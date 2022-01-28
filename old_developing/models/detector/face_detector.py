@@ -80,14 +80,17 @@ class FaceAlignmentDetector(BaseFaceDetector):
                 print("Building FAN for landmarks detection...")
                 self.build_FAN()
                 print("Done.")
+            
             landmarks_list = []
             for bbox in bbox_list:
                 pnts = self.lmd.detect_landmarks(image, bounding_box=bbox)[-1]
                 landmarks_list.append(np.array(pnts))
+            
             landmarks_list = [self.post_process_landmarks(landmarks) \
                               for landmarks in landmarks_list]
             bbox_list = self.preprocess_s3fd_bbox(bbox_list)
             return bbox_list, landmarks_list
+        
         else:
             bbox_list = self.preprocess_s3fd_bbox(bbox_list)
             return bbox_list

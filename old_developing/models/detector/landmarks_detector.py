@@ -25,10 +25,15 @@ class FANLandmarksDetector(BaseLandmarksDetector):
 
     def detect_landmarks(self, image, bounding_box=None, face_detector=None):
         if (bounding_box is None) and (face_detector is None):
-            raise ValueError("Neither bounding box or face detector is passed in.")
+            raise ValueError("Neither bounding box or \
+                              face detector is passed in.")
+        
         detect = True if (bounding_box is None) else False
-        prep_img, center, scale = self._preprocessing_FAN(image, detect=detect, face_detector=face_detector, bbox=bounding_box)
-        pred = self.net.predict(prep_img[np.newaxis, ...])
+        prep_img, center, scale = self._preprocessing_FAN(image, detect=detect,\
+            face_detector=face_detector, bbox=bounding_box)
+
+        print(prep_img.shape)
+        pred   = self.net.predict(prep_img[np.newaxis, ...])
         pnts, pnts_orig = self._get_preds_fromhm(pred[-1], center, scale)
         return pnts, pnts_orig
     
@@ -37,12 +42,13 @@ class FANLandmarksDetector(BaseLandmarksDetector):
         Preprocess single RGB input image to proper format as following:
             0. Detect face
             1. Resize and crop.
-            2. Transform from HWC to CHW ordering.
-            3. Normalize to [0,1] (devide by 255).
+            2. Transform from HWC to CHW ordering. <--- why? source of error probably
+            3. Normalize to [0, 1] (divide by 255).
         """
 
         if img.ndim == 2:
-            img = np.stack([img[..., np.newaxis], img[..., np.newaxis], img[..., np.newaxis]], axis=-1)
+            img = np.stack([img[..., np.newaxis], img[..., np.newaxis], 
+                            img[..., np.newaxis]], axis=-1)
         elif img.ndim == 4:
             img = img[..., :3]
 
@@ -51,14 +57,18 @@ class FANLandmarksDetector(BaseLandmarksDetector):
             try:
                 assert face_detector
             except:
-                AssertionError(f"face_detector has not been specified. face_detect is [{face_detector}]")
+                AssertionError(f"face_detector has not been specified. \
+                                 face_detect is [{face_detector}]")
+
             bbox = face_detector.detect_face(img)[0]
-            x0, x1, y0, y1 = int(bbox[1]), int(bbox[3]), int(bbox[0]), int(bbox[2])
+            x0, x1, y0, y1 = int(bbox[1]), int(bbox[3]), \
+                             int(bbox[0]), int(bbox[2])
         else:
-            x0, x1, y0, y1 = int(bbox[1]), int(bbox[3]), int(bbox[0]), int(bbox[2])    
+            x0, x1, y0, y1 = int(bbox[1]), int(bbox[3]), \
+                             int(bbox[0]), int(bbox[2])    
 
         # Compute center and scale
-        center = np.array([(y0 + y1) / 2, (x0 + x1) / 2], np.float32)
+        center    = np.array([(y0 + y1) / 2, (x0 + x1) / 2], np.float32)
         center[1] = center[1] - (x1 - x0) * 0.12
         # The number 195 is hard coded in 
         # https://github.com/1adrianb/face-alignment/blob/master/face_alignment/detection/sfd/sfd_detector.py
@@ -68,7 +78,7 @@ class FANLandmarksDetector(BaseLandmarksDetector):
         img = self._crop(img, center, scale)
 
         # HWC to CHW
-        img = img.transpose(2,0,1)
+        # img = img.transpose(2,0,1)
 
         # Normalization
         img = img / 255   
