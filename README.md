@@ -22,3 +22,8 @@ like the one present in Google photos.
  Labelled Faces in the Wild (LFW) data set. The confusion matrix is provided
  along with other important metrics such as accuracy, false positive, false
  negative, etc.
+
+  - **[GC_use_your_dataset_FR](demos/GC_use_your_dataset_FR.ipynb)** - allows
+  the user to upload images to a 'gallery' (reference) and target directories.
+  The face recognition system is then executed and the matches between the
+  target images and the gallery are shown (if available).
