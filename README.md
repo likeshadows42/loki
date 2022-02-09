@@ -27,3 +27,5 @@ like the one present in Google photos.
   the user to upload images to a 'gallery' (reference) and target directories.
   The face recognition system is then executed and the matches between the
   target images and the gallery are shown (if available).
+
+test
