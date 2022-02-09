@@ -28,4 +28,3 @@ like the one present in Google photos.
   The face recognition system is then executed and the matches between the
   target images and the gallery are shown (if available).
 
-test
