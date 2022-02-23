@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
-from v1.routers.detection   import fd_router
-from v1.routers.recognition import fr_router
+from api.routers.detection   import fd_router
+from api.routers.recognition import fr_router
 
 app = FastAPI()
 
