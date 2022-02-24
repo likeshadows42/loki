@@ -1,3 +1,6 @@
+# ==============================================================================
+#                         DETECTION-RELATED API METHODS
+# ==============================================================================
 import os
 import cv2
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -145,4 +148,3 @@ async def detect_face(myfile: UploadFile, backend: FaceDetectorOptions,
     im1  = img.save(myfile.filename)
 
     return FileResponse(myfile.filename)
-
