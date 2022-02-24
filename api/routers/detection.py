@@ -4,48 +4,19 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import numpy            as np
 
-from typing             import List, Tuple
-from enum               import Enum
 from fastapi            import APIRouter, UploadFile, File
 from fastapi.responses  import FileResponse
 from deepface.detectors import FaceDetector
 from PIL                import Image
-from pydantic           import BaseModel
-from ..my_functions     import detect_faces as find_faces
+from ..api_functions    import detect_faces as find_faces
+from ..api_classes      import FaceDetectorOptions, Faces
 
-# Path parameter class for face detector name options
-class FaceDetectorOptions(str, Enum):
-    OPENCV = "opencv",
-    SSD    = "ssd",
-    DLIB   = "dlib",
-    MTCNN  = "mtcnn",
-    RETINA = "retinaface"
-
-# Response class for face regions
-class Faces(BaseModel):
-    faces: List[Tuple[int, int, int, int]]
-
-# ------------------------------------------------------------------------------
+# --------------------------- ROUTER INITIALIZATION ----------------------------
 fd_router = APIRouter()
 fd_router.face_detector = None
 fd_router.face_detector_name = None
 
-# ------------------------------------------------------------------------------
-# @fd_router.get("/")
-# def redirect():
-#     response = RedirectResponse(url="/docs")
-#     return response
-
-# ------------------------------------------------------------------------------
-# @fd_router.post("/create/")
-# async def create_face_detector(fd_name: FaceDetectorOptions):
-#     fd_router.face_detector_name = fd_name
-#     fd_router.face_detector = \
-#         FaceDetector.build_model(fd_router.face_detector_name)
-
-#     return {"detector_name":fd_router.face_detector_name}
-
-# ------------------------------------------------------------------------------
+# -------------------------------- API METHODS ---------------------------------
 @fd_router.get("/check/")
 async def check_detector():
     """
@@ -61,17 +32,6 @@ async def check_detector():
         output = {"face_detector_name":fd_router.face_detector_name}
 
     return output
-
-# ------------------------------------------------------------------------------
-# @fd_router.post("/upload/")
-# async def create_upload_file(myfile: UploadFile):
-#     contents = await myfile.read()
-
-#     img = Image.open(BytesIO(contents))
-#     im1 = img.save(myfile.filename)
-
-#     return FileResponse(myfile.filename)
-
 
 # ------------------------------------------------------------------------------
 @fd_router.post("/detect/overlay_faces")
@@ -113,7 +73,6 @@ async def overlay_faces(myfile: UploadFile, backend: FaceDetectorOptions,
 
     return FileResponse(myfile.filename)
 
-
 # ------------------------------------------------------------------------------
 @fd_router.post("/detect/regions")
 async def detect_regions(myfile: UploadFile, backend: FaceDetectorOptions,
@@ -153,7 +112,6 @@ async def detect_regions(myfile: UploadFile, backend: FaceDetectorOptions,
         faces_output = Faces(faces=[])
 
     return faces_output
-
 
 # ------------------------------------------------------------------------------
 @fd_router.post("/detect/face")
