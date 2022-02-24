@@ -10,7 +10,7 @@ import numpy            as np
 from fastapi            import APIRouter, UploadFile
 from deepface           import DeepFace
 from ..api_classes      import FaceDetectorOptions
-from .recognition       import fr_router
+from .verification      import fv_router
 
 # --------------------------- ROUTER INITIALIZATION ----------------------------
 aa_router = APIRouter()
@@ -27,8 +27,8 @@ async def analyze_emotion(myfile: UploadFile, enforce_detection: bool = True,
     """
     # Creates a dictionary with the current model as function expects a
     # dictionary
-    if fr_router.face_verifier != None and fr_router.face_verifier_name != None:
-        models = {fr_router.face_verifier_name:fr_router.face_verifier}
+    if fv_router.face_verifier != None and fv_router.face_verifier_name != None:
+        models = {fv_router.face_verifier_name:fv_router.face_verifier}
     else:
         models = None
     
@@ -58,8 +58,8 @@ async def analyze_age(myfile: UploadFile, enforce_detection: bool = True,
     """
     # Creates a dictionary with the current model as function expects a
     # dictionary
-    if fr_router.face_verifier != None and fr_router.face_verifier_name != None:
-        models = {fr_router.face_verifier_name:fr_router.face_verifier}
+    if fv_router.face_verifier != None and fv_router.face_verifier_name != None:
+        models = {fv_router.face_verifier_name:fv_router.face_verifier}
     else:
         models = None
     
@@ -92,8 +92,8 @@ async def analyze_gender(myfile: UploadFile, enforce_detection: bool = True,
     """
     # Creates a dictionary with the current model as function expects a
     # dictionary
-    if fr_router.face_verifier != None and fr_router.face_verifier_name != None:
-        models = {fr_router.face_verifier_name:fr_router.face_verifier}
+    if fv_router.face_verifier != None and fv_router.face_verifier_name != None:
+        models = {fv_router.face_verifier_name:fv_router.face_verifier}
     else:
         models = None
     
@@ -124,8 +124,8 @@ async def analyze_race(myfile: UploadFile, enforce_detection: bool = True,
     """
     # Creates a dictionary with the current model as function expects a
     # dictionary
-    if fr_router.face_verifier != None and fr_router.face_verifier_name != None:
-        models = {fr_router.face_verifier_name:fr_router.face_verifier}
+    if fv_router.face_verifier != None and fv_router.face_verifier_name != None:
+        models = {fv_router.face_verifier_name:fv_router.face_verifier}
     else:
         models = None
     
@@ -157,8 +157,8 @@ async def analyze_all(myfile: UploadFile, enforce_detection: bool = True,
     """
     # Creates a dictionary with the current model as function expects a
     # dictionary
-    if fr_router.face_verifier != None and fr_router.face_verifier_name != None:
-        models = {fr_router.face_verifier_name:fr_router.face_verifier}
+    if fv_router.face_verifier != None and fv_router.face_verifier_name != None:
+        models = {fv_router.face_verifier_name:fv_router.face_verifier}
     else:
         models = None
     
