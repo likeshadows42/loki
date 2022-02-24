@@ -25,7 +25,7 @@ if tf_version == 2:
 else:
     from keras.preprocessing import image
 
-# ==============================================================================
+# ------------------------------------------------------------------------------
 
 def get_image_paths(root_path, file_types=('.jpg', '.png')):
     """
@@ -57,7 +57,7 @@ def get_image_paths(root_path, file_types=('.jpg', '.png')):
       
     return all_images
 
-# ==============================================================================
+# ------------------------------------------------------------------------------
 
 def detect_faces(img_path, detector_backend = 'opencv', align = True,
                  return_type = 'both', face_detector = None):
@@ -142,7 +142,7 @@ def detect_faces(img_path, detector_backend = 'opencv', align = True,
         assert return_type == 'both', "Return type should be 'both' here."
         return {'faces':faces, 'regions':rois}
 
-# ==============================================================================
+# ------------------------------------------------------------------------------
 
 def build_face_verifier(model_name='VGG-Face', distance_metric='cosine', 
                         model=None, verbose=0):
@@ -204,7 +204,7 @@ def build_face_verifier(model_name='VGG-Face', distance_metric='cosine',
         
     return model_names, metric_names, models
 
-# =================================================================
+# ------------------------------------------------------------------------------
 
 def process_single_face(img_path, target_size = (224, 224), grayscale=False):
     # Loads the face image. Image might be path, base64 or numpy array. Convert
@@ -253,7 +253,7 @@ def process_single_face(img_path, target_size = (224, 224), grayscale=False):
     
     return face
 
-# =================================================================
+# ------------------------------------------------------------------------------
 
 def calc_representations(img_paths, model_name='VGG-Face', model=None,
                          grayscale=False, align=True, normalization='base',
@@ -296,9 +296,10 @@ def calc_representations(img_paths, model_name='VGG-Face', model=None,
     
     return representations, unique_id
 
-# =================================================================
+# ------------------------------------------------------------------------------
 
-def verify_from_reps(target_reps, gallery_reps, model_names, distance_metrics=['cosine'], threshold=-1, prog_bar=True):
+def verify_from_reps(target_reps, gallery_reps, model_names,
+                     distance_metrics=['cosine'], threshold=-1, prog_bar=True):
 
     """
     
@@ -409,7 +410,7 @@ def verify_from_reps(target_reps, gallery_reps, model_names, distance_metrics=['
 
     return resp_obj, toc
 
-# =================================================================
+# ------------------------------------------------------------------------------
 
 def verify_faces(img1_path, img2_path = '', model_name = 'VGG-Face',
                  distance_metric = 'cosine', model = None,
@@ -608,9 +609,54 @@ def verify_faces(img1_path, img2_path = '', model_name = 'VGG-Face',
 
         return resp_obj
 
+# ------------------------------------------------------------------------------
 
+def calculate_similarity(rep1, rep2,
+                         metrics=('cosine', 'euclidean', 'euclidean_l2')):
+    """
+    Calculates the similarity between two face images, represented as two vector
+    embeddings. If a metric in 'metrics' is not valid, the function raises a
+    Value error.
 
-# =============================================================================
+    Inputs:
+        1. rep1 - vector embedding representing the face in image 1
+
+        2. rep2 - vector embedding representing the face in image 2
+
+        3. metrics - tupple containing names of the distance metrics to be used
+            ([metrics=('cosine', 'euclidean', 'euclidean_l2')]). Available
+            metrics are 'cosine', 'euclidean' and 'euclidean_l2'. If the user
+            only requires 1 metric be sure to pass it using this format:
+                metrics=('<distance_metric>',), i.e. metrics=('cosine',)
+
+    Outputs:
+        1. dictionary containing the metric (key) and its corresponding distance
+            (value) or 'similarity'
+
+    Signature:
+        distances = calculate_similarity(rep1, rep2,
+                         metrics=('cosine', 'euclidean', 'euclidean_l2')
+    """
+    distances = {} # initializes output dictionary
+
+    # Loops through each metric
+    for metric in metrics:
+        if metric == 'cosine':
+            distances[metric] = dst.findCosineDistance(rep1, rep2)
+        elif metric == 'euclidean':
+            distances[metric] = dst.findEuclideanDistance(rep1, rep2)
+        elif metric == 'euclidean_l2':
+            distances[metric] = \
+                dst.findEuclideanDistance(dst.l2_normalize(rep1),
+                                          dst.l2_normalize(rep2))
+        else:
+            raise ValueError(f"Invalid metric passed: {metric}")
+
+        distances[metric] = np.float64(distances[metric]) #causes trobule for euclideans in api calls if this is not set (issue #175)
+        
+    return distances
+
+# ------------------------------------------------------------------------------
 
 class Representation():
     """
