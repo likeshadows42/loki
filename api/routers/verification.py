@@ -26,7 +26,7 @@ fv_router.face_verifier_name = None
 async def face_verify(tgt_file: UploadFile, ref_file: UploadFile,
                       params: FaceVerifierParams):
     """
-    API ENDPOINT: verify_faces
+    API ENDPOINT: face_verify
         Used to verify if the person in image 1 (target) matches that of image 2
         (reference). Returns a JSON message with the 'verified' status (i.e.
         matches [True] or not [False]), distance between the representation of
