@@ -102,3 +102,12 @@ class FaceVerifierParams(BaseModel):
     # object instead of dictionary lookups):
     class Config:
         orm_mode = True
+
+# Path parameter class for image save types
+class ImageSaveTypes(str, Enum):
+    """
+    Path parameter class: available image save types.
+    """
+    PNG = "png"
+    JPG = "jpg"
+    NPY = "npy"
