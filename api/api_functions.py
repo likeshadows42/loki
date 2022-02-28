@@ -25,37 +25,11 @@ if tf_version == 2:
 else:
     from keras.preprocessing import image
 
-# ------------------------------------------------------------------------------
-
-def get_image_paths(root_path, file_types=('.jpg', '.png')):
-    """
-    Gets the full paths of all 'file_types' files in the 'root_path' directory
-    and its subdirectories.
-
-    Inputs:
-        1. root_path  - full path of a directory
-        2. file_types - tuple containing strings of file extensions
-            ([file_types=('.jpg', '.png')])
-
-    Output:
-        1. list containing full path of all files in the directory and its
-            subdirectories
-
-    Example call:
-        ROOT_PATH = path/to/some/folder/dude
-        all_images = get_image_paths(ROOT_PATH, file_types=('.png'))
-    """
-    # Gets all images in this root directory
-    all_images = []
-    for root, _junk, files in os.walk(root_path):
-        # Processes files in the root directory - can be transformed into a list
-        # comprehension but code might lose clarity
-        for file in files:
-            if file.lower().endswith(file_types):
-                exact_path = os.path.join(root, file)
-                all_images.append(exact_path)
-      
-    return all_images
+# Setting up paths
+APP_ROOT_DIR = os.path.dirname(os.path.realpath("__file__"))
+API_DIR      = os.path.join(APP_ROOT_DIR, 'api')
+DST_ROOT_DIR = os.path.join(API_DIR, 'data')
+RAW_DIR      = os.path.join(DST_ROOT_DIR, 'raw')
 
 # ------------------------------------------------------------------------------
 
@@ -111,10 +85,10 @@ def detect_faces(img_path, detector_backend = 'opencv', align = True,
     # loops)
     if face_detector == None:
         face_detector = FaceDetector.build_model(detector_backend)
-    detections    = FaceDetector.detect_faces(face_detector, detector_backend,
-                                              img, align)
+    detections = FaceDetector.detect_faces(face_detector, detector_backend,
+                                            img, align)
 
-    # Prints a warning and returns an empty dictionary an error if no faces were
+    # Prints a warning and returns an empty dictionary and error if no faces were
     # found, otherwise processes faces & regions
     if len(detections) == 0:
         print('Face could not be detected or the image contains no faces.')
@@ -267,7 +241,6 @@ def calc_representations(img_paths, model_name='VGG-Face', model=None,
     # Builds the face verifier model - uses input variables to store result from this
     # function, maybe using a different name is clearer?
     model_names, junk, models = build_face_verifier(model_name=model_name, model=model)
-    
     
     representations = []
     unique_id       = unique_id_start
@@ -657,39 +630,3 @@ def calculate_similarity(rep1, rep2,
     return distances
 
 # ------------------------------------------------------------------------------
-
-class Representation():
-    """
-    Class to store the model-specific embeddings for an image.
-    
-    Attributes:
-        After __init__:
-            1. unique_id  - unique identifier number that represents a face
-            2. image_name - image name
-            3. image_fp   - image full path
-            4. embeddings - model-specific vector representation of the face
-        
-    Methods:
-        1. show_info() - prints the representation information in a condensed,
-            easy-to-read form
-    """
-    def __init__(self, unique_id, image_name, image_fp='', embeddings={}):
-        self.unique_id  = unique_id
-        self.image_name = image_name
-        self.image_fp   = image_fp
-        self.embeddings = embeddings
-        
-    def show_info(self):
-        print('Unique ID'.ljust(25) + f': {self.unique_id}',
-              'Original image name'.ljust(25) + f': {self.image_name}',
-              'Original image full path'.ljust(25) + f': {self.image_fp}',
-              sep='\n')
-        
-        if self.embeddings: # embeddings dictionary is NOT empty
-            print('Embeddings:')
-            for key, value in self.embeddings.items():
-                print(f'  > {key}: [{value[0]}, {value[1]}, {value[2]}, ... , {value[-1]}] (len={len(value)})')
-                
-        else:
-            print('No embedding found!')
-
