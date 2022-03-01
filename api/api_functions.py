@@ -15,21 +15,15 @@ from deepface.basemodels     import Boosting
 from deepface.extendedmodels import Age, Gender, Race, Emotion
 from deepface.commons        import functions, realtime, distance as dst
 from deepface.detectors      import FaceDetector
-
-tf_version = int(tf.__version__.split(".")[0])
-
-if tf_version == 2:
-    import logging
-    tf.get_logger().setLevel(logging.ERROR)
-    from tensorflow.keras.preprocessing import image
-else:
-    from keras.preprocessing import image
+from keras.preprocessing     import image
 
 # Setting up paths
-APP_ROOT_DIR = os.path.dirname(os.path.realpath("__file__"))
-API_DIR      = os.path.join(APP_ROOT_DIR, 'api')
+API_DIR      = os.path.dirname(os.path.realpath("__file__"))
 DST_ROOT_DIR = os.path.join(API_DIR, 'data')
 RAW_DIR      = os.path.join(DST_ROOT_DIR, 'raw')
+GALLERY_DIR  = os.path.join(DST_ROOT_DIR, 'gallery')
+TARGETS_DIR  = os.path.join(DST_ROOT_DIR, 'targets')
+RDB_DIR      = os.path.join(DST_ROOT_DIR, 'database')
 
 # ------------------------------------------------------------------------------
 

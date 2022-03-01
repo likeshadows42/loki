@@ -1,8 +1,11 @@
-import os
+# ==============================================================================
+#                                 APP METHODS
+# ==============================================================================
 
 from fastapi                        import FastAPI
 from .utility_functions             import create_dir
-from .api_functions                 import DST_ROOT_DIR, RAW_DIR
+from .api_functions                 import DST_ROOT_DIR, RAW_DIR, GALLERY_DIR,\
+                                           TARGETS_DIR
 
 from api.routers.detection          import fd_router
 from api.routers.verification       import fv_router
@@ -18,22 +21,17 @@ app.include_router(aa_router, prefix="/aa", tags=["Face Attribute Analysis"])
 
 print(DST_ROOT_DIR)
 print(RAW_DIR)
+print(GALLERY_DIR)
+print(TARGETS_DIR)
 
 # -------------------------------- APP METHODS ---------------------------------
 @app.on_event("startup")
 async def initialize_database():
-    # Create data directory
-    print('Creating data directory: ', end='')
-
-    if create_dir(DST_ROOT_DIR):
-        print('directory exists. Continuing...')
-    else:
-        print('success.')
+    # 
+    for directory in [DST_ROOT_DIR, RAW_DIR, GALLERY_DIR, TARGETS_DIR]:
+        print(f'Creating {directory} directory: ', end='')
     
-    # Create raw (image) directory
-    print('Creating raw directory: ', end='')
-        
-    if create_dir(RAW_DIR):
-        print('directory exists. Continuing...')
-    else:
-        print('success.')
+        if create_dir(directory):
+            print('directory exists. Continuing...')
+        else:
+            print('success.')

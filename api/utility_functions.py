@@ -11,7 +11,8 @@ from tqdm                    import tqdm
 def get_image_paths(root_path, file_types=('.jpg', '.png')):
     """
     Gets the full paths of all 'file_types' files in the 'root_path' directory
-    and its subdirectories.
+    and its subdirectories. If the 'root_path' provided points to a file, this
+    functions simply returns that path as a list with 1 element.
 
     Inputs:
         1. root_path  - full path of a directory
@@ -26,6 +27,10 @@ def get_image_paths(root_path, file_types=('.jpg', '.png')):
         ROOT_PATH = path/to/some/folder/dude
         all_images = get_image_paths(ROOT_PATH, file_types=('.png'))
     """
+    # If the root path points to file, simply return it as a list with 1 element
+    if os.path.isfile(root_path):
+        return [root_path]
+    
     # Gets all images in this root directory
     all_images = []
     for root, _junk, files in os.walk(root_path):

@@ -22,10 +22,6 @@ class FaceDetectorOptions(str, Enum):
 class Faces(BaseModel):
     faces: List[Tuple[int, int, int, int]]
 
-# ------------------------------------------------------------------------------
-#                 FACE RECOGNITION & ATTRIBUTE ANALYSIS CLASSES
-# ------------------------------------------------------------------------------
-
 # Path parameter class for face detector name options
 class FaceVerifierOptions(str, Enum):
     """
@@ -111,3 +107,8 @@ class ImageSaveTypes(str, Enum):
     PNG = "png"
     JPG = "jpg"
     NPY = "npy"
+
+# 
+#class Representation
+
+
