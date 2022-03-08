@@ -108,7 +108,55 @@ class ImageSaveTypes(str, Enum):
     JPG = "jpg"
     NPY = "npy"
 
-# 
-#class Representation
+# Stores the representation (embeddings) of a face image
+class Representation():
+    """
+    Class to store the model-specific embeddings for an image.
+    
+    Attributes:
+        After __init__:
+            1. unique_id  - unique identifier number that represents a face
+            2. image_name - image name
+            3. image_fp   - image full path
+            4. embeddings - model-specific vector representation of the face
+        
+    Methods:
+        1. show_info() - prints the representation information in a condensed,
+            easy-to-read form
+    """
+    def __init__(self, unique_id, image_name='', image_fp='', name_tag='',
+                 region=[], embeddings={}):
+        self.unique_id  = unique_id
+        self.name_tag   = name_tag
+        self.image_name = image_name
+        self.image_fp   = image_fp
+        self.region     = region
+        self.embeddings = embeddings
+        
+    def show_info(self):
+        print('Unique ID'.ljust(25) + f': {self.unique_id}',
+              'Name'.ljust(25) + f': {self.name_tag}',
+              'Image name'.ljust(25) + f': {self.image_name}',
+              'Image full path'.ljust(25) + f': {self.image_fp}',
+              'Face region'.ljust(25) + f': {self.region}', sep='\n')
+        
+        if self.embeddings: # embeddings dictionary is NOT empty
+            print('Embeddings:')
+            for k, v in self.embeddings.items():
+                print(f'  > {k}: [{v[0]}, {v[1]}, {v[2]}, ... , {v[-1]}]'\
+                    + f'(len={len(v)})')
+                
+        else:
+            print('No embedding found!')
 
+#
+class FRMatch():
+    def __init__(self):
+        self.verified = False
+        self.matches  = []
 
+    def add_new_match(self, match_obj):
+        if match_obj['verified'] == True:
+            self.matches.append(match_obj)
+            self.matches.sort(key=lambda k: k['distance'])
+            self.verified = True
