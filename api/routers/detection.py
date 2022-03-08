@@ -7,10 +7,10 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import numpy            as np
 
+from PIL                import Image
 from fastapi            import APIRouter, UploadFile, File
 from fastapi.responses  import FileResponse
 from deepface.detectors import FaceDetector
-from PIL                import Image
 from ..api_functions    import detect_faces as find_faces
 from ..api_classes      import FaceDetectorOptions, Faces
 
@@ -20,23 +20,6 @@ fd_router.face_detector = None
 fd_router.face_detector_name = None
 
 # -------------------------------- API METHODS ---------------------------------
-@fd_router.get("/check/")
-async def check_detector():
-    """
-    API ENDPOINT: check_detector
-        Checks which face detector is currently selected. If this is called
-        before a face detector is chosen and initialized, returns 'None' as its
-        name. Otherwise, returns the face detector's name.
-    """
-
-    if fd_router.face_detector_name == None:
-        output = {"face_detector_name":"None"}
-    else:
-        output = {"face_detector_name":fd_router.face_detector_name}
-
-    return output
-
-# ------------------------------------------------------------------------------
 @fd_router.post("/detect/overlay_faces")
 async def overlay_faces(myfile: UploadFile, backend: FaceDetectorOptions,
                              align: bool = False):
@@ -148,3 +131,5 @@ async def detect_face(myfile: UploadFile, backend: FaceDetectorOptions,
     im1  = img.save(myfile.filename)
 
     return FileResponse(myfile.filename)
+
+# ------------------------------------------------------------------------------

@@ -28,7 +28,7 @@ fr_router = APIRouter()
 fr_router.face_verifier = None
 fr_router.face_verifier_name = None
 
-# ------------------------------------------------------------------------------
+# -------------------------------- API METHODS ---------------------------------
 
 @fr_router.post("/upload_files")
 async def upload_files(files: List[UploadFile], overwrite = False,
