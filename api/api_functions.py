@@ -15,7 +15,6 @@ from deepface.basemodels     import Boosting
 from deepface.extendedmodels import Age, Gender, Race, Emotion
 from deepface.commons        import functions, realtime, distance as dst
 from deepface.detectors      import FaceDetector
-from keras.preprocessing     import image
 
 # Setting up paths
 API_DIR      = os.path.dirname(os.path.realpath("__file__"))
@@ -171,97 +170,6 @@ def build_face_verifier(model_name='VGG-Face', distance_metric='cosine',
         metric_names.append(distance_metric)
         
     return model_names, metric_names, models
-
-# ------------------------------------------------------------------------------
-
-def process_single_face(img_path, target_size = (224, 224), grayscale=False):
-    # Loads the face image. Image might be path, base64 or numpy array. Convert
-    # it to numpy whatever it is.
-    face = functions.load_image(img_path)
-    
-    # Ensures that both dimensions are >0, otherwise raises error
-    if face.shape[0] == 0 or face.shape[1] == 0:
-        raise ValueError(f'Detected face shape is {face.shape}.')
-
-    # Converts to grayscale
-    if grayscale:
-        face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
-                
-    # Resizes face
-    if face.shape[0] > 0 and face.shape[1] > 0:
-        factor_0 = target_size[0] / face.shape[0]
-        factor_1 = target_size[1] / face.shape[1]
-        factor   = min(factor_0, factor_1)
-
-    dsize  = (int(face.shape[1] * factor), int(face.shape[0] * factor))
-    face   = cv2.resize(face, dsize)
-
-    # Then pad the other side to the target size by adding black pixels
-    diff_0 = target_size[0] - face.shape[0]
-    diff_1 = target_size[1] - face.shape[1]
-                
-    if not grayscale:
-        # Put the base image in the middle of the padded image
-        face = np.pad(face, ((diff_0 // 2, diff_0 - diff_0 // 2),
-                             (diff_1 // 2, diff_1 - diff_1 // 2), (0, 0)),
-                             'constant')
-    else:
-        face = np.pad(face, ((diff_0 // 2, diff_0 - diff_0 // 2),
-                             (diff_1 // 2, diff_1 - diff_1 // 2)),
-                             'constant')
-
-    # Double check if target image is not still the same size with target.
-    if face.shape[0:2] != target_size:
-        face = cv2.resize(face, target_size)
-
-    # Normalizing the image pixels
-    face  = image.img_to_array(face) #what this line doing? must?
-    face  = np.expand_dims(face, axis = 0)
-    face /= 255 # normalize input in [0, 1]
-    
-    return face
-
-# ------------------------------------------------------------------------------
-
-def calc_representations(img_paths, model_name='VGG-Face', model=None,
-                         grayscale=False, align=True, normalization='base',
-                         unique_id_start=0):
-    
-    # Currently, this function does not support multiple models or Ensemble
-    if model_name == 'Ensemble':
-        print('[WARNING] Ensemble and multiple models currently unsupported! Returning empty representation.')
-        return []
-    
-    # Builds the face verifier model - uses input variables to store result from this
-    # function, maybe using a different name is clearer?
-    model_names, junk, models = build_face_verifier(model_name=model_name, model=model)
-    
-    representations = []
-    unique_id       = unique_id_start
-    
-    # Loops through each image
-    for img_path in img_paths:
-        embeddings = {} # initialize embeddings dictionary
-        img_name   = img_path.split('/')[-1] # gets image name
-        
-        # For the current image, loops through each model and create its representation
-        for name, model in zip(model_names, models.values()):
-            # Find current model's input shape and process the face image
-            input_shape_x, input_shape_y = functions.find_input_shape(model)
-            face = process_single_face(img_path, target_size = (input_shape_x, input_shape_y),
-                                       grayscale=grayscale)
-            
-            # Normalizes input and finds the embedding
-            face = functions.normalize_input(img=face, normalization=normalization)
-            embeddings[name] = model.predict(face)[0].tolist()
-            
-        # Create representation and increment unique id
-        representations.append(Representation(unique_id, img_name,
-                                              image_fp=img_path,
-                                              embeddings=embeddings))
-        unique_id += 1
-    
-    return representations, unique_id
 
 # ------------------------------------------------------------------------------
 
