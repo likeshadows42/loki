@@ -3,11 +3,21 @@
 # ==============================================================================
 
 from enum               import Enum
-from typing             import List, Tuple
+from uuid               import UUID
+from typing             import List, Tuple, Optional
+from numpy import float16
 from pydantic           import BaseModel
 
-# ------------------------------------------------------------------------------
-#                 FACE RECOGNITION & ATTRIBUTE ANALYSIS CLASSES
+# IMPLEMENTATION NOTE:
+# Pydantic expects a dictionary by default. You can configure your model to also
+# support loading from standard ORM parameters (i.e. attributes on the object
+# instead of dictionary lookups) by setting:
+
+# class Config:
+#     orm_mode = True
+
+# ______________________________________________________________________________
+#                       PATH PARAMETER (API INPUT) CLASSES
 # ------------------------------------------------------------------------------
 
 # Path parameter class for face detector name options
@@ -17,10 +27,6 @@ class FaceDetectorOptions(str, Enum):
     DLIB   = "dlib",
     MTCNN  = "mtcnn",
     RETINA = "retinaface"
-
-# Response class for face regions
-class Faces(BaseModel):
-    faces: List[Tuple[int, int, int, int]]
 
 # Path parameter class for face detector name options
 class FaceVerifierOptions(str, Enum):
@@ -93,9 +99,6 @@ class FaceVerifierParams(BaseModel):
     normalization: NormalizationTypes = NormalizationTypes.BASE
     threshold: int = -1
 
-    # Pydantic expects a dictionary by default. You can configure your model to
-    # also support loading from standard ORM parameters (i.e. attributes on the
-    # object instead of dictionary lookups):
     class Config:
         orm_mode = True
 
@@ -107,6 +110,63 @@ class ImageSaveTypes(str, Enum):
     PNG = "png"
     JPG = "jpg"
     NPY = "npy"
+
+# Path parameter class for create_database endpoint parameters
+class CreateDatabaseParams(BaseModel):
+    """
+    Path parameter class: defines the expected body request containing all of
+    the parameters required for database creation.
+    """
+    detector_name : FaceDetectorOptions = FaceDetectorOptions.OPENCV
+    verifier_names: List[FaceVerifierOptions] = [FaceVerifierOptions.VGGFace]
+    align         : bool = True
+    normalization : NormalizationTypes = NormalizationTypes.BASE
+    tags          : Optional[List[str]] = []
+    uids          : Optional[List[str]] = []
+    verbose       : bool = False
+
+    class Config:
+        orm_mode = True
+
+# Path parameter class for 
+class VerificationParams(BaseModel):
+    """
+    Path parameter class: defines the expected body request containing all of
+    the parameters required for the verification / recognition process.
+    """
+    detector_name: FaceDetectorOptions = FaceDetectorOptions.OPENCV
+    verifier_name: FaceVerifierOptions = FaceVerifierOptions.VGGFace
+    align        : bool                = True
+    normalization: NormalizationTypes  = NormalizationTypes.BASE
+    metric       : DistanceMetrics     = DistanceMetrics.COSINE
+    threshold    : float               = -1
+    verbose      : bool                = False
+
+    class Config:
+        orm_mode = True
+
+
+# ______________________________________________________________________________
+#                          RESPONSE (API OUTPUT) CLASSES
+# ------------------------------------------------------------------------------
+
+# Response class for face regions
+class Faces(BaseModel):
+    faces: List[Tuple[int, int, int, int]]
+
+# Response class for face verification matches
+class VerificationMatches(BaseModel):
+    unique_id : List[UUID]
+    name_tag  : List[str]
+    image_name: List[str]
+    image_fp  : List[str]
+    region    : List[Tuple[int, int, int, int]]
+    embeddings: List[dict]
+
+# ______________________________________________________________________________
+#                                  CUSTOM CLASSES
+# ------------------------------------------------------------------------------
+# Used internally in functions, may have methods.
 
 # Stores the representation (embeddings) of a face image
 class Representation():
@@ -126,6 +186,9 @@ class Representation():
     """
     def __init__(self, unique_id, image_name='', image_fp='', name_tag='',
                  region=[], embeddings={}):
+        """
+        Initializes the object with appropriate attributes
+        """
         self.unique_id  = unique_id
         self.name_tag   = name_tag
         self.image_name = image_name
@@ -134,11 +197,14 @@ class Representation():
         self.embeddings = embeddings
         
     def show_info(self):
-        print('Unique ID'.ljust(25) + f': {self.unique_id}',
-              'Name'.ljust(25) + f': {self.name_tag}',
-              'Image name'.ljust(25) + f': {self.image_name}',
-              'Image full path'.ljust(25) + f': {self.image_fp}',
-              'Face region'.ljust(25) + f': {self.region}', sep='\n')
+        """
+        Shows detailed information about the Representation in a neat layout
+        """
+        print('Unique ID'.ljust(15) + f': {self.unique_id}',
+              'Name'.ljust(15) + f': {self.name_tag}',
+              'Image name'.ljust(15) + f': {self.image_name}',
+              'Image full path'.ljust(15) + f': {self.image_fp}',
+              'Face region'.ljust(15) + f': {self.region}', sep='\n')
         
         if self.embeddings: # embeddings dictionary is NOT empty
             print('Embeddings:')
@@ -149,14 +215,12 @@ class Representation():
         else:
             print('No embedding found!')
 
-#
-class FRMatch():
-    def __init__(self):
-        self.verified = False
-        self.matches  = []
+    def show_summary(self):
+        """
+        Shows summarized information about the Representation in a one-liner
+        """
+        print(f'UID: {self.unique_id}'.ljust(25),
+              f'Name: {self.name_tag}'.ljust(15),
+              f'Region: {self.region}'.ljust(15),
+              f'FP: {self.image_fp}', sep=' | ')
 
-    def add_new_match(self, match_obj):
-        if match_obj['verified'] == True:
-            self.matches.append(match_obj)
-            self.matches.sort(key=lambda k: k['distance'])
-            self.verified = True
