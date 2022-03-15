@@ -25,7 +25,7 @@ from keras.preprocessing     import image
 
 # These imports need to be relative to work with FastAPI but need to be absolute
 # to work with ipynb?
-from api_classes           import Representation
+from .api_classes           import Representation
 
 from deepface.detectors.FaceDetector import build_model as build_detector
 
@@ -39,10 +39,7 @@ RDB_DIR      = os.path.join(DST_ROOT_DIR, 'database')
 SVD_MDL_DIR  = os.path.join(API_DIR     , 'saved_models')
 SVD_VRF_DIR  = os.path.join(SVD_MDL_DIR , 'verifiers')
 
-# Global variables
-app_rep_db   = []
-app_models   = []
-
+# Local variables
 api_root_dir = API_DIR
 svd_vrf_dir  = SVD_VRF_DIR
 
@@ -876,7 +873,7 @@ def load_face_verifier(verifier_names, save_dir=svd_vrf_dir,
             except Exception as excpt:
                 if verbose:
                     print(f'failed! Reason: {excpt}')
-            
+    
     return models
 
 # ------------------------------------------------------------------------------
@@ -908,7 +905,7 @@ def load_representation_db(file_path, verbose=False):
     if os.path.isfile(file_path):
         # Try to open pickled database (list of objects)
         try:
-            db = pickle.load(open(file_path, 'wb'))
+            db = pickle.load(open(file_path, 'rb'))
             if verbose:
                 print('success!')
         
@@ -1133,8 +1130,140 @@ def get_embeddings_as_array(db, verifier_name):
 
     return np.array(embeddings)
 
+# ------------------------------------------------------------------------------
+
+def create_reps_from_dir(img_dir, verifier_models, detector_name='opencv',
+                    align=True, verifier_names='VGG-Face', show_prog_bar=True,
+                    normalization='base', tags=[], uids=[], verbose=False):
+    """
+    Creates a representations from images in a directory 'img_dir'. The
+    representations are returned in a list, and the list of representations. If
+    tags and/or unique identifiers (uids) are provided, make sure that they 
+    correspond to the sorted (ascending) image names contained in 'img_dir'.
+
+    Inputs:
+        1. img_dir - string with the full path to the directory containing the
+            images.
+
+        2. verifier_models - dictionary containing model name (key) and model
+            object (value).
+
+        3. detector_name - string with the face detector name ([opencv], ssd,
+            dlib, mtcnn, retinaface).
+        
+        4. align - boolean flag to indicate if face images should be aligned.
+            Improves face recognition performance at the cost of some speed
+            ([True], False).
+
+        5. verifier_names - string with the face verifier name ([VGG-Face],
+            OpenFace, Facenet, Facenet512, DeepFace, DeepID, ArcFace).
+
+        6. show_prog_bar - boolean that toggle the progress bar on or off
+            ([True], False).
+
+        7. normalization - normalizes the face image and may increase face
+            recognition performance depending on the normalization type and the
+            face verifier model ([base], raw, Facenet, Facenet2018, VGGFace,
+            VGGFace2, ArcFace).
+
+        8. tags - list of strings where each string corresponds to a tag for the
+            i-th image, i.e. tags[0] is the tag for the first image in the
+            sorted list of image name obtain from 'img_dir' directory. If an
+            empty list is provided, this is skipped during the representation
+            creation process ([tags=[]]).
+
+        9. uids - list of strings where each string corresponds to a unique
+            identifier (UID) for the i-th image, i.e. uids[0] is the UID for the
+            first image in the sorted list of image name obtain from 'img_dir'
+            directory. If an empty list is provided, a UID is created for each
+            image during the representation creation process ([uids=[]]).
+            
+        10. verbose - boolean to toggle function warnings and other messages
+            ([True], False).
+
+        Note: the 'tags' and 'uids' lists (inputs 8 and 9) must have the same
+        number of elements (length) and must match the number of images in
+        'img_dir'. If not, these inputs will be treated as empty lists (i.e.
+        ignored).
+
+    Outputs:
+        1. list of Representation objects. For more information about the
+            Representation class attributes and methods, use
+            help(Representation)
+
+    Signature:
+        rep_db = create_reps_from_dir(img_dir, verifier_models, 
+                        detector_name='opencv', align=True,
+                        verifier_names='VGG-Face', show_prog_bar=True,
+                        normalization='base', tags=[], uids=[], verbose=False)
+    """
+    # Initializes skip flags and database (list of Representation objects)
+    skip_tag = False
+    skip_uid = False
+    rep_db   = []
+    
+    # Assuming img_dir is a directory containing images
+    img_paths = get_image_paths(img_dir)
+    img_paths.sort()
+
+    # No images found, return empty database
+    if len(img_paths) == 0:
+        return []
+
+    # If tags list does not have the same number of elements as the images (i.e.
+    # 1 tag per image), ignore it
+    if len(tags) != len(img_paths):
+        if verbose:
+            print('[create_reps_from_dir] Number of tags and image paths',
+                  'must match. Ignoring tags list.')
+        skip_tag = True
+
+    # If uids list does not have the same number of elements as the images (i.e.
+    # 1 UID per image), ignore it
+    if len(uids) != len(img_paths):
+        if verbose:
+            print('[create_reps_from_dir] Number of UIDs and image paths',
+                  'must match. Ignoring uids list.')
+        skip_uid = True
+
+    # Creates the progress bar
+    n_imgs  = len(img_paths)
+    disable = not show_prog_bar
+    pbar    = tqdm(range(0, n_imgs), desc='Creating representations',
+                    disable=disable)
+
+    # Loops through each image in the 'img_dir' directory
+    for pb_idx, i, img_path in zip(pbar, range(0, n_imgs), img_paths):
+        # Calculate the face image embedding
+        region, embeddings = calc_embedding(img_path, verifier_models,
+                                            align=align,
+                                            detector_name=detector_name, 
+                                            verifier_names=verifier_names,
+                                            normalization=normalization)
+
+        # Determines if tag was provided and should be used when creating this
+        # representation
+        if skip_tag:
+            tag = ''
+        else:
+            tag = tags[i]
+
+        # Determines if UID was provided and should be used when creating this
+        # representation
+        if skip_uid:
+            uid = ''
+        else:
+            uid = uids[i]
+
+        # Create a new representation and adds it to the database
+        rep_db.append(create_new_representation(img_path, region, embeddings,
+                                                tag=tag, uid=uid))
+
+    # Return representation database
+    return rep_db
+
 # ______________________________________________________________________________
-#                   VERIFY SPEEDUP (FAISS) RELATED FUNCTIONS
+#                           VERIFY RELATED FUNCTIONS
 # ------------------------------------------------------------------------------
 
 def create_faiss_index(embeddings, metric='cosine'):
@@ -1441,7 +1570,7 @@ def calc_similarity(tgt_embd, embds, metric='cosine', model_name='VGG-Face',
     decision = (distances <= threshold).squeeze()
     return {'idxs': np.where(decision)[0],
             'threshold': threshold,
-            'distances': distances}
+            'distances': distances.squeeze()}
 
 # ------------------------------------------------------------------------------
 
@@ -1472,150 +1601,26 @@ def calc_embedding(img_path, verifier_models, detector_name='opencv',
     # For each verifier model provided
     embeddings={}
     for verifier_name in verifier_names:
-        # Gets the current verifier model
-        model = verifier_models[verifier_name]
+        try:
+            # Gets the current verifier model
+            model = verifier_models[verifier_name]
 
-        # Determine target size
-        input_x, input_y = functions.find_input_shape(model)
+            # Determine target size
+            input_x, input_y = functions.find_input_shape(model)
 
-        # Process face
-        processed_face = process_face(face, target_size=(input_x, input_y),
-                                normalization=normalization, grayscale=False)
+            # Process face
+            processed_face = process_face(face, target_size=(input_x, input_y),
+                                   normalization=normalization, grayscale=False)
 
-        # Calculate embeddings
-        embeddings[verifier_name] = model.predict(processed_face)[0]
+            # Calculate embeddings
+            embeddings[verifier_name] = model.predict(processed_face)[0]
+        except Exception as excpt:
+            print(f'[calc_embedding] Error when calculting {verifier_name}. ',
+                  f'Reason: {excpt}', sep='')
+            pass
 
     return (region, embeddings)
 
 # ------------------------------------------------------------------------------
 
-def create_reps_from_dir(img_dir, verifier_models, detector_name='opencv',
-                    align=True, verifier_names='VGG-Face', show_prog_bar=True,
-                    normalization='base', tags=[], uids=[], verbose=False):
-    """
-    Creates a representations from images in a directory 'img_dir'. The
-    representations are returned in a list, and the list of representations. If
-    tags and/or unique identifiers (uids) are provided, make sure that they 
-    correspond to the sorted (ascending) image names contained in 'img_dir'.
-
-    Inputs:
-        1. img_dir - string with the full path to the directory containing the
-            images.
-
-        2. verifier_models - dictionary containing model name (key) and model
-            object (value).
-
-        3. detector_name - string with the face detector name ([opencv], ssd,
-            dlib, mtcnn, retinaface).
-        
-        4. align - boolean flag to indicate if face images should be aligned.
-            Improves face recognition performance at the cost of some speed
-            ([True], False).
-
-        5. verifier_names - string with the face verifier name ([VGG-Face],
-            OpenFace, Facenet, Facenet512, DeepFace, DeepID, ArcFace).
-
-        6. show_prog_bar - boolean that toggle the progress bar on or off
-            ([True], False).
-
-        7. normalization - normalizes the face image and may increase face
-            recognition performance depending on the normalization type and the
-            face verifier model ([base], raw, Facenet, Facenet2018, VGGFace,
-            VGGFace2, ArcFace).
-
-        8. tags - list of strings where each string corresponds to a tag for the
-            i-th image, i.e. tags[0] is the tag for the first image in the
-            sorted list of image name obtain from 'img_dir' directory. If an
-            empty list is provided, this is skipped during the representation
-            creation process ([tags=[]]).
-
-        9. uids - list of strings where each string corresponds to a unique
-            identifier (UID) for the i-th image, i.e. uids[0] is the UID for the
-            first image in the sorted list of image name obtain from 'img_dir'
-            directory. If an empty list is provided, a UID is created for each
-            image during the representation creation process ([uids=[]]).
-            
-        10. verbose - boolean to toggle function warnings and other messages
-            ([True], False).
-
-        Note: the 'tags' and 'uids' lists (inputs 8 and 9) must have the same
-        number of elements (length) and must match the number of images in
-        'img_dir'. If not, these inputs will be treated as empty lists (i.e.
-        ignored).
-
-    Outputs:
-        1. list of Representation objects. For more information about the
-            Representation class attributes and methods, use
-            help(Representation)
-
-    Signature:
-        rep_db = create_reps_from_dir(img_dir, verifier_models, 
-                        detector_name='opencv', align=True,
-                        verifier_names='VGG-Face', show_prog_bar=True,
-                        normalization='base', tags=[], uids=[], verbose=False)
-    """
-    # Initializes skip flags and database (list of Representation objects)
-    skip_tag = False
-    skip_uid = False
-    rep_db   = []
-    
-    # Assuming img_dir is a directory containing images
-    img_paths = get_image_paths(img_dir)
-    img_paths.sort()
-
-    # No images found, return empty database
-    if len(img_paths) == 0:
-        return []
-
-    # If tags list does not have the same number of elements as the images (i.e.
-    # 1 tag per image), ignore it
-    if len(tags) != len(img_paths):
-        if verbose:
-            print('[create_reps_from_dir] Number of tags and image paths',
-                  'must match. Ignoring tags list.')
-        skip_tag = True
-
-    # If uids list does not have the same number of elements as the images (i.e.
-    # 1 UID per image), ignore it
-    if len(uids) != len(img_paths):
-        if verbose:
-            print('[create_reps_from_dir] Number of UIDs and image paths',
-                  'must match. Ignoring uids list.')
-        skip_uid = True
-
-    # Creates the progress bar
-    n_imgs  = len(img_paths)
-    disable = not show_prog_bar
-    pbar    = tqdm(range(0, n_imgs), desc='Creating representations',
-                    disable=disable)
-
-    # Loops through each image in the 'img_dir' directory
-    for pb_idx, i, img_path in zip(pbar, range(0, n_imgs), img_paths):
-        # Calculate the face image embedding
-        region, embeddings = calc_embedding(img_path, verifier_models,
-                                            align=align,
-                                            detector_name=detector_name, 
-                                            verifier_names=verifier_names,
-                                            normalization=normalization)
-
-        # Determines if tag was provided and should be used when creating this
-        # representation
-        if skip_tag:
-            tag = ''
-        else:
-            tag = tags[i]
-
-        # Determines if UID was provided and should be used when creating this
-        # representation
-        if skip_uid:
-            uid = ''
-        else:
-            uid = uids[i]
-
-        # Create a new representation and adds it to the database
-        rep_db.append(create_new_representation(img_path, region, embeddings,
-                                                tag=tag, uid=uid))
-
-    # Return representation database
-    return rep_db
 
