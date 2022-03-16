@@ -84,21 +84,21 @@ All classes, functions and global variables used are conveniently stored in the 
  with other important metrics such as accuracy, false positive, false negative, etc. GoogleColab version - no setup
  required, hooray!
 
- - **[GC_use_your_dataset_FR](demos/GC_use_your_dataset_FR.ipynb)** - allows the user to upload images to a 'gallery'
- (reference) and target directories. The face recognition system is then executed and the matches between the target
- images and the gallery are shown (if available). GoogleColab version - no setup required, hooray!
+ - **[GC_use_your_dataset_FR](demos/GC_use_your_dataset_FR.ipynb)** - allows the user to upload images to a *gallery*
+ (reference) and *target* directories. The face recognition system is then executed and the matches between the *target*
+ images and the *gallery* are shown (if available). GoogleColab version - no setup required, hooray!
 
  - **[detailed_FR_pipeline](demos/detailed_FR_pipeline.ipynb)** - shows the  step-by-step process (pipeline) for the
  face recognition system.
 
  - **[FR_complete_demo](demos/GC_FR_complete_demo.ipynb)** - complete face recognition demo:
-    - Automatically downloads a sample dataset from 'deepface' repo
+    - Automatically downloads a sample dataset from *deepface* repo
     - Splits it into *database* and *target* sets
     - Creates a database from the - you guessed it - *database* set
     - Runs face verification of each image in the *target* set agasint the database
     - Adds the verified images to the database
     - Downloads, recognizes and exposes the results of images from the web
     - Compares the performance (time taken) when using the Faiss library and when using a vectorized distance
-    calculation
- GoogleColab version - no setup required, hooray!
+    calculation.
+    - GoogleColab version - no setup required, hooray!
 
