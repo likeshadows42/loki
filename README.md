@@ -38,6 +38,15 @@ the `requirements.txt`:
 
     pip install -r requirements.txt
 
+To run the face recognition api we suggest reading through fastapi's [Run a Server Manually - Uvicorn documentation page](https://fastapi.tiangolo.com/deployment/manually/). Uvicorn was used during the development of this api and as such is the recommended alternative.
+It can be installed, if needed, with the usual `pip` command:
+
+    pip install "uvicorn[standard]"
+
+Once uvicorn is installed, the api can be accesed by changing the current working directory to the root directory containing the api project and running the following command:
+
+    uvicorn api.app:app
+
 The api has the following structure:
 ```
 api
@@ -70,6 +79,8 @@ Most of the subdirectories and files use is contained in their names: `./routers
 The `./saved_models` subdirectory stores all pre-built models. For now, verifier and attribute analysis models are stored in the `./save_models/verifiers` subdirectory (need to seperate attribute analysis models from this). The built models get loaded onto memory when the api starts to speed up the subsequent api calls (instead of building each model everytime a specific endpoint is accessed).
 
 All classes, functions and global variables used are conveniently stored in the `api_classes.py`, `api_functions.py` and `global_variables.py` files respectively.
+
+The main application is contained in the `app.py` file.
 
 
 # Demos
