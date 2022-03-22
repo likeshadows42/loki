@@ -62,13 +62,15 @@ async def initialization():
 
     # Tries to load a database if it exists. If not, create a new one.
     print('  -> Loading / creating database:')
+    if not os.path.isfile(os.path.join(RDB_DIR, 'rep_database.pickle')):
+        glb.db_changed = True
     glb.rep_db = load_representation_db(os.path.join(RDB_DIR,
                                     'rep_database.pickle'), verbose=True)
     print('')
     
     # Checks if face verifier folder exists
     print('  -> Loading / creating face verifiers:')
-    glb.models = load_face_verifier(['ArcFace', 'Facenet'],
+    glb.models = load_face_verifier(['ArcFace'],
                                     save_dir=SVD_VRF_DIR,
                                     show_prog_bar=False, verbose=True)
     print('\n -------- End of initialization process -------- \n')
