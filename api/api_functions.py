@@ -130,179 +130,117 @@ def detect_faces(img_path, detector_backend = 'opencv', align = True,
 
 # ------------------------------------------------------------------------------
 
-def build_face_verifier(model_name='VGG-Face', distance_metric='cosine', 
-                        model=None, verbose=0):
-    """
-    Builds the face verifier model with 'model_name'. Alternatively, a pre-built
-    'model' can be passed. In that case, the function simply stores the model
-    and metric names. Also handles the special case of the 'Ensemble' model.
+# def verify_from_reps(target_reps, gallery_reps, model_names,
+#                      distance_metrics=['cosine'], threshold=-1, prog_bar=True):
+
+#     """
     
-    Inputs:
-        1. model_name - name of face verifier model ([VGG-Face], Facenet,
-                Facenet512, OpenFace, DeepFace, DeepID, ArcFace, Dlib, Ensemble)
-        2. model - built model (see DeepFace.build_model() for more information)
-                or None ([model=None])
-                
-    Outputs:
-        1. dictionary containing model names
-        2. dictionary containing metric names
-        3. dictionary containing models
-        
-    Signature:
-        model_names, metric_names, models = 
-                build_face_verifier(model_name='VGG-Face', model=None)
-        
-    Example:
-        
-    """
+#     """
+#     # Starts function timer
+#     tic = time.time()
     
-    if model == None:
-        if model_name == 'Ensemble':
-            if verbose:
-                print("Ensemble learning enabled")
-            models = Boosting.loadModel()
+#     #------------------------------
+    
+#     if not isinstance(model_names, list):
+#         model_names = [model_names]
+
+#     #------------------------------
+
+#     disable_option = not prog_bar
+#     n_tgts         = len(target_reps)
+#     n_gall         = len(gallery_reps)
+#     pbar           = tqdm(range(0, n_tgts * n_gall),
+#                           desc='Verification', disable=disable_option)
+#     bulk_process   = False if n_tgts * n_gall != 1 else True
+#     resp_objects   = []
+
+#     for index in pbar:
+#         ensemble_features = []
+
+#         for model_name in model_names:
+#             # Get embeddings and names from the representations
+#             target_rep   = target_reps[index // n_gall].embeddings[model_name]
+#             target_name  = target_reps[index // n_gall].image_name
+#             gallery_rep  = gallery_reps[np.mod(index, n_gall)].embeddings[model_name]
+#             gallery_name = gallery_reps[np.mod(index, n_gall)].image_name
             
-        else: #model is not ensemble
-            model  = DeepFace.build_model(model_name)
-            models = {}
-            models[model_name] = model
+#             #----------------------
+#             #find distances between embeddings
 
-    else: #model != None
-        if verbose:
-            print("Already built model is passed")
-        
-        if model_name == 'Ensemble':
-            Boosting.validate_model(model)
-            models = model.copy()
-        else:
-            models = {}
-            models[model_name] = model
+#             for metric in distance_metrics:
+#                 if metric == 'cosine':
+#                     distance = dst.findCosineDistance(target_rep, gallery_rep)
+#                 elif metric == 'euclidean':
+#                     distance = dst.findEuclideanDistance(target_rep, gallery_rep)
+#                 elif metric == 'euclidean_l2':
+#                     distance = dst.findEuclideanDistance(dst.l2_normalize(target_rep), dst.l2_normalize(gallery_rep))
+#                 else:
+#                     raise ValueError("Invalid distance_metric passed - ", metric)
 
-
-    if model_name == 'Ensemble':
-        model_names = ['VGG-Face', 'Facenet', 'OpenFace', 'DeepFace']
-        metric_names = ['cosine', 'euclidean', 'euclidean_l2']
-
-    elif model_name != 'Ensemble':
-        model_names = []; metric_names = []
-        model_names.append(model_name)
-        metric_names.append(distance_metric)
-        
-    return model_names, metric_names, models
-
-# ------------------------------------------------------------------------------
-
-def verify_from_reps(target_reps, gallery_reps, model_names,
-                     distance_metrics=['cosine'], threshold=-1, prog_bar=True):
-
-    """
-    
-    """
-    # Starts function timer
-    tic = time.time()
-    
-    #------------------------------
-    
-    if not isinstance(model_names, list):
-        model_names = [model_names]
-
-    #------------------------------
-
-    disable_option = not prog_bar
-    n_tgts         = len(target_reps)
-    n_gall         = len(gallery_reps)
-    pbar           = tqdm(range(0, n_tgts * n_gall),
-                          desc='Verification', disable=disable_option)
-    bulk_process   = False if n_tgts * n_gall != 1 else True
-    resp_objects   = []
-
-    for index in pbar:
-        ensemble_features = []
-
-        for model_name in model_names:
-            # Get embeddings and names from the representations
-            target_rep   = target_reps[index // n_gall].embeddings[model_name]
-            target_name  = target_reps[index // n_gall].image_name
-            gallery_rep  = gallery_reps[np.mod(index, n_gall)].embeddings[model_name]
-            gallery_name = gallery_reps[np.mod(index, n_gall)].image_name
-            
-            #----------------------
-            #find distances between embeddings
-
-            for metric in distance_metrics:
-                if metric == 'cosine':
-                    distance = dst.findCosineDistance(target_rep, gallery_rep)
-                elif metric == 'euclidean':
-                    distance = dst.findEuclideanDistance(target_rep, gallery_rep)
-                elif metric == 'euclidean_l2':
-                    distance = dst.findEuclideanDistance(dst.l2_normalize(target_rep), dst.l2_normalize(gallery_rep))
-                else:
-                    raise ValueError("Invalid distance_metric passed - ", metric)
-
-                distance = np.float64(distance) #causes trobule for euclideans in api calls if this is not set (issue #175)
-                #----------------------
+#                 distance = np.float64(distance) #causes trobule for euclideans in api calls if this is not set (issue #175)
+#                 #----------------------
                 
-                # Makes a decision  EDIT THE RESPONSE OBJECT
-                if model_name != 'Ensemble':
+#                 # Makes a decision  EDIT THE RESPONSE OBJECT
+#                 if model_name != 'Ensemble':
                     
-                    # Finds the threshold if the one provided is not a number (int or float)
-                    # or if it is a negative number
-                    if type(threshold) == int or float:
-                        if threshold < 0:
-                            threshold = dst.findThreshold(model_name, metric)
-                    else:
-                        threshold = dst.findThreshold(model_name, metric)
+#                     # Finds the threshold if the one provided is not a number (int or float)
+#                     # or if it is a negative number
+#                     if type(threshold) == int or float:
+#                         if threshold < 0:
+#                             threshold = dst.findThreshold(model_name, metric)
+#                     else:
+#                         threshold = dst.findThreshold(model_name, metric)
 
-                    # Makes the decision
-                    if distance <= threshold:
-                        identified = True
-                    else:
-                        identified = False
+#                     # Makes the decision
+#                     if distance <= threshold:
+#                         identified = True
+#                     else:
+#                         identified = False
 
-                    resp_obj = {'target': target_name, 'ref': gallery_name,
-                                'verified': identified, 'distance': distance,
-                                'threshold': threshold, 'model': model_name,
-                                'similarity_metric': metric}
+#                     resp_obj = {'target': target_name, 'ref': gallery_name,
+#                                 'verified': identified, 'distance': distance,
+#                                 'threshold': threshold, 'model': model_name,
+#                                 'similarity_metric': metric}
 
-                    resp_objects.append(resp_obj)
+#                     resp_objects.append(resp_obj)
 
-                else: #Ensemble
+#                 else: #Ensemble
 
-                    #this returns same with OpenFace - euclidean_l2
-                    if model_name == 'OpenFace' and metric == 'euclidean':
-                        continue
-                    else:
-                        ensemble_features.append(distance)
+#                     #this returns same with OpenFace - euclidean_l2
+#                     if model_name == 'OpenFace' and metric == 'euclidean':
+#                         continue
+#                     else:
+#                         ensemble_features.append(distance)
 
-        #----------------------
+#         #----------------------
 
-        if model_name == 'Ensemble':
-            boosted_tree = Boosting.build_gbm()
-            prediction   = boosted_tree.predict(np.expand_dims(\
-                                        np.array(ensemble_features), axis=0))[0]
-            verified     = np.argmax(prediction) == 1
-            score        = prediction[np.argmax(prediction)]
-            resp_obj     = {'target': target_name, 'ref': gallery_name,
-                            'verified': verified, 'score': score,
-                            'distance': ensemble_features,
-                            'model': ['VGG-Face', 'Facenet', 'OpenFace', 'DeepFace'],
-                            'similarity_metric': ['cosine', 'euclidean', 'euclidean_l2']}
+#         if model_name == 'Ensemble':
+#             boosted_tree = Boosting.build_gbm()
+#             prediction   = boosted_tree.predict(np.expand_dims(\
+#                                         np.array(ensemble_features), axis=0))[0]
+#             verified     = np.argmax(prediction) == 1
+#             score        = prediction[np.argmax(prediction)]
+#             resp_obj     = {'target': target_name, 'ref': gallery_name,
+#                             'verified': verified, 'score': score,
+#                             'distance': ensemble_features,
+#                             'model': ['VGG-Face', 'Facenet', 'OpenFace', 'DeepFace'],
+#                             'similarity_metric': ['cosine', 'euclidean', 'euclidean_l2']}
 
-            resp_objects.append(resp_obj)
+#             resp_objects.append(resp_obj)
 
-    #-------------------------
+#     #-------------------------
 
-    resp_obj = {}
+#     resp_obj = {}
 
-    for i in range(0, len(resp_objects)):
-        resp_item   = resp_objects[i]
-        target_name = resp_item['target'].split('.')[0]
-        ref_name    = resp_item['ref'].split('.')[0]
-        resp_obj[f'pair_{i+1:05}_{target_name}_vs_{ref_name}'] = resp_item
+#     for i in range(0, len(resp_objects)):
+#         resp_item   = resp_objects[i]
+#         target_name = resp_item['target'].split('.')[0]
+#         ref_name    = resp_item['ref'].split('.')[0]
+#         resp_obj[f'pair_{i+1:05}_{target_name}_vs_{ref_name}'] = resp_item
         
-    toc = time.time()
+#     toc = time.time()
 
-    return resp_obj, toc
+#     return resp_obj, toc
 
 # ------------------------------------------------------------------------------
 
@@ -619,6 +557,68 @@ def create_dir(dir_path):
 
 # ______________________________________________________________________________
 #                DETECTORS & VERIFIERS BUILDING, SAVING & LOADING
+# ------------------------------------------------------------------------------
+
+def build_face_verifier(model_name='VGG-Face', distance_metric='cosine', 
+                        model=None, verbose=0):
+    """
+    Builds the face verifier model with 'model_name'. Alternatively, a pre-built
+    'model' can be passed. In that case, the function simply stores the model
+    and metric names. Also handles the special case of the 'Ensemble' model.
+    
+    Inputs:
+        1. model_name - name of face verifier model ([VGG-Face], Facenet,
+                Facenet512, OpenFace, DeepFace, DeepID, ArcFace, Dlib, Ensemble)
+        2. model - built model (see DeepFace.build_model() for more information)
+                or None ([model=None])
+                
+    Outputs:
+        1. dictionary containing model names
+        2. dictionary containing metric names
+        3. dictionary containing models
+        
+    Signature:
+        model_names, metric_names, models = 
+                build_face_verifier(model_name='VGG-Face', model=None)
+        
+    Example:
+        
+    """
+    
+    if model == None:
+        if model_name == 'Ensemble':
+            if verbose:
+                print("Ensemble learning enabled")
+            models = Boosting.loadModel()
+            
+        else: #model is not ensemble
+            model  = DeepFace.build_model(model_name)
+            models = {}
+            models[model_name] = model
+
+    else: #model != None
+        if verbose:
+            print("Already built model is passed")
+        
+        if model_name == 'Ensemble':
+            Boosting.validate_model(model)
+            models = model.copy()
+        else:
+            models = {}
+            models[model_name] = model
+
+
+    if model_name == 'Ensemble':
+        model_names = ['VGG-Face', 'Facenet', 'OpenFace', 'DeepFace']
+        metric_names = ['cosine', 'euclidean', 'euclidean_l2']
+
+    elif model_name != 'Ensemble':
+        model_names = []; metric_names = []
+        model_names.append(model_name)
+        metric_names.append(distance_metric)
+        
+    return model_names, metric_names, models
+
 # ------------------------------------------------------------------------------
 
 def batch_build_detectors(detector_names, show_prog_bar=True, verbose=True):
@@ -1039,6 +1039,9 @@ def find_image_in_db(img_path, db, shortcut=None):
             both representation and index are returned as empty lists. If
             multiple entries are found, multiple Representations and indexs are
             returned as lists.
+
+    Signature:
+        rep_objs, rep_idxs = find_image_in_db(img_path, db, shortcut=None)
     """
     rep_objs = [] # empty representation object
     rep_idxs = [] # no matching index
@@ -1076,6 +1079,32 @@ def find_image_in_db(img_path, db, shortcut=None):
 
 def create_new_representation(img_path, region, embeddings, tag='', uid='',
                                 ignore_taglist=['--', '---']):
+    """
+    Creates a new representation object. For more information see
+    help(Representation).
+
+    Inputs:
+        1. img_path - string containing image full path
+        2. region - list of integers specifying face region on the original
+            image
+        3. embeddings - dictionary with face verifier name (key) and embedding
+            (1-D numpy array) (item). Can have multiple verifier, embedding
+            pairs (key, value pairs).
+        4. tags - string containing a name tag for this representation
+            ([tag=''])
+        5. uid - string containing unique object identifier. If left empty ('')
+            a unique object identifier is created using uuid4 from uuid library
+            ([uid=''])
+        6. ignore_taglist - list of strings that are treated as equivalent to ''
+            (i.e. no tag) ([ignore_taglist=['--', '---']])
+    
+    Output:
+        1. Representation object
+
+    Signature:
+        new_rep = create_new_representation(img_path, region, embeddings,
+                                tag='', uid='', ignore_taglist=['--', '---'])
+    """
 
     # If Unique IDentifier (UID) is not provided, generate one
     if len(uid) == 0 or uid == '':
@@ -1094,7 +1123,20 @@ def create_new_representation(img_path, region, embeddings, tag='', uid='',
 
 def update_representation(rep, embeddings):
     """
-    TODO: Add description
+    Updates an existing representation object. For more information on the
+    Representation object see help(Representation).
+
+    Inputs:
+        1. rep - Representation object
+        2. embeddings - dictionary with face verifier name (key) and embedding
+            (1-D numpy array) (item). Can have multiple verifier, embedding
+            pairs (key, value pairs).
+    
+    Output:
+        1. Representation object
+
+    Signature:
+        updated_rep = update_representation(rep, embeddings)
     """
 
     # Loops through each model name and embedding pair, adding or updating the 
@@ -1540,10 +1582,10 @@ def calc_similarity(tgt_embd, embds, metric='cosine', model_name='VGG-Face',
 
     Output:
         1. dictionary containing the indexes of matches (key: idxs), the
-            threshold value used (key: threshold) and the distances calculated
-            using the specified metric (key: distances). Note that if no match
-            is found, then the 'indexes' will have a length of zero (i.e. will
-            be empty).
+            threshold value used (key: threshold) and the distances (using the
+            specified metric) of the matches (key: distances). Note that if no
+            match is found, then the 'indexes' will have a length of zero (i.e.
+            will be empty).
     
     Signature:
         similarity_obj = calc_similarity(tgt_embd, embds, metric='cosine',
@@ -1566,11 +1608,34 @@ def calc_similarity(tgt_embd, embds, metric='cosine', model_name='VGG-Face',
     if threshold < 0:
         threshold = dst.findThreshold(model_name, metric)
     
+    # Processes distances
+    distances = distances.flatten() # flattens into 1-D array
+
     # Makes a decision
-    decision = (distances <= threshold).squeeze()
-    return {'idxs': np.where(decision)[0],
+    decision  = (distances <= threshold)
+    idxs      = np.where(decision)[0]
+
+    # Determines the corresponding distances of each match (decision==True)
+    dists = []
+    j     = 0
+    for i in range(len(distances)):
+        if i in idxs:
+            dists.append(distances[i])
+            j += 1
+        
+        if j == len(idxs):
+            break
+
+    # Sort the indexes by smallest distance
+    srt_dists = []
+    srt_idxs  = []
+    for dist, idx in sorted(zip(dists, idxs)):
+        srt_idxs.append(idx)
+        srt_dists.append(dist)
+
+    return {'idxs': np.array(srt_idxs),
             'threshold': threshold,
-            'distances': distances.squeeze()}
+            'distances': np.array(srt_dists)}
 
 # ------------------------------------------------------------------------------
 
@@ -1578,7 +1643,42 @@ def calc_embedding(img_path, verifier_models, detector_name='opencv',
                     align=True, verifier_names='VGG-Face',
                     normalization='base'):
     """
-    TODO: ADD DESCRIPTION
+    Calculates the embedding (1-D numpy array) of a face image. Each embedding
+    is associated with a face verifier model. Multiple verifiers can be passed
+    (as model names) to this function so that multiple embeddings are calculated
+    in a single function call.
+
+    Inputs:
+        1. img_dir - string with the full path to the directory containing the
+            images.
+        2. verifier_models - dictionary containing pre-built models (key: model
+            name, value: built model object)
+        3. detector_name - string with the chosen face detector name ([opencv],
+            ssd, dlib, mtcnn, retinaface)
+        4. align - boolean indicating if alignment of face images should be
+            performed (may improve recognition performance around 1-2%)
+            ([align=True])
+        5. verifier_names - string or list of strings with face verifier name(s)
+            ([VGG-Face], OpenFace, Facenet, Facenet512, DeepFace, DeepID, Dlib,
+            ArcFace)
+        6. normalization - string indicating the type of image normalization to
+            be performed ([base], raw, Facenet, Facenet2018, VGGFace, VGGFace2,
+            ArcFace)
+        
+    Outputs:
+        1. region - list of lists of 4 integers specifying the faces' region on
+            the original image. The 4 integers correspond to the top-left
+            corner's and bottom-right corner's x & y coordinates respectively
+        2. embeddings - dictionary containing the embedding (value) for each
+            face verifier model provided in 'verifier_names' (key)
+
+        The outputs are returned as a tuple.
+
+    Signature:
+        region, embeddings = calc_embedding(img_path, verifier_models,
+                                            detector_name='opencv', align=True,
+                                            verifier_names='VGG-Face',
+                                            normalization='base')
     """
     # Converts verifier names into a list if it is a single entry
     if not isinstance(verifier_names, list):
@@ -1617,10 +1717,38 @@ def calc_embedding(img_path, verifier_models, detector_name='opencv',
         except Exception as excpt:
             print(f'[calc_embedding] Error when calculting {verifier_name}. ',
                   f'Reason: {excpt}', sep='')
-            pass
 
     return (region, embeddings)
 
 # ------------------------------------------------------------------------------
 
 
+
+# ------------------------------------------------------------------------------
+# ------------------------------------------------------------------------------
+
+def get_matches_from_similarity(similarity_obj, db, verifier_name):
+
+    # Initializes all required lists
+    mtch_uids  = [] # unique ids
+    mtch_tags  = [] # name tags
+    mtch_names = [] # image names
+    mtch_fps   = [] # image full paths (fp)
+    mtch_rgns  = [] # regions
+    mtch_embds = [] # embeddings
+
+    for i in similarity_obj['idxs']:
+        rep = db[i]
+        mtch_uids.append(rep.unique_id)
+        mtch_tags.append(rep.name_tag)
+        mtch_names.append(rep.image_name)
+        mtch_fps.append(rep.image_fp)
+        mtch_rgns.append(rep.region)
+        mtch_embds.append(list(rep.embeddings[verifier_name]))
+
+    return {'unique_ids':mtch_uids  , 'name_tags':mtch_tags,
+            'image_names':mtch_names, 'image_fps':mtch_fps ,
+            'regions':mtch_rgns     , 'embeddings':mtch_embds,
+            'distances':list(similarity_obj['distances']),
+            'threshold':similarity_obj['threshold']}
+            
