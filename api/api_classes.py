@@ -156,12 +156,15 @@ class Faces(BaseModel):
 
 # Response class for face verification matches
 class VerificationMatches(BaseModel):
-    unique_id : List[UUID]
-    name_tag  : List[str]
-    image_name: List[str]
-    image_fp  : List[str]
-    region    : List[Tuple[int, int, int, int]]
-    embeddings: List[dict]
+    unique_ids : List[UUID]
+    name_tags  : List[str]
+    image_names: List[str]
+    image_fps  : List[str]
+    regions    : List[List[int]]
+    embeddings : List[List[float]]
+    distances  : List[float]
+    threshold  : float
+
 
 # ______________________________________________________________________________
 #                                  CUSTOM CLASSES
@@ -223,4 +226,20 @@ class Representation():
               f'Name: {self.name_tag}'.ljust(15),
               f'Region: {self.region}'.ljust(15),
               f'FP: {self.image_fp}', sep=' | ')
+
+# 
+class VerificationResult():
+    def __init__(self, unique_ids, image_names, image_fps, name_tags,
+                 regions, embeddings, distances, threshold):
+        self.unique_ids  = unique_ids
+        self.image_names = image_names
+        self.image_fps   = image_fps
+        self.name_tags   = name_tags
+        self.regions     = regions
+        self.embeddings  = embeddings
+        self.distances   = distances
+        self.threshold   = threshold
+        self.num_matches = len(self.unique_ids)
+
+
 
