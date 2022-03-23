@@ -5,17 +5,17 @@ import os
 import pickle
 
 from fastapi                        import FastAPI
-from .api_functions                 import API_DIR, DST_ROOT_DIR, RAW_DIR,\
+from api_functions                 import API_DIR, DST_ROOT_DIR, RAW_DIR,\
                                            TARGETS_DIR, RDB_DIR, SVD_MDL_DIR,\
                                            SVD_VRF_DIR, load_representation_db,\
                                            create_dir, load_face_verifier
 
-from .                              import global_variables as glb
+import global_variables as glb
 
-from api.routers.detection          import fd_router
-from api.routers.verification       import fv_router
-from api.routers.recognition        import fr_router
-from api.routers.attribute_analysis import aa_router
+from router_detection          import fd_router
+from router_verification       import fv_router
+from router_recognition        import fr_router
+from router_attribute_analysis import aa_router
 
 # ______________________________________________________________________________
 #                               APP INITIALIZATION

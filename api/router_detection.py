@@ -11,8 +11,8 @@ from PIL                import Image
 from fastapi            import APIRouter, UploadFile, File
 from fastapi.responses  import FileResponse
 from deepface.detectors import FaceDetector
-from ..api_functions    import detect_faces as find_faces
-from ..api_classes      import FaceDetectorOptions, Faces
+from api_functions    import detect_faces as find_faces
+from api_classes      import FaceDetectorOptions, Faces
 
 # --------------------------- ROUTER INITIALIZATION ----------------------------
 fd_router = APIRouter()

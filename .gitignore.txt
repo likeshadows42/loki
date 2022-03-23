@@ -31,4 +31,3 @@ api/data
 api/saved_models
 
 .DS_Store
-api/__pycache__

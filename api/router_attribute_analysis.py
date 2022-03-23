@@ -9,8 +9,8 @@ import numpy            as np
 
 from fastapi            import APIRouter, UploadFile
 from deepface           import DeepFace
-from ..api_classes      import FaceDetectorOptions
-from .verification      import fv_router
+from api_classes      import FaceDetectorOptions
+from router_verification      import fv_router
 
 # --------------------------- ROUTER INITIALIZATION ----------------------------
 aa_router = APIRouter()

@@ -10,18 +10,18 @@ import numpy             as np
 from typing              import List, Optional
 from fastapi             import APIRouter, UploadFile
 from deepface.DeepFace   import find
-from ..api_classes       import FaceVerifierParams, ImageSaveTypes,\
+from api_classes       import FaceVerifierParams, ImageSaveTypes,\
                                 CreateDatabaseParams, VerificationParams,\
                                 VerificationMatches
-from ..api_functions     import DST_ROOT_DIR, RAW_DIR, RDB_DIR,\
+from api_functions     import DST_ROOT_DIR, RAW_DIR, RDB_DIR,\
                                 build_face_verifier, create_reps_from_dir,\
                                 calc_embedding, get_embeddings_as_array,\
                                 calc_similarity, create_new_representation,\
                                 get_matches_from_similarity
-from .detection          import fd_router, FaceDetectorOptions
-from .verification       import fv_router
+from router_detection          import fd_router, FaceDetectorOptions
+from router_verification       import fv_router
 
-from ..                  import global_variables            as glb
+import global_variables            as glb
 from matplotlib          import image                       as mpimg
 
 dst_root_dir = DST_ROOT_DIR
@@ -209,7 +209,7 @@ async def create_database(cdb_params: CreateDatabaseParams,
 
 # ------------------------------------------------------------------------------
 
-from ..api_classes       import FaceVerifierOptions, NormalizationTypes,\
+from api_classes       import FaceVerifierOptions, NormalizationTypes,\
                                 DistanceMetrics
 
 @fr_router.post("/verify/no_upload", response_model=List[VerificationMatches])
