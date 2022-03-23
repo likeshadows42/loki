@@ -25,7 +25,7 @@ from keras.preprocessing     import image
 
 # These imports need to be relative to work with FastAPI but need to be absolute
 # to work with ipynb?
-from .api_classes           import Representation
+from api_classes           import Representation
 
 from .                               import global_variables as glb
 from deepface.detectors.FaceDetector import build_model      as build_detector

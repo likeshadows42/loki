@@ -10,11 +10,11 @@ import numpy            as np
 from typing             import List
 from fastapi            import APIRouter, UploadFile
 from deepface           import DeepFace
-from ..api_functions    import build_face_verifier, verify_faces,\
+from api_functions    import build_face_verifier, verify_faces,\
                                calculate_similarity
-from ..api_classes      import DistanceMetrics, GetRepresentationParams,\
+from api_classes      import DistanceMetrics, GetRepresentationParams,\
                                FaceVerifierParams
-from .detection         import fd_router, FaceDetectorOptions
+from router_detection         import fd_router, FaceDetectorOptions
 
 # --------------------------- ROUTER INITIALIZATION ----------------------------
 fv_router = APIRouter()

@@ -3,16 +3,16 @@
 # ==============================================================================
 import os
 import pickle
+import global_variables as glb
 
-from fastapi                        import FastAPI     
-from .api_functions                 import load_representation_db,\
-                                           load_face_verifier, create_dir
-from .                              import global_variables as glb
+from fastapi                   import FastAPI
+from api_functions             import load_representation_db,\
+                                      create_dir, load_face_verifier
 
-from api.routers.detection          import fd_router
-from api.routers.verification       import fv_router
-from api.routers.recognition        import fr_router
-from api.routers.attribute_analysis import aa_router
+from router_detection          import fd_router
+from router_verification       import fv_router
+from router_recognition        import fr_router
+from router_attribute_analysis import aa_router
 
 # ______________________________________________________________________________
 #                               APP INITIALIZATION
