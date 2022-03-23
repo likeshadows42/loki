@@ -27,21 +27,12 @@ from keras.preprocessing     import image
 # to work with ipynb?
 from .api_classes           import Representation
 
-from deepface.detectors.FaceDetector import build_model as build_detector
-
-# Setting up paths
-API_DIR      = os.path.join(os.path.dirname(os.path.realpath("__file__")),'api')
-DST_ROOT_DIR = os.path.join(API_DIR     , 'data')
-RAW_DIR      = os.path.join(DST_ROOT_DIR, 'raw')
-#GALLERY_DIR  = os.path.join(DST_ROOT_DIR, 'gallery')
-TARGETS_DIR  = os.path.join(DST_ROOT_DIR, 'targets')
-RDB_DIR      = os.path.join(DST_ROOT_DIR, 'database')
-SVD_MDL_DIR  = os.path.join(API_DIR     , 'saved_models')
-SVD_VRF_DIR  = os.path.join(SVD_MDL_DIR , 'verifiers')
+from .                               import global_variables as glb
+from deepface.detectors.FaceDetector import build_model      as build_detector
 
 # Local variables
-api_root_dir = API_DIR
-svd_vrf_dir  = SVD_VRF_DIR
+api_root_dir = glb.API_DIR
+svd_vrf_dir  = glb.SVD_VRF_DIR
 
 # ------------------------------------------------------------------------------
 
@@ -127,120 +118,6 @@ def detect_faces(img_path, detector_backend = 'opencv', align = True,
     else:
         assert return_type == 'both', "Return type should be 'both' here."
         return {'faces':faces, 'regions':rois}
-
-# ------------------------------------------------------------------------------
-
-# def verify_from_reps(target_reps, gallery_reps, model_names,
-#                      distance_metrics=['cosine'], threshold=-1, prog_bar=True):
-
-#     """
-    
-#     """
-#     # Starts function timer
-#     tic = time.time()
-    
-#     #------------------------------
-    
-#     if not isinstance(model_names, list):
-#         model_names = [model_names]
-
-#     #------------------------------
-
-#     disable_option = not prog_bar
-#     n_tgts         = len(target_reps)
-#     n_gall         = len(gallery_reps)
-#     pbar           = tqdm(range(0, n_tgts * n_gall),
-#                           desc='Verification', disable=disable_option)
-#     bulk_process   = False if n_tgts * n_gall != 1 else True
-#     resp_objects   = []
-
-#     for index in pbar:
-#         ensemble_features = []
-
-#         for model_name in model_names:
-#             # Get embeddings and names from the representations
-#             target_rep   = target_reps[index // n_gall].embeddings[model_name]
-#             target_name  = target_reps[index // n_gall].image_name
-#             gallery_rep  = gallery_reps[np.mod(index, n_gall)].embeddings[model_name]
-#             gallery_name = gallery_reps[np.mod(index, n_gall)].image_name
-            
-#             #----------------------
-#             #find distances between embeddings
-
-#             for metric in distance_metrics:
-#                 if metric == 'cosine':
-#                     distance = dst.findCosineDistance(target_rep, gallery_rep)
-#                 elif metric == 'euclidean':
-#                     distance = dst.findEuclideanDistance(target_rep, gallery_rep)
-#                 elif metric == 'euclidean_l2':
-#                     distance = dst.findEuclideanDistance(dst.l2_normalize(target_rep), dst.l2_normalize(gallery_rep))
-#                 else:
-#                     raise ValueError("Invalid distance_metric passed - ", metric)
-
-#                 distance = np.float64(distance) #causes trobule for euclideans in api calls if this is not set (issue #175)
-#                 #----------------------
-                
-#                 # Makes a decision  EDIT THE RESPONSE OBJECT
-#                 if model_name != 'Ensemble':
-                    
-#                     # Finds the threshold if the one provided is not a number (int or float)
-#                     # or if it is a negative number
-#                     if type(threshold) == int or float:
-#                         if threshold < 0:
-#                             threshold = dst.findThreshold(model_name, metric)
-#                     else:
-#                         threshold = dst.findThreshold(model_name, metric)
-
-#                     # Makes the decision
-#                     if distance <= threshold:
-#                         identified = True
-#                     else:
-#                         identified = False
-
-#                     resp_obj = {'target': target_name, 'ref': gallery_name,
-#                                 'verified': identified, 'distance': distance,
-#                                 'threshold': threshold, 'model': model_name,
-#                                 'similarity_metric': metric}
-
-#                     resp_objects.append(resp_obj)
-
-#                 else: #Ensemble
-
-#                     #this returns same with OpenFace - euclidean_l2
-#                     if model_name == 'OpenFace' and metric == 'euclidean':
-#                         continue
-#                     else:
-#                         ensemble_features.append(distance)
-
-#         #----------------------
-
-#         if model_name == 'Ensemble':
-#             boosted_tree = Boosting.build_gbm()
-#             prediction   = boosted_tree.predict(np.expand_dims(\
-#                                         np.array(ensemble_features), axis=0))[0]
-#             verified     = np.argmax(prediction) == 1
-#             score        = prediction[np.argmax(prediction)]
-#             resp_obj     = {'target': target_name, 'ref': gallery_name,
-#                             'verified': verified, 'score': score,
-#                             'distance': ensemble_features,
-#                             'model': ['VGG-Face', 'Facenet', 'OpenFace', 'DeepFace'],
-#                             'similarity_metric': ['cosine', 'euclidean', 'euclidean_l2']}
-
-#             resp_objects.append(resp_obj)
-
-#     #-------------------------
-
-#     resp_obj = {}
-
-#     for i in range(0, len(resp_objects)):
-#         resp_item   = resp_objects[i]
-#         target_name = resp_item['target'].split('.')[0]
-#         ref_name    = resp_item['ref'].split('.')[0]
-#         resp_obj[f'pair_{i+1:05}_{target_name}_vs_{ref_name}'] = resp_item
-        
-#     toc = time.time()
-
-#     return resp_obj, toc
 
 # ------------------------------------------------------------------------------
 
@@ -1751,4 +1628,3 @@ def get_matches_from_similarity(similarity_obj, db, verifier_name):
             'regions':mtch_rgns     , 'embeddings':mtch_embds,
             'distances':list(similarity_obj['distances']),
             'threshold':similarity_obj['threshold']}
-            
