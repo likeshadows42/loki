@@ -2,9 +2,6 @@
 #                             API FUNCTIONS
 # ==============================================================================
 
-# TODO: REMOVE DEPENDENCIES ON GLOBAL VARIABLES - THE IDEA HERE IS THAT THESE
-# METHODS ARE STANDALONE
-
 # Module / package imports
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
@@ -21,21 +18,15 @@ from tqdm                    import tqdm
 from uuid                    import uuid4
 from deepface                import DeepFace
 from deepface.commons        import functions, distance as dst
-from deepface.DeepFace       import build_model as build_verifier
+from deepface.DeepFace       import build_model         as build_verifier
 from deepface.basemodels     import Boosting
 from deepface.detectors      import FaceDetector
 from keras.preprocessing     import image
 
 # These imports need to be relative to work with FastAPI but need to be absolute
 # to work with ipynb?
-from IFR.classes           import Representation
-
-import api.global_variables as glb
+from IFR.classes                     import Representation
 from deepface.detectors.FaceDetector import build_model      as build_detector
-
-# Local variables
-api_root_dir = glb.API_DIR
-svd_vrf_dir  = glb.SVD_VRF_DIR
 
 # ------------------------------------------------------------------------------
 
@@ -575,7 +566,7 @@ def batch_build_verifiers(verifier_names, show_prog_bar=True):
 
 # ------------------------------------------------------------------------------
 
-def saved_verifier_exists(verifier_name, save_dir=svd_vrf_dir):
+def saved_verifier_exists(verifier_name, save_dir):
     """
     Checks if a saved verifier exists with name 'verifier_name'. Does that by
     comparing the 'verifier_name' against the name of all files in 'save_dir'.
@@ -583,14 +574,12 @@ def saved_verifier_exists(verifier_name, save_dir=svd_vrf_dir):
     Inputs:
         1. verifier_name - string with the name of the verifier.
         2. save_dir - string with the full path of the save directory
-            ([save_dir=svd_vrf_dir]).
         
     Output:
         1. Boolean value indicating if saved verifier exists or not.
     
     Signature:
-        verifier_exists = saved_verifier_exists(verifier_name,
-                                                save_dir=svd_vrf_dir)
+        verifier_exists = saved_verifier_exists(verifier_name, save_dir)
     """
     # Save directory provided is not a directory
     if not os.path.isdir(save_dir):
@@ -606,7 +595,7 @@ def saved_verifier_exists(verifier_name, save_dir=svd_vrf_dir):
 
 # ------------------------------------------------------------------------------
 
-def save_face_verifiers(verifiers, save_dir=svd_vrf_dir, show_prog_bar=True,
+def save_face_verifiers(verifiers, save_dir, show_prog_bar=True,
                         overwrite=False):
     """
     Saves all face verifier models specified in 'verifiers' using the 'shelve'
@@ -617,17 +606,19 @@ def save_face_verifiers(verifiers, save_dir=svd_vrf_dir, show_prog_bar=True,
     
     Inputs:
         1. verifiers - dictionary containing the build face verifier models.
-        2. show_prog_bar - boolean that toggles the progress bar on or off.
+        2. save_dir - string with the full path of the save directory
+        2. show_prog_bar - boolean that toggles the progress bar on or off
+            ([show_prog_bar=True]).
         3. overwrite - boolean that indicates if the function should overwrite
-                        any saved models.
+            any saved models ([overwrite=False]).
                         
     Outputs:
         1. returns a status flag of True if any model fails to save (otherwise
             returns False)
     
     Signature:
-        status = save_face_verifiers(verifiers, show_prog_bar=True,
-                    overwrite=False)
+        status = save_face_verifiers(verifiers, save_dir, show_prog_bar=True,
+                        overwrite=False)
     """
     # Checks if the save directory provided is a directory
     if not os.path.isdir(save_dir):
@@ -663,8 +654,8 @@ def save_face_verifiers(verifiers, save_dir=svd_vrf_dir, show_prog_bar=True,
 
 # ------------------------------------------------------------------------------
 
-def load_face_verifier(verifier_names, save_dir=svd_vrf_dir,
-                        show_prog_bar=True, verbose=False):
+def load_face_verifier(verifier_names, save_dir, show_prog_bar=True,
+                        verbose=False):
     """
     Loads all face verifier models specified in 'verifier_names'. Alternatively,
     'all' can be passed as a 'verifier_name' to load all saved models. The
@@ -675,9 +666,11 @@ def load_face_verifier(verifier_names, save_dir=svd_vrf_dir,
     
     Inputs:
         1. verifier_name - string with the name of the face verifiers.
-        2. save_dir      - string with the full path of the save directory
-            ([save_dir='']).
-        3. show_prog_bar - boolean that toggles the progress bar on or off.
+        2. save_dir      - string with the full path of the save directory.
+        3. show_prog_bar - boolean that toggles the progress bar on or off
+            ([show_prog_bar=True]).
+        4. verbose       - boolean that toggles the amount of text output
+            ([False] - silent, True - verbose)
                         
     Outputs:
         1. returns a status flag of True if any model fails to save (otherwise
