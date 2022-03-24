@@ -35,9 +35,8 @@ async def initialization():
 
     # Directories & paths initialization
     print('  -> Directory creation:')
-    directory_list = [glb.API_DIR    , glb.DST_ROOT_DIR, glb.RAW_DIR,
-                      glb.TARGETS_DIR, glb.RDB_DIR     , glb.SVD_MDL_DIR,
-                      glb.SVD_VRF_DIR]
+    directory_list = [glb.API_DIR, glb.DATA_DIR, glb.IMG_DIR, glb.RDB_DIR,
+                      glb.SVD_MDL_DIR, glb.SVD_VRF_DIR]
     
     for directory in directory_list:
         print(f'Creating {directory} directory: ', end='')

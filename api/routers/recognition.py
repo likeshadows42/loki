@@ -23,9 +23,9 @@ from api.routers.verification import fv_router
 
 from matplotlib               import image                       as mpimg
 
-dst_root_dir = glb.DST_ROOT_DIR
-raw_dir      = glb.RAW_DIR
-rdb_dir      = glb.RDB_DIR
+data_dir = glb.DATA_DIR
+img_dir  = glb.IMG_DIR
+rdb_dir  = glb.RDB_DIR
 
 # ______________________________________________________________________________
 #                             ROUTER INITIALIZATION
@@ -50,13 +50,13 @@ async def upload_files(files: List[UploadFile], overwrite = False,
         is set to True ([overwrite=False]).
     """    
     # Gets all files in the raw directory
-    all_files = os.listdir(raw_dir)
+    all_files = os.listdir(img_dir)
     
     for f in files:
         data     = np.fromfile(f.file, dtype=np.uint8)
         img      = cv2.imdecode(data, cv2.IMREAD_UNCHANGED)
         img_name = f.filename.split('.')[0]
-        img_fp   = os.path.join(raw_dir, img_name + '.' + save_as)
+        img_fp   = os.path.join(img_dir, img_name + '.' + save_as)
 
         if not (img_name in all_files) or overwrite:
             if save_as == ImageSaveTypes.NPY:
@@ -88,9 +88,8 @@ async def debug_inputs(params: VerificationParams):
 async def inspect_globals():
 
     print('[inspect_globals] Path variables:')
-    directory_list = [glb.API_DIR    , glb.DST_ROOT_DIR, glb.RAW_DIR,
-                      glb.TARGETS_DIR, glb.RDB_DIR     , glb.SVD_MDL_DIR,
-                      glb.SVD_VRF_DIR]
+    directory_list = [glb.API_DIR, glb.DATA_DIR   , glb.IMG_DIR,
+                      glb.RDB_DIR, glb.SVD_MDL_DIR, glb.SVD_VRF_DIR]
 
     for name, fp in zip(glb.directory_list_names, directory_list):
         print(f'   -> Directory {name}'.ljust(30), f': {fp}', sep='')
@@ -123,7 +122,7 @@ async def recognize_single_face(tgt_file: UploadFile,
     """
     API ENDPOINT: recognize_single_face
         Recognizes a single image by comparing it to the images in the directory
-        specified by the 'RAW_DIR' path variable.
+        specified by the 'IMG_DIR' path variable.
     """    
     # Obtains contents of the target and reference files & transforms them into
     # images
@@ -154,7 +153,7 @@ async def recognize_single_face(tgt_file: UploadFile,
         use_backend = fd_router.face_detector_name
 
     # Runs face recognition
-    response = find(tgt_img, raw_dir, model_name=params.model_name,
+    response = find(tgt_img, img_dir, model_name=params.model_name,
                                 distance_metric=params.distance_metric,
                                 model=fv_router.face_verifier,
                                 enforce_detection=params.enforce_detection,
@@ -169,14 +168,14 @@ async def recognize_single_face(tgt_file: UploadFile,
 
 @fr_router.post("/create_database")
 async def create_database(cdb_params: CreateDatabaseParams,
-                          img_dir: Optional[str] = None,
+                          image_dir: Optional[str] = None,
                           db_path: Optional[str] = None,
                           force_create: Optional[bool] = False):
 
     # If image directory provided is None, use default directory
-    if not img_dir:
-        global raw_dir
-        img_dir = raw_dir
+    if not image_dir:
+        global img_dir
+        image_dir = img_dir
 
     # If database path provided is None, use default path
     if not db_path:
@@ -189,7 +188,7 @@ async def create_database(cdb_params: CreateDatabaseParams,
         pass
 
     elif len(glb.rep_db) == 0 or force_create:
-        glb.rep_db = create_reps_from_dir(img_dir, glb.models,
+        glb.rep_db = create_reps_from_dir(image_dir, glb.models,
                                     detector_name=cdb_params.detector_name,
                                     align=cdb_params.align, show_prog_bar=True,
                                     verifier_names=cdb_params.verifier_names,
@@ -282,7 +281,7 @@ async def verify_with_upload(files: List[UploadFile],
     # Initializes results list, obtains the relevant embeddings from the 
     # representation database and gets all files in the raw directory
     verification_results = []
-    all_files            = os.listdir(raw_dir)
+    all_files            = os.listdir(img_dir)
     dtb_embs             = get_embeddings_as_array(glb.rep_db, verifier_name)
 
     # Loops through each file
@@ -294,7 +293,7 @@ async def verify_with_upload(files: List[UploadFile],
 
         # Obtains the file's image name and creates the full path
         img_name = f.filename.split('.')[0]
-        img_fp   = os.path.join(raw_dir, img_name + '.' + save_as)
+        img_fp   = os.path.join(img_dir, img_name + '.' + save_as)
 
         # Saves the image if it does not exist or if overwrite is True
         if not (img_name in all_files) or overwrite:
@@ -366,11 +365,11 @@ async def bug1(myfile: UploadFile, vf_params: VerificationParams):
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/set_raw_dir")
-async def set_raw_dir(path: str):
+@fr_router.post("/set_img_dir")
+async def set_img_dir(path: str):
     path = path.replace("//", "/")
     if os.path.isdir(path):
-        glb.RAW_DIR = path
+        glb.IMG_DIR = path
         return {'message':f'RAW DIR set to {path}'}
     else:
         return {'message':f'Path provided is not a valid directory ({path})'}

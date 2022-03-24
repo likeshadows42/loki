@@ -15,8 +15,8 @@ SVD_MDL_DIR  = os.path.join(API_DIR     , 'saved_models')
 SVD_VRF_DIR  = os.path.join(SVD_MDL_DIR , 'verifiers')
 
 # List with all path variables' "names"
-directory_list_names = ['api root', 'dataset root', 'raw', 'targets',
-                        'rep. database', 's. models', 's. verifiers']
+directory_list_names = ['api root', 'data dir', 'img dir', 'rep. database',
+                        'saved models', 'saved verifiers']
 
 # Other variables
 models      = []    # stores all face verifier models
