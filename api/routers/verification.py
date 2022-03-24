@@ -5,16 +5,16 @@ import os
 import cv2
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-import numpy            as np
+import numpy                as np
 
-from typing             import List
-from fastapi            import APIRouter, UploadFile
-from deepface           import DeepFace
-from IFR.functions      import build_face_verifier, verify_faces,\
-                               calculate_similarity
-from IFR.classes        import DistanceMetrics, GetRepresentationParams,\
-                               FaceVerifierParams
-from api.routers.detection   import fd_router, FaceDetectorOptions
+from typing                 import List
+from fastapi                import APIRouter, UploadFile
+from deepface               import DeepFace
+from IFR.functions          import build_face_verifier, verify_faces,\
+                                   calculate_similarity
+from IFR.classes            import DistanceMetrics, GetRepresentationParams,\
+                                   FaceVerifierParams
+from api.routers.detection  import fd_router, FaceDetectorOptions
 
 # --------------------------- ROUTER INITIALIZATION ----------------------------
 fv_router = APIRouter()

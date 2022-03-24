@@ -15,8 +15,8 @@ from IFR.functions      import detect_faces as find_faces
 from IFR.classes        import FaceDetectorOptions, Faces
 
 # --------------------------- ROUTER INITIALIZATION ----------------------------
-fd_router = APIRouter()
-fd_router.face_detector = None
+fd_router                    = APIRouter()
+fd_router.face_detector      = None
 fd_router.face_detector_name = None
 
 # -------------------------------- API METHODS ---------------------------------
