@@ -18,7 +18,11 @@ SVD_VRF_DIR  = os.path.join(SVD_MDL_DIR , 'verifiers')
 directory_list_names = ['api root', 'data dir', 'img dir', 'rep. database',
                         'saved models', 'saved verifiers']
 
+# Tuple with all verifier names
+verifier_names = ('VGG-Face', 'Facenet', 'Facenet512', 'OpenFace',
+                  'DeepFace', 'DeepID' , 'ArcFace')
+
 # Other variables
-models      = []    # stores all face verifier models
+models      = {}    # stores all face verifier models
 rep_db      = []    # stores representation database
 db_changed  = False # indicates whether database has been modified (and should be saved)
