@@ -430,6 +430,7 @@ def create_dir(dir_path):
 #                DETECTORS & VERIFIERS BUILDING, SAVING & LOADING
 # ------------------------------------------------------------------------------
 
+# Required for verification router
 def build_face_verifier(model_name='VGG-Face', distance_metric='cosine', 
                         model=None, verbose=0):
     """
@@ -595,159 +596,123 @@ def saved_verifier_exists(verifier_name, save_dir):
 
 # ------------------------------------------------------------------------------
 
-def save_face_verifiers(verifiers, save_dir, show_prog_bar=True,
-                        overwrite=False):
+def save_face_verifier(verifier_name, verifier_obj, save_dir, overwrite=False,
+                        verbose=False):
     """
-    Saves all face verifier models specified in 'verifiers' using the 'shelve'
-    (persistent storage) module. The models are saved in the 'save_dir'
-    directory and each model is saved individually. Models that fail to save (or
-    produces an error) are skipped. For each model that already exists, this
+    Save a face verifier model specified in 'verifier' as a pickled object. The
+    model is saved in the 'save_dir' directory. If a model already exists, this
     function does not overwrite it unless the 'overwrite' flag is set to True.
+    All errors are suppressed unless verbose is True.
     
     Inputs:
-        1. verifiers - dictionary containing the build face verifier models.
-        2. save_dir - string with the full path of the save directory
-        2. show_prog_bar - boolean that toggles the progress bar on or off
-            ([show_prog_bar=True]).
-        3. overwrite - boolean that indicates if the function should overwrite
-            any saved models ([overwrite=False]).
+        1. verifier_name - string with the verifier name.
+        2. verifier_obj  - built verifier model object.
+        3. save_dir      - string with the full path of the save directory
+        4. overwrite     - boolean that indicates if the function should
+            overwrite any saved models ([overwrite=False]).
+        5. verbose       - boolean that toggles the amount of text output
+            ([False] - silent, True - verbose)
                         
     Outputs:
-        1. returns a status flag of True if any model fails to save (otherwise
-            returns False)
+        1. returns a status flag of True on error (otherwise returns False)
     
     Signature:
-        status = save_face_verifiers(verifiers, save_dir, show_prog_bar=True,
-                        overwrite=False)
+        status = save_face_verifier(verifier_name, verifier_obj, save_dir,
+                                    overwrite=False, verbose=False)
     """
+    # Prints message
+    if verbose:
+        print(f'[save_face_verifier] Saving {verifier_name}: ', end='')
+
     # Checks if the save directory provided is a directory
     if not os.path.isdir(save_dir):
+        if verbose:
+            print(f'failed! Reason: {save_dir} is not a directory',
+                   'or does not exist.')
         return True
     
-    # Creates the progress bar
-    n_verifiers    = len(verifiers)
-    disable_option = not show_prog_bar
-    pbar           = tqdm(range(0, n_verifiers), desc='Saving verifiers',
-                            disable = disable_option)
+    # Saves verifier if it does not exist or if 'overwrite' is set to True
+    if not saved_verifier_exists(verifier_name, save_dir=save_dir) or overwrite:
+        try:
+            # Creates the file's full path
+            file_fp  = os.path.join(save_dir, verifier_name) + '.pickle'
+        
+            # Saves the built model as a pickled object
+            with open(file_fp, 'wb') as handle:
+                pickle.dump(verifier_obj, handle,
+                            protocol=pickle.HIGHEST_PROTOCOL)
+
+            # Prints success message
+            if verbose:
+                print('success!')
+            
+        except Exception as excpt:
+            # Prints exception and returns True
+            if verbose:
+                print(f'failed! Reason: {excpt}')
+            return True
     
-    # Loops through each verifier
-    no_errors_flag = False # False means no errors
-    for index, verifier_items in zip(pbar, verifiers.items()):
-        # Gets the name of the verifier and the verifier object
-        name     = verifier_items[0]
-        verifier = verifier_items[1]
-        
-        if not saved_verifier_exists(name, save_dir=save_dir) or overwrite:
-            try:
-                # Creates the file's full path
-                file_fp  = os.path.join(save_dir, name)
-        
-                # Opens a persistent dictionary, saves the model
-                # as a dictionary then closes it
-                with shelve.open(file_fp) as d:
-                    d[name]  = verifier
+    # Otherwise, skips saving because verifier exists
+    else:
+        # Prints skip message
+        if verbose:
+            print(f'skipped! Reason: {verifier_name} already exists.')
             
-            except Exception as excpt:
-                no_errors_flag = True
-            
-    return no_errors_flag
+    return False
 
 # ------------------------------------------------------------------------------
 
-def load_face_verifier(verifier_names, save_dir, show_prog_bar=True,
-                        verbose=False):
+def load_face_verifier(verifier_name, save_dir, verbose=False):
     """
-    Loads all face verifier models specified in 'verifier_names'. Alternatively,
-    'all' can be passed as a 'verifier_name' to load all saved models. The
-    models are loaded from the 'save_dir' directory.
-      
-    This function loads each model individually and skips any model that 
-    fails to load (or produces an error).
+    Loads a face verifier model specified in 'verifier_name'. The model is
+    loaded from the 'save_dir' directory. Errors are suppressed if 'verbose' is
+    set to False, but an empty list is returned on error (instead of the built)
+    model object.
     
     Inputs:
         1. verifier_name - string with the name of the face verifiers.
         2. save_dir      - string with the full path of the save directory.
-        3. show_prog_bar - boolean that toggles the progress bar on or off
-            ([show_prog_bar=True]).
-        4. verbose       - boolean that toggles the amount of text output
+        3. verbose       - boolean that toggles the amount of text output
             ([False] - silent, True - verbose)
                         
     Outputs:
-        1. returns a status flag of True if any model fails to save (otherwise
-            returns False)
+        1. returns the built model object (or returns an empty list on error)
             
     Signature:
-        models = load_face_verifier(verifier_names, save_dir='',
-                    show_prog_bar=True)
+        model = load_face_verifier(verifier_name, save_dir, verbose=False)
     """
+    # Initializes output
+    model = []
+
     # Checks if the save directory provided is a directory
     if not os.path.isdir(save_dir):
         raise OSError(f'Save directory does not exist ({save_dir})!')
     
-    # Ensures that the verifier_names is a list (even a single name is provided)
-    if not isinstance(verifier_names, list):
-        verifier_names = [verifier_names]
-        
-    # If 'all' was provided, use all model names
-    if verifier_names[0].lower() == 'all':
-        verifier_names = ['VGG-Face', 'OpenFace', 'Facenet', 'Facenet512',
-                          'DeepFace', 'DeepID', 'ArcFace', 'Emotion', 'Age',
-                          'Gender', 'Race']
-    
-    # Creates the progress bar
-    n_verifiers    = len(verifier_names)
-    disable_option = not show_prog_bar
-    pbar           = tqdm(range(0, n_verifiers), desc='Loading verifiers',
-                            disable = disable_option)
-    
-    models = {}
-    for index, verifier_name in zip(pbar, verifier_names):       
-        # Checks if the face verifier model exists
-        if saved_verifier_exists(verifier_name, save_dir=save_dir):
-            # Loads the model
-            file_fp = os.path.join(save_dir, verifier_name)
-            with shelve.open(file_fp) as model:
-                if verbose:
-                    print(f'[load_face_verifier] Loading model',
-                          f'{verifier_name}: ', end='')
-                try:
-                    models[verifier_name] = model[verifier_name]
-                    if verbose:
-                        print('success!')
-                except Exception as excpt:
-                    if verbose:
-                        print(f'failed! Reason: {excpt}\n',
-                               '[load_face_verifier] Attempting to build',
-                               ' & save model from scratch: ', sep='', end='')
-                    try:
-                        cur_model = build_verifier(verifier_name)
-                        models[verifier_name] = cur_model
-                        save_face_verifiers(cur_model, save_dir=save_dir,
-                                            show_prog_bar=False, overwrite=True)
-                        if verbose:
-                            print('success!')
-                    except Exception as excpt:
-                        if verbose:
-                            print(f'failed! Reason: {excpt}')
-                                
-        else:
-            # Otherwise, tries to build model from scratch & save it
+    # Prints message
+    if verbose:
+        print('[load_face_verifier] Loading model',
+             f'{verifier_name}: ', end='')
+
+    # Checks if the face verifier model exists
+    if saved_verifier_exists(verifier_name, save_dir=save_dir):
+        # Loads the model
+        file_fp = os.path.join(save_dir, verifier_name)
+        try:
+            with open(file_fp) as handle:
+                model = handle
             if verbose:
-                print(f'[load_face_verifier] Model {verifier_name} ',
-                      'does not exist.', '\nAttempting to build & save model ',
-                      'from scratch: ', sep='', end='')
-            try:
-                cur_model = build_verifier(verifier_name)
-                models[verifier_name] = cur_model
-                save_face_verifiers(cur_model, save_dir=save_dir,
-                                    show_prog_bar=False, overwrite=False)
-                if verbose:
-                    print('success!')
-            except Exception as excpt:
-                if verbose:
-                    print(f'failed! Reason: {excpt}')
+                print('success!')
+        except Exception as excpt:
+            if verbose:
+                print(f'failed! Reason: {excpt}')
+
+    # Model does not exist at specified path
+    else:
+        if verbose:
+            print(f'failed! Reason: {verifier_name}'
+                  f' does not exist in {save_dir}', sep='')
     
-    return models
+    return model
 
 # ------------------------------------------------------------------------------
         

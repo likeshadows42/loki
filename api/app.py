@@ -5,14 +5,18 @@ import os
 import pickle
 import api.global_variables         as glb
 
+from tqdm                           import tqdm
 from fastapi                        import FastAPI
 from IFR.functions                  import load_representation_db,\
-                                           create_dir, load_face_verifier
+                                           create_dir, load_face_verifier,\
+                                           save_face_verifier
 
 from api.routers.detection          import fd_router
 from api.routers.verification       import fv_router
 from api.routers.recognition        import fr_router
 from api.routers.attribute_analysis import aa_router
+
+from deepface.DeepFace              import build_model    as build_verifier
 
 # ______________________________________________________________________________
 #                               APP INITIALIZATION
@@ -33,6 +37,7 @@ app.include_router(aa_router, prefix="/aa", tags=["Face Attribute Analysis"])
 async def initialization():
     print('\n ======== Starting initialization process ======== \n')
 
+
     # Directories & paths initialization
     print('  -> Directory creation:')
     directory_list = [glb.API_DIR, glb.DATA_DIR, glb.IMG_DIR, glb.RDB_DIR,
@@ -47,6 +52,7 @@ async def initialization():
             print('success.')
     print('')
 
+
     # Tries to load a database if it exists. If not, create a new one.
     print('  -> Loading / creating database:')
     if not os.path.isfile(os.path.join(glb.RDB_DIR, 'rep_database.pickle')):
@@ -55,11 +61,30 @@ async def initialization():
                                     'rep_database.pickle'), verbose=True)
     print('')
     
-    # Checks if face verifier folder exists
+
+    # Loads (or creates) all face verifiers
     print('  -> Loading / creating face verifiers:')
-    glb.models = load_face_verifier(['ArcFace'],
-                                    save_dir=glb.SVD_VRF_DIR,
-                                    show_prog_bar=False, verbose=True)
+
+    for verifier_name in glb.verifier_names:
+        # First, try loading (opening) the model
+        model = load_face_verifier(verifier_name + '.pickle', glb.SVD_VRF_DIR,
+                                   verbose=True)
+
+        # If successful, save the model in a dictionary
+        if not isinstance(model, list):
+            glb.models[verifier_name] = model
+
+        # Otherwise, build the model from scratch
+        else:
+            print(f'[build_verifier] Building {verifier_name}: ', end='')
+            try:
+                glb.models[verifier_name] = build_verifier(verifier_name)
+                print('success!\n')
+
+            except Exception as excpt:
+                print(f'failed! Reason: {excpt}\n')
+
+
     print('\n -------- End of initialization process -------- \n')
 
 # ------------------------------------------------------------------------------
@@ -67,6 +92,7 @@ async def initialization():
 @app.on_event("shutdown")
 async def finish_processes():
     print('\n ======== Performing finishing processes ======== \n')
+
 
     # Saves the modified database if flag is True
     if glb.db_changed:
@@ -76,8 +102,15 @@ async def finish_processes():
         with open(db_fp, 'wb') as handle:
             pickle.dump(glb.rep_db, handle, protocol=pickle.HIGHEST_PROTOCOL)
     else:
-        print('  -> Database is unchanged: skipping save.')
+        print('  -> Database is unchanged: skipping save.\n')
 
+
+    # Saves (built) face verifiers (if needed)
+    print('  -> Saving face verifiers (if needed):')
+    for verifier_name in glb.verifier_names:
+        # Saving face verifiers
+        save_face_verifier(verifier_name, glb.models[verifier_name],
+                           glb.SVD_VRF_DIR, overwrite=False, verbose=True)
 
 
     print('\n -------- Exitting program: good bye! -------- \n')
