@@ -9,7 +9,6 @@ import time
 import cv2
 import faiss
 import pickle
-import shelve
 
 import numpy                as np
 import tensorflow           as tf
@@ -698,8 +697,8 @@ def load_face_verifier(verifier_name, save_dir, verbose=False):
         # Loads the model
         file_fp = os.path.join(save_dir, verifier_name)
         try:
-            with open(file_fp) as handle:
-                model = handle
+            with open(file_fp, 'rb') as handle:
+                model = pickle.load(handle)
             if verbose:
                 print('success!')
         except Exception as excpt:
