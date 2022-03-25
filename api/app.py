@@ -10,10 +10,12 @@ from IFR.functions                  import load_representation_db,\
                                            create_dir, load_face_verifier,\
                                            save_face_verifier
 
-from api.routers.detection          import fd_router
-from api.routers.verification       import fv_router
+# from api.routers.detection          import fd_router
+# from api.routers.verification       import fv_router
+# from api.routers.attribute_analysis import aa_router
+
+from api.routers.deepface           import df_router
 from api.routers.recognition        import fr_router
-from api.routers.attribute_analysis import aa_router
 
 from deepface.DeepFace              import build_model    as build_verifier
 
@@ -23,10 +25,9 @@ from deepface.DeepFace              import build_model    as build_verifier
 
 app = FastAPI()
 
-app.include_router(fd_router, prefix="/fd", tags=["Face Detection"])
-app.include_router(fv_router, prefix="/fv", tags=["Face Verification"])
+app.include_router(df_router, prefix="/df", tags=["Deepface"])
 app.include_router(fr_router, prefix="/fr", tags=["Face Recognition"])
-app.include_router(aa_router, prefix="/aa", tags=["Face Attribute Analysis"])
+
 
 # ______________________________________________________________________________
 #                                   APP METHODS
@@ -113,6 +114,12 @@ async def finish_processes():
     # Saves (built) face verifiers (if needed)
     print('  -> Saving face verifiers (if needed):')
     for verifier_name in glb.verifier_names:
+        # Quick fix to avoid problems when len(glb.verifier_names) == 1. In this
+        # case, FOR loops over each letter in the string instead of considering
+        # the entire string as one thing.
+        if verifier_name == '':
+            continue
+
         # Saving face verifiers
         save_face_verifier(verifier_name, glb.models[verifier_name],
                            glb.SVD_VRF_DIR, overwrite=False, verbose=True)
