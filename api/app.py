@@ -5,7 +5,6 @@ import os
 import pickle
 import api.global_variables         as glb
 
-from tqdm                           import tqdm
 from fastapi                        import FastAPI
 from IFR.functions                  import load_representation_db,\
                                            create_dir, load_face_verifier,\
@@ -66,6 +65,12 @@ async def initialization():
     print('  -> Loading / creating face verifiers:')
 
     for verifier_name in glb.verifier_names:
+        # Quick fix to avoid problems when len(glb.verifier_names) == 1. In this
+        # case, FOR loops over each letter in the string instead of considering
+        # the entire string as one thing.
+        if verifier_name == '':
+            continue
+
         # First, try loading (opening) the model
         model = load_face_verifier(verifier_name + '.pickle', glb.SVD_VRF_DIR,
                                    verbose=True)
