@@ -96,7 +96,7 @@ async def finish_processes():
 
     # Saves the modified database if flag is True
     if glb.db_changed:
-        print('  -> Database has changed: saving database.')
+        print('  -> Database has changed: saving database.\n')
         db_fp = os.path.join(glb.RDB_DIR, 'rep_database.pickle')
 
         with open(db_fp, 'wb') as handle:
