@@ -93,8 +93,6 @@ async def bug1(myfile: UploadFile, vf_params_dep: VerificationParams = Depends()
     # No idea why this happening. #myfile: UploadFile,
     # 
 
-    vf_params = vf_params_dep.dict()
-
     print('Input parameters:\n',
           ' > detector_name'.ljust(18), f': {vf_params["detector_name"]}\n',
           ' > verifier_name'.ljust(18), f': {vf_params["verifier_name"]}\n',
