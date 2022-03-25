@@ -16,7 +16,7 @@ from pydantic           import BaseModel
 #     orm_mode = True
 
 # ______________________________________________________________________________
-#                       PATH PARAMETER (API INPUT) CLASSES
+#                          ENUMERATION (OPTIONS) CLASSES
 # ------------------------------------------------------------------------------
 
 # Path parameter class for face detector name options
@@ -66,41 +66,6 @@ class NormalizationTypes(str, Enum):
     VGGFACE2    = "VGGFace2"
     ARCFACE     = "ArcFace"
 
-# Path parameter class for get representation options
-class GetRepresentationParams(BaseModel):
-    """
-    Path parameter class: defines the expected body request containing all of
-    the get representation options.
-    """
-    model_name: FaceVerifierOptions = FaceVerifierOptions.VGGFace
-    enforce_detection: bool = True
-    detector_backend: FaceDetectorOptions = FaceDetectorOptions.OPENCV
-    align: bool = True
-    normalization: NormalizationTypes = NormalizationTypes.BASE
-
-    # Pydantic expects a dictionary by default. You can configure your model to
-    # also support loading from standard ORM parameters (i.e. attributes on the
-    # object instead of dictionary lookups):
-    class Config:
-        orm_mode = True
-
-# Path parameter class for face verification options
-class FaceVerifierParams(BaseModel):
-    """
-    Path parameter class: defines the expected body request containing all of
-    the face verification options.
-    """
-    model_name: FaceVerifierOptions = FaceVerifierOptions.VGGFace
-    distance_metric: DistanceMetrics = DistanceMetrics.COSINE
-    enforce_detection: bool = True
-    detector_backend: FaceDetectorOptions = FaceDetectorOptions.OPENCV
-    align: bool = True
-    normalization: NormalizationTypes = NormalizationTypes.BASE
-    threshold: int = -1
-
-    class Config:
-        orm_mode = True
-
 # Path parameter class for image save types
 class ImageSaveTypes(str, Enum):
     """
@@ -110,19 +75,73 @@ class ImageSaveTypes(str, Enum):
     JPG = "jpg"
     NPY = "npy"
 
+
+# ______________________________________________________________________________
+#                                   DEFAULT VALUES
+# ------------------------------------------------------------------------------
+
+default_detector          = FaceDetectorOptions.RETINA
+default_verifier          = FaceVerifierOptions.ARCFACE
+default_metric            = DistanceMetrics.COSINE
+default_normalization     = NormalizationTypes.BASE
+default_image_save_type   = ImageSaveTypes.JPG
+default_align             = True
+default_enforce_detection = True
+default_threshold         = -1
+default_tags              = []
+default_uids              = []
+default_verbose           = False
+
+
+# ______________________________________________________________________________
+#                       PATH PARAMETER (API INPUT) CLASSES
+# ------------------------------------------------------------------------------
+
+# Path parameter class for get representation options
+class GetRepresentationParams(BaseModel):
+    """
+    Path parameter class: defines the expected body request containing all of
+    the get representation options.
+    """
+    model_name       : FaceVerifierOptions = default_verifier
+    enforce_detection: bool                = default_enforce_detection
+    detector_backend : FaceDetectorOptions = default_detector
+    align            : bool                = default_align
+    normalization    : NormalizationTypes  = default_normalization
+
+    class Config:
+        orm_mode = True
+
+# Path parameter class for face verification options
+class FaceVerifierParams(BaseModel):
+    """
+    Path parameter class: defines the expected body request containing all of
+    the face verification options.
+    """
+    model_name       : FaceVerifierOptions  = default_verifier
+    distance_metric  : DistanceMetrics      = default_metric
+    enforce_detection: bool                 = default_enforce_detection
+    detector_backend : FaceDetectorOptions  = default_detector
+    align            : bool                 = default_align
+    normalization    : NormalizationTypes   = default_normalization
+    threshold        : int                  = default_threshold
+
+    class Config:
+        orm_mode = True
+
 # Path parameter class for create_database endpoint parameters
 class CreateDatabaseParams(BaseModel):
     """
     Path parameter class: defines the expected body request containing all of
     the parameters required for database creation.
     """
-    detector_name : FaceDetectorOptions = FaceDetectorOptions.OPENCV
-    verifier_names: List[FaceVerifierOptions] = [FaceVerifierOptions.VGGFace]
-    align         : bool = True
-    normalization : NormalizationTypes = NormalizationTypes.BASE
-    tags          : Optional[List[str]] = []
-    uids          : Optional[List[str]] = []
-    verbose       : bool = False
+    detector_name : FaceDetectorOptions       = default_detector
+    verifier_names: List[FaceVerifierOptions] = [default_verifier]
+    align         : bool                      = default_align
+    normalization : NormalizationTypes        = default_normalization
+    tags          : Optional[List[str]]       = default_tags
+    uids          : Optional[List[str]]       = default_uids
+    verbose       : bool                      = default_verbose
 
     class Config:
         orm_mode = True
@@ -133,13 +152,13 @@ class VerificationParams(BaseModel):
     Path parameter class: defines the expected body request containing all of
     the parameters required for the verification / recognition process.
     """
-    detector_name: FaceDetectorOptions = FaceDetectorOptions.OPENCV
-    verifier_name: FaceVerifierOptions = FaceVerifierOptions.VGGFace
-    align        : bool                = True
-    normalization: NormalizationTypes  = NormalizationTypes.BASE
-    metric       : DistanceMetrics     = DistanceMetrics.COSINE
-    threshold    : float               = -1
-    verbose      : bool                = False
+    detector_name: FaceDetectorOptions = default_detector
+    verifier_name: FaceVerifierOptions = default_verifier
+    align        : bool                = default_align
+    normalization: NormalizationTypes  = default_normalization
+    metric       : DistanceMetrics     = default_metric
+    threshold    : float               = default_threshold
+    verbose      : bool                = default_verbose
 
     class Config:
         orm_mode = True
