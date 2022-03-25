@@ -13,13 +13,10 @@ from typing                   import List, Optional
 from zipfile                  import ZipFile
 from fastapi                  import APIRouter, UploadFile, File
 from IFR.classes              import *
-from deepface.DeepFace        import find
-from IFR.functions            import build_face_verifier, create_reps_from_dir,\
-                                    calc_embedding, get_embeddings_as_array,\
-                                    calc_similarity, create_new_representation,\
-                                    get_matches_from_similarity
-from api.routers.detection    import fd_router, FaceDetectorOptions
-from api.routers.verification import fv_router
+from IFR.functions            import create_reps_from_dir, calc_embedding,\
+                                     get_embeddings_as_array, calc_similarity,\
+                                     create_new_representation, \
+                                     get_matches_from_similarity
 
 from matplotlib               import image                       as mpimg
 
