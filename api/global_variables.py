@@ -19,8 +19,10 @@ directory_list_names = ['api root', 'data dir', 'img dir', 'rep. database',
                         'saved models', 'saved verifiers']
 
 # Tuple with all verifier names
-verifier_names = ('VGG-Face', 'Facenet', 'Facenet512', 'OpenFace',
-                  'DeepFace', 'DeepID' , 'ArcFace')
+# verifier_names = ('VGG-Face', 'Facenet', 'Facenet512', 'OpenFace',
+#                   'DeepFace', 'DeepID' , 'ArcFace')
+verifier_names = ('ArcFace', '') # to avoid long startups during developing
+                                 # (dont forget to include '' to avoid a bug)
 
 # Other variables
 models      = {}    # stores all face verifier models
