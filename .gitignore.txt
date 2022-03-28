@@ -27,7 +27,7 @@ __pycache__/
 .ionide
 
 ### API Directories ###
-api/data
-api/saved_models
+/api/data/
+/api/saved_models/
 
 .DS_Store
