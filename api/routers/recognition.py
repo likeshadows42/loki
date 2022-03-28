@@ -13,13 +13,10 @@ from typing                   import List, Optional
 from zipfile                  import ZipFile
 from fastapi                  import APIRouter, UploadFile, File, Depends
 from IFR.classes              import *
-from deepface.DeepFace        import find
-from IFR.functions            import build_face_verifier, create_reps_from_dir,\
-                                    calc_embedding, get_embeddings_as_array,\
-                                    calc_similarity, create_new_representation,\
-                                    get_matches_from_similarity
-from api.routers.detection    import fd_router, FaceDetectorOptions
-from api.routers.verification import fv_router
+from IFR.functions            import create_reps_from_dir, calc_embedding,\
+                                     get_embeddings_as_array, calc_similarity,\
+                                     create_new_representation, \
+                                     get_matches_from_similarity
 
 from matplotlib               import image                       as mpimg
 
@@ -106,91 +103,41 @@ async def bug1(myfile: UploadFile, vf_params_dep: VerificationParams = Depends()
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/upload_files")
-async def upload_files(files: List[UploadFile], overwrite = False,
-                       save_as: ImageSaveTypes = ImageSaveTypes.NPY):
-    """
-    API ENDPOINT: upload_files
-        Use this endpoint to upload several files at once. The files can be
-        saved as .png, .jpg or .npy files ([save_as='npy']). If the file already
-        exists in the data directory it is skipped unless the 'overwrite' flag
-        is set to True ([overwrite=False]).
-    """    
-    # Gets all files in the raw directory
-    all_files = os.listdir(img_dir)
+# @fr_router.post("/upload_files")
+# async def upload_files(files: List[UploadFile], overwrite = False,
+#                        save_as: ImageSaveTypes = ImageSaveTypes.NPY):
+#     """
+#     API ENDPOINT: upload_files
+#         Use this endpoint to upload several files at once. The files can be
+#         saved as .png, .jpg or .npy files ([save_as='npy']). If the file already
+#         exists in the data directory it is skipped unless the 'overwrite' flag
+#         is set to True ([overwrite=False]).
+#     """    
+#     # Gets all files in the raw directory
+#     all_files = os.listdir(img_dir)
     
-    for f in files:
-        data     = np.fromfile(f.file, dtype=np.uint8)
-        img      = cv2.imdecode(data, cv2.IMREAD_UNCHANGED)
-        img_name = f.filename.split('.')[0]
-        img_fp   = os.path.join(img_dir, img_name + '.' + save_as)
+#     for f in files:
+#         data     = np.fromfile(f.file, dtype=np.uint8)
+#         img      = cv2.imdecode(data, cv2.IMREAD_UNCHANGED)
+#         img_name = f.filename.split('.')[0]
+#         img_fp   = os.path.join(img_dir, img_name + '.' + save_as)
 
-        if not (img_name in all_files) or overwrite:
-            if save_as == ImageSaveTypes.NPY:
-                np.save(img_fp, img[:, :, ::-1], allow_pickle=False,
-                                                  fix_imports=False)
-            else:
-                mpimg.imsave(img_fp, img[:, :, ::-1])
+#         if not (img_name in all_files) or overwrite:
+#             if save_as == ImageSaveTypes.NPY:
+#                 np.save(img_fp, img[:, :, ::-1], allow_pickle=False,
+#                                                   fix_imports=False)
+#             else:
+#                 mpimg.imsave(img_fp, img[:, :, ::-1])
 
-    return {'message':'Images uploaded successfully.'}
-
-# ------------------------------------------------------------------------------
-
-@fr_router.post("/recognize/single") # uses deepface function 'find'
-async def recognize_single_face(tgt_file: UploadFile,
-                                params: FaceVerifierParams):
-    """
-    API ENDPOINT: recognize_single_face
-        Recognizes a single image by comparing it to the images in the directory
-        specified by the 'IMG_DIR' path variable.
-    """    
-    # Obtains contents of the target and reference files & transforms them into
-    # images
-    tgt_data = np.fromfile(tgt_file.file, dtype=np.uint8)
-    tgt_img  = cv2.imdecode(tgt_data, cv2.IMREAD_UNCHANGED)
-
-    # Builds the face verifier model
-    fv_router.face_verifier_name, metric_name, fv_router.face_verifier = \
-                build_face_verifier(model_name=params.model_name, 
-                                    model=fv_router.face_verifier,
-                                    distance_metric=params.distance_metric)
-    
-    # Unnests single element list into element. Does the same for the dictionary
-    # of models unless the model name is 'Ensemble' (as Ensemble models consists
-    # of 4 models)
-    fv_router.face_verifier_name = fv_router.face_verifier_name[0]
-    metric_name                  = metric_name[0]
-
-    if fv_router.face_verifier_name != "Ensemble":
-        fv_router.face_verifier = \
-            fv_router.face_verifier[fv_router.face_verifier_name]
-
-    # Check if a face detection model has been used before, if not use a default
-    # option
-    if fd_router.face_detector_name == None:
-        use_backend = FaceDetectorOptions.OPENCV
-    else:
-        use_backend = fd_router.face_detector_name
-
-    # Runs face recognition
-    response = find(tgt_img, img_dir, model_name=params.model_name,
-                                distance_metric=params.distance_metric,
-                                model=fv_router.face_verifier,
-                                enforce_detection=params.enforce_detection,
-                                detector_backend=use_backend,
-                                align=params.align, prog_bar=False,
-                                normalization=params.normalization)
-
-    print(response)
-    return response
+#     return {'message':'Images uploaded successfully.'}
 
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/create_database/from_directory")
 async def create_database_from_directory(cdb_params: CreateDatabaseParams,
-                                         image_dir: Optional[str] = None,
-                                         db_dir: Optional[str] = None,
-                                         force_create: Optional[bool] = False):
+                                    image_dir   : Optional[str]  = glb.IMG_DIR,
+                                    db_dir      : Optional[str]  = glb.RDB_DIR,
+                                    force_create: Optional[bool] = False):
     # Initialize output message
     output_msg = ''
 
@@ -464,12 +411,56 @@ async def verify_with_upload(files: List[UploadFile],
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/set_img_dir")
-async def set_img_dir(path: str):
-    path = path.replace("//", "/")
-    if os.path.isdir(path):
-        glb.IMG_DIR = path
-        return {'message':f'RAW DIR set to {path}'}
+@fr_router.post("/utility/edit_default_directories")
+async def edit_default_directories(img_dir: str = glb.IMG_DIR,
+                                   rdb_dir: str = glb.RDB_DIR):
+    # Intitializes output message
+    output_msg = ''
+    
+    # Sets the IMG_DIR path to the one provided IF it is a valid directory
+    if os.path.isdir(img_dir):
+        glb.IMG_DIR = img_dir
+        output_msg += f'IMG_DIR set to {img_dir}'
     else:
-        return {'message':f'Path provided is not a valid directory ({path})'}
+        output_msg += f'Path provided is not a valid directory ({img_dir})'
+
+    # Sets the RDB_DIR path to the one provided IF it is a valid directory
+    if os.path.isdir(rdb_dir):
+        glb.RDB_DIR = rdb_dir
+        output_msg += f'RDB_DIR set to {rdb_dir}'
+    else:
+        output_msg += f'Path provided is not a valid directory ({rdb_dir})'
+
+    return {'message':output_msg}
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/utility/get_names_in_database")
+async def get_names_in_database():
+
+    # Gets the names in the database depending on the database's size
+    if len(glb.rep_db) == 0:   # no representations
+        all_tags = []
+
+    elif len(glb.rep_db) == 1: # single representation
+        all_tags = [glb.rep_db[0].name_tag]
+
+    elif len(glb.rep_db) > 1:  # many representations
+        # Loops through each representation in the database and gets the name
+        # tag
+        all_tags = []
+        for rep in glb.rep_db:
+            all_tags.append(rep.name_tag)
+
+        # Only keep unique tags and sort the 'all_tags' list
+        all_tags = np.unique(all_tags)
+        all_tags.sort()
+    
+    else: # this should never happen (negative size for a database? preposterous!)
+        raise AssertionError('Representation database can '
+                            +'not have a negative size!')
+
+    return {'names':all_tags}
+
+# ------------------------------------------------------------------------------
 
