@@ -11,7 +11,7 @@ import api.global_variables   as glb
 from io                       import BytesIO
 from typing                   import List, Optional
 from zipfile                  import ZipFile
-from fastapi                  import APIRouter, UploadFile, File
+from fastapi                  import APIRouter, UploadFile, File, Depends
 from IFR.classes              import *
 from IFR.functions            import create_reps_from_dir, calc_embedding,\
                                      get_embeddings_as_array, calc_similarity,\
@@ -46,8 +46,8 @@ async def debug_inputs(params: VerificationParams):
           ' > metric'.ljust(18)       , f': {params.metric}\n',
           ' > threshold'.ljust(18)    , f': {params.threshold}\n',
           ' > verbose'.ljust(18)      , f': {params.verbose}\n', '', sep='')
-
-    return {'params':params}
+    
+    return params.dict()
 
 # ------------------------------------------------------------------------------
 
@@ -83,20 +83,23 @@ async def inspect_globals():
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/debug/bug1", response_model=VerificationMatches)
-async def bug1(myfile: UploadFile, vf_params: VerificationParams):
+async def bug1(myfile: UploadFile, vf_params_dep: VerificationParams = Depends()):
     # This bug occurs if a UploadFile ('myfile') is required as input
     # If it is removed, then vf_params change depending on user input.
     # If not, then vf_params ignores user's inputs and uses the default values.
-    # No idea why this happening. #myfile: UploadFile, 
+    # No idea why this happening. #myfile: UploadFile,
+    # 
+
+    vf_params = vf_params_dep.dict()
 
     print('Input parameters:\n',
-          ' > detector_name'.ljust(18), f': {vf_params.detector_name}\n',
-          ' > verifier_name'.ljust(18), f': {vf_params.verifier_name}\n',
-          ' > align'.ljust(18)        , f': {vf_params.align}\n',
-          ' > normalization'.ljust(18), f': {vf_params.normalization}\n',
-          ' > metric'.ljust(18)       , f': {vf_params.metric}\n',
-          ' > threshold'.ljust(18)    , f': {vf_params.threshold}\n',
-          ' > verbose'.ljust(18)      , f': {vf_params.verbose}\n', '', sep='')
+          ' > detector_name'.ljust(18), f': {vf_params["detector_name"]}\n',
+          ' > verifier_name'.ljust(18), f': {vf_params["verifier_name"]}\n',
+          ' > align'.ljust(18)        , f': {vf_params["align"]}\n',
+          ' > normalization'.ljust(18), f': {vf_params["normalization"]}\n',
+          ' > metric'.ljust(18)       , f': {vf_params["metric"]}\n',
+          ' > threshold'.ljust(18)    , f': {vf_params["threshold"]}\n',
+          ' > verbose'.ljust(18)      , f': {vf_params["verbose"]}\n', '', sep='')
 
 # ------------------------------------------------------------------------------
 

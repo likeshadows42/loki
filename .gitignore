@@ -1,6 +1,6 @@
 ### Python ###
 # Byte-compiled / optimized / DLL files
-**/__pycache__/
+__pycache__/
 *.py[cod]
 *$py.class
 
@@ -27,8 +27,8 @@
 .ionide
 
 ### API Directories ###
-api/data
-api/saved_models
-api/dataset
+/api/data/
+/api/saved_models/
+/api/dataset/
 
 .DS_Store
