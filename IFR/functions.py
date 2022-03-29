@@ -424,6 +424,118 @@ def create_dir(dir_path):
 
   return status
 
+# ------------------------------------------------------------------------------
+# unique_id : UUID
+# name_tag  : str
+# image_name: str
+# image_fp  : str
+# region    : List[int]
+# embeddings: List[str]
+
+def get_property_from_database(db, param, do_sort=False, suppress_error=True):
+    """
+    Gets a specific property 'param' from each representation the in the
+    database 'db'. If the flag 'do_sort' is True, then the output is sorted. If
+    the 'suppress_error' flag is set to True, then if the chosen property
+    'param' does not exist an empty list is returned. Otherwise, an Assertion
+    error is raised.
+
+    Inputs:
+        1. db - list of representation objects.
+        2. param - string with the property / parameter name (unique_id,
+            name_tag, image_name, image_fp, region or embeddings).
+        3. do_sort - boolean flag controlling if sorting of all properties
+            should be performed ([False], True).
+        4. suppress_error - boolean flag controlling if errors should be
+            suppressed, i.e. if the chosen property does not exist, an empty
+            list should be returned instead of an exception (False, [True]).
+
+    Output:
+        1. list containing the chosen property from each representation. The
+            list is sorted if 'do_sort' is set to True. The list will be empty
+            if the representation database has a length of zero or if
+            'suppress_error' is True and a non-existant property 'param' is
+            chosen.
+
+    Signature:
+        propty = get_property_from_database(db, param, do_sort=False,
+                                            suppress_error=True)
+    """
+    # Gets the names in the database depending on the database's size
+    if len(db) == 0:   # no representations
+        propty = []
+
+    elif len(db) == 1: # single representation
+        if   param == 'unique_id':
+            propty = [db[0].unique_id]
+        elif param == 'name_tag':
+            propty = [db[0].name_tag]
+        elif param == 'image_name':
+            propty = [db[0].image_name]
+        elif param == 'image_fp':
+            propty = [db[0].image_fp]
+        elif param == 'region':
+            propty = [db[0].region]
+        elif param == 'embeddings':
+            propty = [db[0].embeddings]
+        else:
+            if suppress_error:
+                propty = []
+            else:
+                raise AttributeError('Representation does not have '
+                                   + 'the chosen property.')
+
+    elif len(db) > 1:  # many representations
+        # Loops through each representation in the database and gets the
+        # specified property / parameter
+        if   param == 'unique_id':
+            propty = []
+            for rep in db:
+                propty.append(rep.unique_id)
+            
+        elif param == 'name_tag':
+            propty = []
+            for rep in db:
+                propty.append(rep.name_tag)
+            propty = np.unique(propty) # only keep unique name tags
+            
+        elif param == 'image_name':
+            propty = []
+            for rep in db:
+                propty.append(rep.image_name)
+            
+        elif param == 'image_fp':
+            propty = []
+            for rep in db:
+                propty.append(rep.image_fp)
+            
+        elif param == 'region':
+            propty = []
+            for rep in db:
+                propty.append(rep.region)
+            
+        elif param == 'embeddings':
+            propty = []
+            for rep in db:
+                propty.append(rep.embeddings)
+            
+        else:
+            if suppress_error:
+                propty = []
+            else:
+                raise AttributeError('Representation does not have '
+                                   + 'the chosen property.')
+
+        # Sorts the property if do_sort flag is set to True
+        if do_sort:
+            propty.sort()
+    
+    else: # this should never happen (negative size for a database? preposterous!)
+        raise AssertionError('Representation database can '
+                            +'not have a negative size!')
+
+    return list(propty)
+
 # ______________________________________________________________________________
 #                DETECTORS & VERIFIERS BUILDING, SAVING & LOADING
 # ------------------------------------------------------------------------------
