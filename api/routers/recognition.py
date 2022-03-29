@@ -47,8 +47,8 @@ async def debug_inputs(params: VerificationParams):
           ' > metric'.ljust(18)       , f': {params.metric}\n',
           ' > threshold'.ljust(18)    , f': {params.threshold}\n',
           ' > verbose'.ljust(18)      , f': {params.verbose}\n', '', sep='')
-
-    return {'params':params}
+    
+    return params.dict()
 
 # ------------------------------------------------------------------------------
 
