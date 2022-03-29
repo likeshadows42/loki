@@ -75,6 +75,24 @@ class ImageSaveTypes(str, Enum):
     JPG = "jpg"
     NPY = "npy"
 
+# Path parameter class for message detail options
+class MessageDetailOptions(str, Enum):
+    COMPLETE = "complete"
+    SUMMARY  = "summary"
+
+# Path parameter class for message output options
+class MessageOutputOptions(str, Enum):
+    STRUCTURE = "structure"
+    MESSAGE   = "message"
+
+# Path parameter class for available representation properties
+class AvailableRepProperties(str, Enum):
+    UNIQUE_ID  = "unique_id"
+    NAME_TAG   = "name_tag"
+    IMAGE_NAME = "image_name"
+    IMAGE_FP   = "image_fp"
+    REGION     = "region"
+    EMBEDDINGS = "embeddings"
 
 # ______________________________________________________________________________
 #                                   DEFAULT VALUES
@@ -91,7 +109,9 @@ default_threshold         = -1
 default_tags              = []
 default_uids              = []
 default_verbose           = False
-
+default_msg_detail        = MessageDetailOptions.SUMMARY
+default_msg_output        = MessageOutputOptions.STRUCTURE
+default_property          = AvailableRepProperties.NAME_TAG
 
 # ______________________________________________________________________________
 #                       PATH PARAMETER (API INPUT) CLASSES
@@ -182,6 +202,22 @@ class VerificationMatches(BaseModel):
     embeddings : List[List[float]]
     distances  : List[float]
     threshold  : float
+
+# Response class for representation summary output
+class RepsSummaryOutput(BaseModel):
+    unique_id: UUID
+    name_tag : str
+    region   : List[int]
+    image_fp : str
+
+# Response class for representation information output
+class RepsInfoOutput(BaseModel):
+    unique_id : UUID
+    name_tag  : str
+    image_name: str
+    image_fp  : str
+    region    : List[int]
+    embeddings: List[str]
 
 
 # ______________________________________________________________________________
