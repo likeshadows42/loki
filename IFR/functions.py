@@ -425,12 +425,6 @@ def create_dir(dir_path):
   return status
 
 # ------------------------------------------------------------------------------
-# unique_id : UUID
-# name_tag  : str
-# image_name: str
-# image_fp  : str
-# region    : List[int]
-# embeddings: List[str]
 
 def get_property_from_database(db, param, do_sort=False, suppress_error=True):
     """
@@ -540,7 +534,6 @@ def get_property_from_database(db, param, do_sort=False, suppress_error=True):
 #                DETECTORS & VERIFIERS BUILDING, SAVING & LOADING
 # ------------------------------------------------------------------------------
 
-# Required for verification router
 def build_face_verifier(model_name='VGG-Face', distance_metric='cosine', 
                         model=None, verbose=0):
     """
@@ -1068,7 +1061,7 @@ def create_new_representation(img_path, region, embeddings, tag='', uid='',
                           embeddings=embeddings)
 
 # ------------------------------------------------------------------------------
-
+# Still used?
 def update_representation(rep, embeddings):
     """
     Updates an existing representation object. For more information on the

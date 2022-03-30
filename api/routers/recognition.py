@@ -9,16 +9,18 @@ import numpy                  as np
 import api.global_variables   as glb
 
 from io                       import BytesIO
-from uuid                     import UUID
+from uuid                     import UUID, uuid4
 from typing                   import List, Optional
 from zipfile                  import ZipFile
-from fastapi                  import APIRouter, UploadFile, File, Depends
+from fastapi                  import APIRouter, UploadFile, Depends
+from tempfile                 import mkdtemp
 from IFR.classes              import *
 from IFR.functions            import create_reps_from_dir, calc_embedding,\
                         get_embeddings_as_array, calc_similarity,\
                         create_new_representation, get_matches_from_similarity,\
                         get_property_from_database as get_prop_from_db
 
+from shutil                   import rmtree, move                as sh_move
 from matplotlib               import image                       as mpimg
 
 data_dir = glb.DATA_DIR
@@ -151,6 +153,7 @@ async def create_database_from_zip(myfile: UploadFile,
                              params      : CreateDatabaseParams = Depends(),
                              image_dir   : Optional[str]        = glb.IMG_DIR,
                              db_dir      : Optional[str]        = glb.RDB_DIR,
+                             auto_rename : Optional[bool]       = True,
                              force_create: Optional[bool]       = False):
 
     # Initialize output message
@@ -185,13 +188,50 @@ async def create_database_from_zip(myfile: UploadFile,
         # Extract zip files
         output_msg += 'Extracting images in zip:'
         try:
+            # Create temporary directory and extract all files to it
+            tempdir = mkdtemp(prefix="create_database_from_zip-")
             with ZipFile(BytesIO(myfile.file.read()), 'r') as myzip:
-                myzip.extractall(image_dir)
+                myzip.extractall(tempdir)
+            
+            # Obtais all file names and temporary file names
+            all_fnames = [name.split('/')[-1] for name in os.listdir(image_dir)]
+            all_tnames = [name.split('/')[-1] for name in os.listdir(tempdir)]
+
+            # Initializes new names list
+            new_names = []
+
+            # Loops through each temporary file name
+            for tname in all_tnames:
+                # If they match any of the current file names, rename them using
+                # a unique id if 'auto_rename' is True. If 'auto_rename' is 
+                # False (and file requires renaming) skip this file.
+                if tname in all_fnames:
+                    if auto_rename:
+                        uid        = uuid4().hex
+                        new_name   = uid + '.' + tname.split('.')[-1] # uid.extension
+                        new_names.append(uid[0:8]   + '-' +\
+                                         uid[8:12]  + '-' +\
+                                         uid[12:16] + '-' +\
+                                         uid[16::])
+                    else:
+                        continue
+
+                # Otherwise, dont rename it
+                else:
+                    new_name = tname
+
+                # Move (and rename if needed) file to appropriate directory
+                new_fp = os.path.join(image_dir, new_name)
+                old_fp = os.path.join(tempdir, tname)
+                sh_move(old_fp, new_fp)
+
             output_msg += ' success! '
         except Exception as excpt:
             dont_skip   = False
             output_msg += f' failed (reason: {excpt}).'
-
+        finally:
+            # Remove the temporary directory
+            rmtree(tempdir)
 
         # Create database
         if dont_skip:
@@ -203,6 +243,25 @@ async def create_database_from_zip(myfile: UploadFile,
                                         normalization=params.normalization,
                                         tags=params.tags, uids=params.uids,
                                         verbose=params.verbose)
+
+            # Loops through each representation
+            for i, rep in enumerate(glb.rep_db):
+                # Determines the current image name and, if it is one of the
+                # files that was renamed, use its name (which is a unique id) as
+                # its unique id
+                cur_img_name = rep.image_name.split('.')[0]
+                cur_img_name = cur_img_name[0:8]   + '-' +\
+                               cur_img_name[8:12]  + '-' +\
+                               cur_img_name[12:16] + '-' +\
+                               cur_img_name[16::]
+                
+                if cur_img_name in new_names:
+                    glb.rep_db[i].unique_id = UUID(cur_img_name)
+                    glb.db_changed          = True
+
+            # TODO: Refactor the unzipping + renaming process into a better
+            # function
+            # if len(new_names) > 0: # need to fix these files
             output_msg += 'success!\n'
         else:
             output_msg += 'Skipping database creation.\n'
@@ -284,10 +343,12 @@ async def verify_with_upload(files: List[UploadFile],
     verification_results = []
     all_files            = [name.split('.')[0] for name in os.listdir(img_dir)]
     dtb_embs   = get_embeddings_as_array(glb.rep_db, params.verifier_name)
-    print('all files:\n\n', all_files, sep='')
 
     # Loops through each file
     for f in files:
+        # Initializes empty unique id
+        uid = ''
+
         # Obtains contents of the file & transforms it into an image
         data  = np.fromfile(f.file, dtype=np.uint8)
         img   = cv2.imdecode(data, cv2.IMREAD_UNCHANGED)
@@ -307,7 +368,17 @@ async def verify_with_upload(files: List[UploadFile],
             else:
                 mpimg.imsave(img_fp, img)
         elif auto_rename:
-            pass
+            # Creates a new unique object identifier using uuid4, converts it
+            # into a string, sets it as the file name, creates the file's full
+            # path and saves it
+            uid      = uuid4().hex 
+            img_name = uid
+            img_fp   = os.path.join(img_dir, img_name + '.' + save_as)
+
+            if save_as == ImageSaveTypes.NPY:
+                np.save(img_fp, img, allow_pickle=False, fix_imports=False)
+            else:
+                mpimg.imsave(img_fp, img)
         else:
             continue  # skips verification using this file
 
@@ -322,7 +393,8 @@ async def verify_with_upload(files: List[UploadFile],
 
         # Calculates the similarity between the current embedding and all
         # embeddings from the database
-        similarity_obj = calc_similarity(cur_emb, dtb_embs, metric=params.metric,
+        similarity_obj = calc_similarity(cur_emb, dtb_embs,
+                                         metric=params.metric,
                                          model_name=params.verifier_name,
                                          threshold=params.threshold)
 
@@ -341,11 +413,11 @@ async def verify_with_upload(files: List[UploadFile],
                 tag = ''
         else:
             tag = ''
-        print('Automatic tag:', tag)
 
         # Creates a representation object for this image and adds it to the
         # database
-        new_rep = create_new_representation(img_fp, region, embeddings, tag=tag)
+        new_rep = create_new_representation(img_fp, region, embeddings, tag=tag,
+                                            uid=uid)
         glb.rep_db.append(new_rep)
         glb.db_changed = True
 
@@ -571,5 +643,3 @@ async def rename_entries_by_tag(old_tag: str, new_tag: str):
     return output_obj
 
 # ------------------------------------------------------------------------------
-
-# TODO: fix file overwrite for verify_with_upload AND for create_database_from_zip
