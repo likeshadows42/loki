@@ -6,6 +6,8 @@ import pickle
 import api.global_variables         as glb
 
 from fastapi                        import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
 from IFR.functions                  import load_representation_db,\
                                            create_dir, load_face_verifier,\
                                            save_face_verifier
@@ -24,6 +26,16 @@ from deepface.DeepFace              import build_model    as build_verifier
 # ------------------------------------------------------------------------------
 
 app = FastAPI()
+
+origins = ['http://localhost:8080']
+
+app.add_middleware(
+    CORSMiddleware,
+     allow_origins=origins,
+     allow_credentials=True,
+     allow_methods=["*"],
+     allow_headers=["*"],
+)
 
 app.include_router(df_router, prefix="/df", tags=["Deepface"])
 app.include_router(fr_router, prefix="/fr", tags=["Face Recognition"])
