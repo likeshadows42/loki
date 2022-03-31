@@ -1,10 +1,12 @@
 <script>
 export default {
-  data() {
-    return {
-      todoData: null
-    }
-  },
+  // data() {
+  //   return {
+  //     todoData: null
+  //   }
+  // },
+  emits: ['response'],
+
   methods: {
     async fetchData() {
       this.todoData = null
@@ -13,25 +15,26 @@ export default {
       };
       const res = await fetch(`http://localhost:8000/fr/debug/inspect_globals`,requestOptions)
       const data = await res.json()
-      // console.log(this.todoData)
-      this.todoData = data
+      // this.todoData = data
+      console.log(`Fecthed news data successfully`)
+      this.$emit('response', data)
+    },
+    
+    test_alert() {
+      alert('Test alert')
     }
   },
 
-  // mounted() {
-  //   this.fetchData()
-  // },
-  // watch: {
-  //   todoId() {
-  //     this.fetchData()
-  //   }
-  // }
+  mounted() {
+    console.log(`Global variable component initiated`)
+  },
 }
 </script>
 
 <template>
-  <!-- <button @click="todoId++">Fetch next todo</button> -->
-  <button @click="fetchData">Reload global variables</button>
-  <p v-if="!todoData">Click to see the updated global variables...</p>
-  <pre v-else>{{ todoData }}</pre>
+  <a href="#" @click.prevent="fetchData">Show global variables</a>
+  <!-- <p v-if="!todoData">Click to see the updated global variables...</p>
+  <pre v-else>{{ todoData }}</pre> -->
+
+  
 </template>
