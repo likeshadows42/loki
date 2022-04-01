@@ -28,8 +28,8 @@ from deepface.detectors.FaceDetector import build_model      as build_detector
 
 # ------------------------------------------------------------------------------
 
-def detect_faces(img_path, detector_backend = 'opencv', align = True,
-                 return_type = 'both', face_detector = None):
+def detect_faces(img_path, detector_backend='opencv', align=True,
+                 return_type='both', face_detector=None):
     """
     Detects faces in an image (and optionally aligns them).
     
@@ -203,7 +203,6 @@ def verify_faces(img1_path, img2_path = '', model_name = 'VGG-Face',
             for i in model_names:
                 custom_model = models[i]
 
-                #img_path, model_name = 'VGG-Face', model = None, enforce_detection = True, detector_backend = 'mtcnn'
                 img1_representation = DeepFace.represent(img_path = img1_path,
                             model_name = model_name, model = custom_model,
                             enforce_detection = enforce_detection,
@@ -236,7 +235,9 @@ def verify_faces(img1_path, img2_path = '', model_name = 'VGG-Face',
                         raise ValueError("Invalid distance_metric passed - ",
                                          distance_metric)
 
-                    distance = np.float64(distance) #causes trobule for euclideans in api calls if this is not set (issue #175)
+                    # Issue #175: causes trobule for euclideans in api calls if
+                    # this is not set
+                    distance = np.float64(distance)
                     #----------------------
                     #decision
 
@@ -1061,34 +1062,6 @@ def create_new_representation(img_path, region, embeddings, tag='', uid='',
                           embeddings=embeddings)
 
 # ------------------------------------------------------------------------------
-# Still used?
-def update_representation(rep, embeddings):
-    """
-    Updates an existing representation object. For more information on the
-    Representation object see help(Representation).
-
-    Inputs:
-        1. rep - Representation object
-        2. embeddings - dictionary with face verifier name (key) and embedding
-            (1-D numpy array) (item). Can have multiple verifier, embedding
-            pairs (key, value pairs).
-    
-    Output:
-        1. Representation object
-
-    Signature:
-        updated_rep = update_representation(rep, embeddings)
-    """
-
-    # Loops through each model name and embedding pair, adding or updating the 
-    # corresponding value in the embeddings dictionary of the representation 
-    # provided
-    for model_name, embedding in embeddings.items():
-        rep.embeddings[model_name] = embedding
-
-    return rep
-
-# ------------------------------------------------------------------------------
 
 def get_embeddings_as_array(db, verifier_name):
     """
@@ -1244,12 +1217,6 @@ def create_reps_from_dir(img_dir, verifier_models, detector_name='opencv',
 
     # Return representation database
     return rep_db
-
-# ______________________________________________________________________________
-#                           VERIFY RELATED FUNCTIONS
-# ------------------------------------------------------------------------------
-
-
 
 # ______________________________________________________________________________
 #                   SIMILARITY & DISTANCE RELATED FUNCTIONS
@@ -1486,12 +1453,44 @@ def calc_embedding(img_path, verifier_models, detector_name='opencv',
 
 # ------------------------------------------------------------------------------
 
-
-
-# ------------------------------------------------------------------------------
-# ------------------------------------------------------------------------------
-
 def get_matches_from_similarity(similarity_obj, db, verifier_name):
+    """
+    Gets all matches from the database 'db' based on the current similairty
+    object 'similairty_obj' and the face verifier 'verifier_name'. This object
+    is obtained from 'calc_similarity()' function (see help(calc_similarity) for
+    more information).
+
+    Inputs:
+        1. similarity_obj - dictionary containing the indexes of matches (key:
+            idxs), the threshold value used (key: threshold) and the distances
+            of the matches (key: distances).
+        2. db - list of Representations
+        3. verifier_name - string specifying the face verifier used (VGG-Face,
+            Facenet, Facenet512, OpenFace, DeepFace, DeepID, ArcFace)
+
+    Output:
+        1. dictionary containing:
+            - unique_ids : list of unique ids
+            - name_tags  : list of name tags
+            - image_names: list of image names
+            - image_fps  : list of image full paths
+            - regions    : list of regions, where each region is a list
+                            containing the (X, Y) coordinates of the top-left
+                            and bottom-right corners of the rectangle that
+                            contains the detected face
+            - embeddings : list of face verifier names (strings) for which this
+                            Representation has embeddings for
+            - distances  : list of distances / similarity
+            - threshold  : float indicating the cutoff value for the decision
+
+            The length of each list is equal to the number of matches, so that
+            each index correspond to a single match (i.e. index 0 corresponds to
+            match 1, index 1 to match 2, etc...)
+
+    Signature:
+        match_object = get_matches_from_similarity(similarity_obj, db,
+                                                   verifier_name)
+    """
 
     # Initializes all required lists
     mtch_uids  = [] # unique ids
@@ -1515,3 +1514,5 @@ def get_matches_from_similarity(similarity_obj, db, verifier_name):
             'regions':mtch_rgns     , 'embeddings':mtch_embds,
             'distances':list(similarity_obj['distances']),
             'threshold':similarity_obj['threshold']}
+
+# ------------------------------------------------------------------------------

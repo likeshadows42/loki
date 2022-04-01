@@ -10,10 +10,6 @@ from IFR.functions                  import load_representation_db,\
                                            create_dir, load_face_verifier,\
                                            save_face_verifier
 
-# from api.routers.detection          import fd_router
-# from api.routers.verification       import fv_router
-# from api.routers.attribute_analysis import aa_router
-
 from api.routers.deepface           import df_router
 from api.routers.recognition        import fr_router
 
@@ -107,6 +103,9 @@ async def finish_processes():
 
         with open(db_fp, 'wb') as handle:
             pickle.dump(glb.rep_db, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        # Updates the database changed flag
+        glb.db_changed = False
     else:
         print('  -> Database is unchanged: skipping save.\n')
 
@@ -125,6 +124,6 @@ async def finish_processes():
                            glb.SVD_VRF_DIR, overwrite=False, verbose=True)
 
 
-    print('\n -------- Exitting program: good bye! -------- \n')
+    print('\n -------- Exitting program: goodbye! -------- \n')
 
 # ------------------------------------------------------------------------------
