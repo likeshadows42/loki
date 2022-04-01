@@ -3,6 +3,8 @@
 # ==============================================================================
 import os
 import cv2
+import pickle
+
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import numpy                  as np
@@ -10,18 +12,22 @@ import api.global_variables   as glb
 
 from io                       import BytesIO
 from uuid                     import UUID, uuid4
+from pydoc                    import describe
+from pandas                   import describe_option
 from typing                   import List, Optional
 from zipfile                  import ZipFile
-from fastapi                  import APIRouter, UploadFile, Depends
+from fastapi                  import APIRouter, UploadFile, Depends, Query
 from tempfile                 import mkdtemp
 from IFR.classes              import *
 from IFR.functions            import create_reps_from_dir, calc_embedding,\
-                        get_embeddings_as_array, calc_similarity,\
+                        get_embeddings_as_array, calc_similarity, create_dir,\
+                        load_representation_db, load_face_verifier,\
                         create_new_representation, get_matches_from_similarity,\
                         get_property_from_database as get_prop_from_db
 
-from shutil                   import rmtree, move                as sh_move
-from matplotlib               import image                       as mpimg
+from shutil                   import rmtree, move             as sh_move
+from matplotlib               import image                    as mpimg
+from deepface.DeepFace        import build_model              as build_verifier
 
 data_dir = glb.DATA_DIR
 img_dir  = glb.IMG_DIR
@@ -39,57 +45,119 @@ fr_router.face_verifier_name = None
 #                                  API METHODS
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/debug/input")
-async def debug_inputs(params: VerificationParams):
-    print('Input parameters:\n',
-          ' > detector_name'.ljust(18), f': {params.detector_name}\n',
-          ' > verifier_name'.ljust(18), f': {params.verifier_name}\n',
-          ' > align'.ljust(18)        , f': {params.align}\n',
-          ' > normalization'.ljust(18), f': {params.normalization}\n',
-          ' > metric'.ljust(18)       , f': {params.metric}\n',
-          ' > threshold'.ljust(18)    , f': {params.threshold}\n',
-          ' > verbose'.ljust(18)      , f': {params.verbose}\n', '', sep='')
-    
-    return params.dict()
-
-# ------------------------------------------------------------------------------
-
 @fr_router.post("/debug/inspect_globals")
 async def inspect_globals():
+    """
+    API endpoint: inspect_globals.
 
+    Inspects the values of all global variables, printing them to the server's
+    console and returning the following dictionary (key:value):
+        directories: list of all directory paths
+        dir_names  : list with names of each directory path (i.e. directories[0]
+                        is the path for dir_names[0])
+        models     : list of names of all loaded face verifiers
+        num_reps   : number of Representations in the currently loaded database
+        db_changed : boolean flag indicating if the database has been modified
+                        (and will be saved on shutdown)
+
+    Parameters:
+        None
+
+    Output:\n
+        JSON-encoded dictionary with the following key/value pairs is returned:
+            1. directories: list of directories' full paths
+            2. dir_names  : list of directories' names
+            3. models     : list of loaded face verifier models
+            4. num_reps   : number of Representations in the currently loaded
+                            database
+            5. db_changed : flag indicating if the database has been modified
+                            (and will be saved on shutdown)
+    """
+
+    # Printing all path variables (name and full path)
     print('[inspect_globals] Path variables:')
     directory_list = [glb.API_DIR, glb.DATA_DIR   , glb.IMG_DIR,
                       glb.RDB_DIR, glb.SVD_MDL_DIR, glb.SVD_VRF_DIR]
-
     for name, fp in zip(glb.directory_list_names, directory_list):
         print(f'   -> Directory {name}'.ljust(30), f': {fp}', sep='')
     print('')
     
+    # Printing all loaded face verifier models
     print('[inspect_globals] models:')
     for key, value in glb.models.items():
         print(f'   -> {key}'.ljust(16) + f': {value}')
     print('')
 
+    # Printing the number of Representations in the database
     print('[inspect_globals] database:')
     print('  - there are {} representations'.format(len(glb.rep_db)))
     for i, rep in zip(range(len(glb.rep_db)), glb.rep_db):
         print(f' Entry: {i}  |  ', end='')
         rep.show_summary()
 
+    # Printing the 'database has been modified' flag
     print(f'[inspect_globals] database change status: {glb.db_changed}')
 
-    return {'directories':directory_list,
-            'dir_names':glb.directory_list_names,
-            'models': list(glb.models.keys()), 'num_reps':len(glb.rep_db),
-            'db_changed':glb.db_changed}
+    return {'directories': directory_list,
+            'dir_names'  : glb.directory_list_names,
+            'models'     : list(glb.models.keys()),
+            'num_reps'   : len(glb.rep_db),
+            'db_changed' : glb.db_changed}
 
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/create_database/from_directory")
 async def create_database_from_directory(cdb_params: CreateDatabaseParams,
-                                    image_dir   : Optional[str]  = glb.IMG_DIR,
-                                    db_dir      : Optional[str]  = glb.RDB_DIR,
-                                    force_create: Optional[bool] = False):
+    image_dir   : Optional[str]  = Query(glb.IMG_DIR, description="Full path to directory containing images (string)"),
+    db_dir      : Optional[str]  = Query(glb.RDB_DIR, description="Full path to directory containing saved database (string)"),
+    force_create: Optional[bool] = Query(False      , description="Flag to force database creation even if one already exists, overwritting the old one (boolean)")):
+    """
+    API endpoint: create_database_from_directory()
+
+    Creates a database from a directory. The directory is expected to have image
+    files in any of the following formats: .jpg, .png, .npy. The database is a
+    list of Representation objects.
+
+    Parameters:
+    - cdb_params: a structure with the following parameters:
+        1. detector_name  - name of face detector model (string)
+        2. verifier_names - list of names of face verifier models (list of
+                            strings)
+        3. align          - perform face alignment flag (boolean, default: True)
+        4. normalization  - name of image normalization (string)
+        5. tags           - list of name tags (list of strings)
+        6. uids           - list of uids (list of strings)
+        7. verbose        - output messages to server's console (boolean,
+                            default: False)
+
+        [Example] JSON schema:
+        {
+            "detector_name": "retinaface",
+            "verifier_names": ["ArcFace"],
+            "align": true,
+            "normalization": "base",
+            "tags": [],
+            "uids": [],
+            "verbose": false
+        }
+
+    - image_dir   : full path to directory containing images (string,
+                     default: <glb.IMG_DIR>)
+
+    - db_dir      : full path to directory containing saved database (string,
+                     default: <glb.RDB_DIR>)
+
+    - force_create: flag to force database creation even if one already exists,
+                     overwritting the old one (boolean, default: True)
+
+    Output:\n
+        JSON-encoded dictionary with the following key/value pairs is returned:
+            1. length: length of the newly created database OR of the currently
+                loaded one if this process is skipped (i.e. force_create=False
+                with existing database loaded)
+            
+            2. message: informative message string
+    """
     # Initialize output message
     output_msg = ''
 
@@ -150,12 +218,57 @@ async def create_database_from_directory(cdb_params: CreateDatabaseParams,
 
 @fr_router.post("/create_database/from_zip")
 async def create_database_from_zip(myfile: UploadFile,
-                             params      : CreateDatabaseParams = Depends(),
-                             image_dir   : Optional[str]        = glb.IMG_DIR,
-                             db_dir      : Optional[str]        = glb.RDB_DIR,
-                             auto_rename : Optional[bool]       = True,
-                             force_create: Optional[bool]       = False):
+    params      : CreateDatabaseParams = Depends(),
+    image_dir   : Optional[str]  = Query(glb.IMG_DIR, description="Full path to directory containing images (string)"),
+    db_dir      : Optional[str]  = Query(glb.RDB_DIR, description="Full path to directory containing saved database (string)"),
+    auto_rename : Optional[bool] = Query(True       , description="Flag to force auto renaming of images in the zip file with names that match images already in the image directory (boolean)"),
+    force_create: Optional[bool] = Query(False      , description="Flag to force database creation even if one already exists, overwritting the old one (boolean)")):
+    """
+    API endpoint: create_database_from_zip()
 
+    Creates a database from a zip file. The zip file is expected to contain
+    image files in any of the following formats: .jpg, .png, .npy. The database
+    is a list of Representation objects.
+
+    The images in the zip file are extracted to a temporary directory. Any image
+    with the same name of another image in the 'image directory' is either
+    renamed (auto_rename=True) or skipped (auto_rename=False). Renamed images
+    are renamed using its unique object identifier.
+
+    Parameters:
+    - myfile: a zip file
+    - params: a structure with the following parameters:
+        1. detector_name  - name of face detector model (string)
+        2. verifier_names - list of names of face verifier models (list of
+                            strings)
+        3. align          - perform face alignment flag (boolean, default: True)
+        4. normalization  - name of image normalization (string)
+        5. tags           - list of name tags (list of strings)
+        6. uids           - list of uids (list of strings)
+        7. verbose        - output messages to server's console (boolean,
+                            default: False)
+
+    - image_dir   : full path to directory containing images (string,
+                     default: <glb.IMG_DIR>)
+
+    - db_dir      : full path to directory containing saved database (string,
+                     default: <glb.RDB_DIR>)
+
+    - auto_rename : flag to force auto renaming of images in the zip file with
+                     names that match images already in the image directory
+                     (boolean, default: True)
+
+    - force_create: flag to force database creation even if one already exists,
+                     overwritting the old one (boolean, default: True)
+
+    Output:\n
+        JSON-encoded dictionary with the following key/value pairs is returned:
+            1. length: length of the newly created database OR of the currently
+                loaded one if this process is skipped (i.e. force_create=False
+                with existing database loaded)
+            
+            2. message: informative message string
+    """
     # Initialize output message
     output_msg = ''
 
@@ -291,7 +404,38 @@ async def create_database_from_zip(myfile: UploadFile,
 @fr_router.post("/verify/no_upload", response_model=List[VerificationMatches])
 async def verify_no_upload(files: List[UploadFile],
                           params: VerificationParams = Depends()):
-    
+    """
+    API endpoint: verify_no_upload()
+
+    Executes the face verification process on one or more images without
+    uploading these images to the server and adding them to the database.
+
+    Parameters:
+    - files: list of image files
+
+    - params: a structure with the following parameters:
+        1. detector_name - name of face detector model (string)
+        2. verifier_name - name of face verifier model (string)
+        3. align         - perform face alignment flag (boolean, default: True)
+        4. normalization - name of image normalization (string)
+        5. metric        - name of similarity / distance metric (string)
+        6. threshold     - cutoff value for positive (match) decision (float)
+        7. verbose       - output messages to server's console (boolean,
+                            default: False)
+
+    Output:\n
+        JSON-encoded structure with the following attributes:
+            1. unique_ids : list of unique identifiers (list of UUIDs)
+            2. name_tags  : list of name tags (list of strings)
+            3. image_names: list of image names (list of strings)
+            4. image_fps  : list of image full paths (list of strings)
+            5. regions    : list of regions. Each region is a 4 element list
+                            (list of list of integers)
+            6. embeddings : list of face verifier names for which this
+                            Representation has embeddings for
+            7. distances  : list of distances (similarity) (list of floats)
+            8. threshold  : decision (match) cutoff threshold (float)
+    """
     # Initializes results list and obtains the relevant embeddings from the 
     # representation database
     verification_results = []
@@ -333,11 +477,54 @@ async def verify_no_upload(files: List[UploadFile],
 
 @fr_router.post("/verify/with_upload", response_model=List[VerificationMatches])
 async def verify_with_upload(files: List[UploadFile],
-                    params     : VerificationParams = Depends(),
-                    save_as    : ImageSaveTypes     = default_image_save_type,
-                    overwrite  : bool               = False,
-                    auto_rename: bool               = True):
-    
+    params     : VerificationParams = Depends(),
+    save_as    : ImageSaveTypes     = Query(default_image_save_type, description="File type which uploaded images should be saved as (string)"),
+    overwrite  : bool               = Query(False, description="Flag to indicate if an uploaded image with the same name as an existing one in the server should be saved and replace it (boolean)"),
+    auto_rename: bool               = Query(True, description="Flag to force auto renaming of images in the zip file with (boolean)")):
+    """
+    API endpoint: verify_with_upload()
+
+    Executes the face verification process on one or more images. These images
+    are uploaded to the server and added to the database if they do not exist
+    already. If overwrite=True then newly uploaded images with the same name 
+    replace existing images in the server with the same name.
+
+    Parameters:
+    - files: list of image files
+
+    - params: a structure with the following parameters:
+        1. detector_name - name of face detector model (string)
+        2. verifier_name - name of face verifier model (string)
+        3. align         - perform face alignment flag (boolean, default: True)
+        4. normalization - name of image normalization (string)
+        5. metric        - name of similarity / distance metric (string)
+        6. threshold     - cutoff value for positive (match) decision (float)
+        7. verbose       - output messages to server's console (boolean,
+                            default: False)
+
+    - save_as     : file type which uploaded images should be saved as (string)
+
+    - overwrite   : flag to indicate if an uploaded image with the same name as
+                    an existing one in the server should be saved and replace it
+                    (boolean, default: False)
+
+    - auto_rename : flag to force auto renaming of images in the zip file with
+                    names that match images already in the image directory
+                    (boolean, default: True)
+
+    Output:\n
+        JSON-encoded structure with the following attributes:
+            1. unique_ids : list of unique identifiers (list of UUIDs)
+            2. name_tags  : list of name tags (list of strings)
+            3. image_names: list of image names (list of strings)
+            4. image_fps  : list of image full paths (list of strings)
+            5. regions    : list of regions. Each region is a 4 element list
+                            (list of list of integers)
+            6. embeddings : list of face verifier names for which this
+                            Representation has embeddings for
+            7. distances  : list of distances (similarity) (list of floats)
+            8. threshold  : decision (match) cutoff threshold (float)
+    """
     # Initializes results list, gets all files in the image directory and
     # obtains the relevant embeddings from the representation database
     verification_results = []
@@ -429,8 +616,25 @@ async def verify_with_upload(files: List[UploadFile],
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/utility/edit_default_directories")
-async def edit_default_directories(img_dir: str = glb.IMG_DIR,
-                                   rdb_dir: str = glb.RDB_DIR):
+async def edit_default_directories(img_dir: str = Query(glb.IMG_DIR, description="Full path to image directory (string)"),
+                                   rdb_dir: str = Query(glb.RDB_DIR, description="Full path to Representation database directory (string)")):
+    """
+    API endpoint: edit_default_directories()
+
+    Allows the user to edit the image and Representation database directories.
+    These are determined automatically on server startup. These edit will NOT be
+    persistent across server restarts.
+
+    Parameters:
+    - img_dir: full path to image directory (string)
+
+    - rdb_dir: full path to Representation database directory (string)
+
+    Output:\n
+        JSON-encoded dictionary with the following key/value pairs is returned:
+            1. message: informative message stating if the function executed
+                        without errors or if there were errors
+    """
     # Intitializes output message
     output_msg = ''
     
@@ -454,19 +658,63 @@ async def edit_default_directories(img_dir: str = glb.IMG_DIR,
 
 @fr_router.post("/utility/get_property_from_database")
 async def get_property_from_database(
-                            propty : AvailableRepProperties = default_property,
-                            do_sort: bool                   = False,
-                    suppress_error : bool                   = True):
+    propty        : AvailableRepProperties = Query(default_property, description="Representations' property (string)"),
+    do_sort       : bool                   = Query(False, description="Flag to perform sorting of the results (boolean)"),
+    suppress_error: bool                   = Query(True , description="Flag to suppress error, returning an empty list instead of raising an exception (boolean")):
+    """
+    API endpoint: get_property_from_database()
 
+    Gets a specific property from all Representations in the database. In the
+    specific case of the 'name_tag' property, only unique name tags are
+    returned.
+
+    Parameters:
+    - propty: Representations' property (string)
+
+    - do_sort: flag to perform sorting of the results (boolean, default: False)
+
+    - suppress_error: flag to suppress error, returning an empty list instead
+                        of raising an exception (boolean, default: True)
+
+    Output:\n
+        JSON-encoded list containing the chosen property from each
+        Representation. The list is sorted if 'do_sort' is set to True. The list
+        will be empty if the Representation database has a length of zero or if
+        'suppress_error' is True and a non-existant property 'param' is chosen.
+    """
     return get_prop_from_db(glb.rep_db, propty, do_sort=do_sort,
                             suppress_error=suppress_error)  
 
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/utility/view_database")
-async def view_database(amt_detail : MessageDetailOptions = default_msg_detail,
-                        output_type: MessageOutputOptions = default_msg_output):
-    
+async def view_database(
+    amt_detail : MessageDetailOptions = Query(default_msg_detail, description="Amount of detail in the output (string)"),
+    output_type: MessageOutputOptions = Query(default_msg_output, description="Type of message format (string or structure) of the output (string)")):
+    """
+    API endpoint: view_database()
+
+    Gets a specific property from all Representations in the database. In the
+    specific case of the 'name_tag' property, only unique name tags are
+    returned.
+
+    Parameters:
+    - amt_detail : amount of detail in the output (string)
+
+    - output_type: type of message format (string or structure) of the output
+                    (string)
+
+    Output:\n
+        - If output_type='structure':
+            JSON-encoded structure containing all (amt_detail='complete') or
+            some (amt_detail='summary') of the attributes of each Representation
+            in the database.
+        
+        - If output_type='message':
+            String like message containing all (amt_detail='complete') or some
+            (amt_detail='summary') of the attributes of each Representation
+            in the database.
+    """
     if output_type == MessageOutputOptions.STRUCTURE:
         # Initialize output object
         output_obj = []
@@ -539,7 +787,30 @@ async def view_database(amt_detail : MessageDetailOptions = default_msg_detail,
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/utility/edit_tag_by_uid/{target_uid}")
-async def edit_tag_by_uid(target_uid: str, new_name_tag: str):
+async def edit_tag_by_uid(
+    target_uid  : str = Query(None, description="Unique identifier (string)"),
+    new_name_tag: str = Query(None, description="New name tag (string)")):
+    """
+    API endpoint: edit_tag_by_uid()
+
+    Allows the user to edit the name tag of a specific image (Representation) by
+    providing its unique identifier.
+
+    Parameters:
+    - target_uid: unique identifier (string)
+
+    - new_name_tag: new name tag (string)
+
+    Output:\n
+        JSON-encoded Representation structure with the following attributes:
+            1. unique_id : unique identifier (UUID)
+            2. name_tag  : name tag (string)
+            3. image_name: image name (string)
+            4. image_fp  : image full path (string)
+            5. region    : the region is a 4 element list (list of integers)
+            6. embedding : list of face verifier names for which this
+                            Representation has embeddings for
+    """
     # Gets the unique ids in the database depending on the database's size
     if len(glb.rep_db) == 0:   # no representations
         all_uids = []
@@ -586,8 +857,28 @@ async def edit_tag_by_uid(target_uid: str, new_name_tag: str):
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/utility/search_database_by_tag/{target_tag}")
-async def search_database_by_tag(target_tag: str):
+async def search_database_by_tag(target_tag: str = Query(None, description="Name tag to be searched (string)")):
+    """
+    API endpoint: search_database_by_tag()
 
+    Allows the user to search the database using a name tag. Returns all
+    database entries containing the name tag provided. This search is CASE
+    SENSITIVE.
+
+    Parameters:
+    - target_tag: name tag to be searched (string)
+
+    Output:\n
+        JSON-encoded structure with the following attributes:
+            1. unique_ids : list of unique identifiers (list of UUIDs)
+            2. name_tags  : list of name tags (list of strings)
+            3. image_names: list of image names (list of strings)
+            4. image_fps  : list of image full paths (list of strings)
+            5. regions    : list of regions. Each region is a 4 element list
+                            (list of list of integers)
+            6. embeddings : list of face verifier names for which this
+                            Representation has embeddings for
+    """
     # Initialize output object
     output_obj = []
 
@@ -615,7 +906,33 @@ async def search_database_by_tag(target_tag: str):
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/utility/rename_entries_by_tag/{target_tag}")
-async def rename_entries_by_tag(old_tag: str, new_tag: str):
+async def rename_entries_by_tag(
+    old_tag: str = Query(None, description="Old name tag (used in search) (string)"),
+    new_tag: str = Query(None, description="New name tag (string)")):
+    """
+    API endpoint: rename_entries_by_tag()
+
+    Allows the user to rename all database entries related to a specific tag
+    with a new one. This operation is similar to a search_database_by_tag()
+    followed by updating the name tag of each result with the new tag.
+
+    Parameters:
+    - old_tag: old name tag - this will be used to search for the database
+                entries (string)
+
+    - new_tag: new name tag (string)
+
+    Output:\n
+        JSON-encoded structure with the following attributes:
+            1. unique_ids : list of unique identifiers (list of UUIDs)
+            2. name_tags  : list of name tags (list of strings)
+            3. image_names: list of image names (list of strings)
+            4. image_fps  : list of image full paths (list of strings)
+            5. regions    : list of regions. Each region is a 4 element list
+                            (list of list of integers)
+            6. embeddings : list of face verifier names for which this
+                            Representation has embeddings for
+    """
     # Initialize output object
     output_obj = []
 
@@ -641,5 +958,270 @@ async def rename_entries_by_tag(old_tag: str, new_tag: str):
                             +'not have a negative size!')
 
     return output_obj
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/utility/updated_rep_by_uid/{target_uid}")
+async def updated_rep_by_uid(
+    target_uid  : str = Query(None, description="Unique identifier (string)"),
+    new_name_tag: str = Query(None, description="New name tag (string)"),
+    new_img_name: str = Query(None, description="New image name (string)"),
+    new_img_fp  : str = Query(None, description="New image full path (string)"),
+    new_region  : List[int] = Query(None, description="New face region in image (list, len=4)")):
+    """
+    API endpoint: updated_rep_by_uid()
+
+    Allows the user to update many parameters of a specific image
+    (Representation) by providing its unique identifier.
+
+    Parameters:
+    - target_uid: unique identifier (string)
+
+    - new_name_tag: new name tag (string)
+
+    - new_img_name: new image name (string)
+
+    - new_img_fp  : new image full path (string)
+
+    - new_region  : new face region in image (list, len=4)
+
+    Output:\n
+        JSON-encoded Representation structure with the following attributes:
+            1. unique_id : unique identifier (UUID)
+            2. name_tag  : name tag (string)
+            3. image_name: image name (string)
+            4. image_fp  : image full path (string)
+            5. region    : the region is a 4 element list (list of integers)
+            6. embedding : list of face verifier names for which this
+                            Representation has embeddings for
+    """
+    # Gets the unique ids in the database depending on the database's size
+    if len(glb.rep_db) == 0:   # no representations
+        all_uids = []
+
+    elif len(glb.rep_db) == 1: # single representation
+        all_uids = [glb.rep_db[0].unique_id]
+
+    elif len(glb.rep_db) > 1:  # many representations
+        # Loops through each representation in the database and gets the unique
+        # id tag
+        all_uids = []
+        for rep in glb.rep_db:
+            all_uids.append(rep.unique_id)
+    
+    else: # this should never happen (negative size for a database? preposterous!)
+        raise AssertionError('Representation database can '
+                            +'not have a negative size!')
+
+    # Search the list for the chosen unique id
+    try:
+        index = all_uids.index(UUID(target_uid))
+    except:
+        index = -1
+
+    # If a match if found, update the attributes and return the updated
+    # representation
+    if index >= 0:
+        glb.rep_db[index].name_tag   = new_name_tag
+        glb.rep_db[index].image_name = new_img_name
+        glb.rep_db[index].image_fp   = new_img_fp
+        glb.rep_db[index].region     = new_region
+
+        glb.db_changed = True
+        rep            = glb.rep_db[index]
+        output_obj     = RepsInfoOutput(unique_id  = rep.unique_id,
+                                        name_tag   = rep.name_tag,
+                                        image_name = rep.image_name,
+                                        image_fp   = rep.image_fp,
+                                        region     = rep.region,
+                                        embeddings = [name for name in\
+                                                    rep.embeddings.keys()])
+        
+    else:
+        output_obj = []
+
+    return output_obj
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/utility/save_database")
+async def save_database(rdb_dir: str = Query(glb.RDB_DIR, description="Full path to Representation database directory (string)")):
+    """
+    API endpoint: save_database()
+
+    Allows the user to save the database. Sets the global 'database has been
+    modified' flag to False (i.e. database has not been modified).
+
+    Parameters:
+    - rdb_dir: full path to Representation database directory (string)
+
+    Output:\n
+        JSON-encoded dictionary with the following attributes:
+            1. message: message stating the database has been saved
+            2. status : indicates if an error occurred (status=1) or not
+                        (status=0) (boolean)
+    """
+    # Obtains the database's full path
+    try:
+        db_fp = os.path.join(rdb_dir, 'rep_database.pickle')
+
+        # Opens the database file (or creates one if necessary) and stores the
+        # database object
+        with open(db_fp, 'wb') as handle:
+            pickle.dump(glb.rep_db, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+        # Updates the database changed flag
+        glb.db_changed = False
+
+        # Creates output message and sets the status as 0
+        output_msg = "Databased saved!"
+        status     = False
+    except Exception as excpt:
+        # On exception, create output message (with exception) and set the
+        # status as 1 (= something went wrong)
+        output_msg = f"Unable to save database. Reason: {excpt}"
+        status     = True
+
+    return {"message":output_msg, "status":status}
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/utility/reload_database")
+async def reload_database(
+    rdb_dir: str  = Query(glb.RDB_DIR, description="Full path to Representation database directory (string)"),
+    verbose: bool = Query(False, description="Controls the amount of text that is printed to the server's console (boolean)")):
+    """
+    API endpoint: reload_database()
+
+    Allows the user to reload the database. Sets the global 'database has been
+    modified' flag to True (i.e. database has been modified).
+
+    Parameters:
+    - rdb_dir: full path to Representation database directory (string)
+
+    - verbose: controls the amount of text that is printed to the server's
+                console (boolean)
+
+    Output:\n
+        JSON-encoded dictionary with the following attributes:
+            1. message: message stating the database has been reloaded (string)
+            2. status : indicates if an error occurred (status=1) or not
+                        (status=0) (boolean)
+    """
+    # 
+    try:
+        # Attempts to load the database
+        glb.rep_db = load_representation_db(os.path.join(rdb_dir,
+                                        'rep_database.pickle'), verbose=verbose)
+
+        # Sets the 'database has been modified' flag to True, creates output
+        # message and sets the status as 0
+        glb.db_changed = True
+        output_msg     = "Databased reloaded!"
+        status         = False
+    except Exception as excpt:
+        # On exception, create output message (with exception) and set the
+        # status as 1 (= something went wrong)
+        output_msg = f"Unable to save database. Reason: {excpt}"
+        status     = True
+
+    return {"message":output_msg, "status":status}
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/utility/reset_server")
+async def reset_server():
+    """
+    API endpoint: reset_server()
+
+    Allows the user to restart the server without manually requiring to shut it
+    down and start it up.
+
+    Parameters:
+    - None
+
+    Output:\n
+        JSON-encoded dictionary with the following attributes:
+            1. message: message stating the server has been restarted (string)
+    """
+    print('\n!!!!!!!!!!!!!!!! RESTARTING THE SERVER !!!!!!!!!!!!!!!!')
+    print('======== Starting initialization process ======== \n')
+
+    # Directories & paths initialization
+    print('  -> Resetting global variables:')
+    API_DIR     = os.path.join(os.path.dirname(os.path.realpath("__file__")),
+                                'api')
+    print('[PATH]'.ljust(12), 'API_DIR'.ljust(12), f': reset! ({API_DIR})')
+    DATA_DIR    = os.path.join(API_DIR     , 'data')
+    print('[PATH]'.ljust(12), 'DATA_DIR'.ljust(12), f': reset! ({DATA_DIR})')
+    IMG_DIR     = os.path.join(DATA_DIR    , 'img')
+    print('[PATH]'.ljust(12), 'IMG_DIR'.ljust(12), f': reset! ({IMG_DIR})')
+    RDB_DIR     = os.path.join(DATA_DIR    , 'database')
+    print('[PATH]'.ljust(12), 'RDB_DIR'.ljust(12), f': reset! ({RDB_DIR})')
+    SVD_MDL_DIR = os.path.join(API_DIR     , 'saved_models')
+    print('[PATH]'.ljust(12), 'SVD_MDL_DIR'.ljust(12), f': reset! ({SVD_MDL_DIR})')
+    SVD_VRF_DIR = os.path.join(SVD_MDL_DIR , 'verifiers')
+    print('[PATH]'.ljust(12), 'SVD_VRF_DIR'.ljust(12), f': reset! ({SVD_VRF_DIR})')
+    print('')
+
+    models      = {}    # stores all face verifier models
+    print('[MODELS]'.ljust(12), 'models'.ljust(12), f': reset! ({models})')
+    rep_db      = []    # stores representation database
+    print('[DATABASE]'.ljust(12), 'rep_db'.ljust(12), f': reset! ({rep_db})')
+    db_changed  = False # indicates whether database has been modified (and should be saved)
+    print('[FLAG]'.ljust(12), 'db_changed'.ljust(12), f': reset! ({db_changed})')
+    print('')
+
+    # Directories & paths initialization
+    print('  -> Directory creation:')
+    directory_list = [glb.API_DIR, glb.DATA_DIR, glb.IMG_DIR, glb.RDB_DIR,
+                      glb.SVD_MDL_DIR, glb.SVD_VRF_DIR]
+    
+    for directory in directory_list:
+        print(f'Creating {directory} directory: ', end='')
+    
+        if create_dir(directory):
+            print('directory exists. Continuing...')
+        else:
+            print('success.')
+    print('')
+
+    # Tries to load a database if it exists. If not, create a new one.
+    print('  -> Loading / creating database:')
+    if not os.path.isfile(os.path.join(glb.RDB_DIR, 'rep_database.pickle')):
+        glb.db_changed = True
+    glb.rep_db = load_representation_db(os.path.join(glb.RDB_DIR,
+                                    'rep_database.pickle'), verbose=True)
+    print('')
+    
+    # Loads (or creates) all face verifiers
+    print('  -> Loading / creating face verifiers:')
+    for verifier_name in glb.verifier_names:
+        # Quick fix to avoid problems when len(glb.verifier_names) == 1. In this
+        # case, FOR loops over each letter in the string instead of considering
+        # the entire string as one thing.
+        if verifier_name == '':
+            continue
+
+        # First, try loading (opening) the model
+        model = load_face_verifier(verifier_name + '.pickle', glb.SVD_VRF_DIR,
+                                   verbose=True)
+
+        # If successful, save the model in a dictionary
+        if not isinstance(model, list):
+            glb.models[verifier_name] = model
+
+        # Otherwise, build the model from scratch
+        else:
+            print(f'[build_verifier] Building {verifier_name}: ', end='')
+            try:
+                glb.models[verifier_name] = build_verifier(verifier_name)
+                print('success!\n')
+
+            except Exception as excpt:
+                print(f'failed! Reason: {excpt}\n')
+
+    print('\n -------- End of initialization process -------- \n')
+    return {"message": "Server has been restarted"}
 
 # ------------------------------------------------------------------------------
