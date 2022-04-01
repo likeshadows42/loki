@@ -1,8 +1,9 @@
 <template>
   <div class="wrapper">
-    <header class="header"><Home msg="Welcome to Loki MVP"/></header>
+    <header class="header"><Home msg="Loki MVP"/></header>
     <aside class="aside aside-1">
       <GlobalsGet @response="(msg) => MainContent = msg"/>
+      <SecondComp @response="(msg) => MainContent = msg"/>
     </aside>
     <article class="main">
       <p v-if="!MainContent">Use the left menu</p>
@@ -17,13 +18,15 @@
 // imports
 import Home from './components/home.vue'
 import GlobalsGet from './components/globals-get.vue'
+import SecondComp from './components/second-comp.vue'
 
 // exports
 export default {
   name: 'App',
   components: {
     Home,
-    GlobalsGet
+    GlobalsGet,
+    SecondComp
   },
 
   data(){
@@ -67,6 +70,11 @@ export default {
 
 .header {
   text-align: center;
+}
+
+header > h1 {
+  background-color: #000;
+  color: #fff;
 }
 
 .footer {

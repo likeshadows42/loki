@@ -1,10 +1,5 @@
 <script>
 export default {
-  // data() {
-  //   return {
-  //     todoData: null
-  //   }
-  // },
   emits: ['response'],
 
   methods: {
@@ -32,7 +27,7 @@ export default {
 </script>
 
 <template>
-  <a href="#" @click.prevent="fetchData">Show global variables</a>
+  <p><a href="#" @click.prevent="fetchData">Show global variables</a></p>
   <!-- <p v-if="!todoData">Click to see the updated global variables...</p>
   <pre v-else>{{ todoData }}</pre> -->
 
