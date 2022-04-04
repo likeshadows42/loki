@@ -21,6 +21,9 @@ from pydantic           import BaseModel
 
 # Path parameter class for face detector name options
 class FaceDetectorOptions(str, Enum):
+    """
+    Path parameter class: available face detector names
+    """
     OPENCV = "opencv",
     SSD    = "ssd",
     DLIB   = "dlib",
@@ -30,7 +33,7 @@ class FaceDetectorOptions(str, Enum):
 # Path parameter class for face detector name options
 class FaceVerifierOptions(str, Enum):
     """
-    Path parameter class: available face detector names
+    Path parameter class: available face verifier names
     """
     VGGFace    = "VGG-Face"
     FACENET    = "Facenet"
@@ -44,7 +47,7 @@ class FaceVerifierOptions(str, Enum):
 # Path parameter class for distance metric options
 class DistanceMetrics(str, Enum):
     """
-    Path parameter class: available distance metrics
+    Path parameter class: available distance metrics.
     """
     COSINE       = "cosine"
     EUCLIDEAN    = "euclidean"
@@ -77,16 +80,25 @@ class ImageSaveTypes(str, Enum):
 
 # Path parameter class for message detail options
 class MessageDetailOptions(str, Enum):
-    COMPLETE = "complete"
-    SUMMARY  = "summary"
+    """
+    Path parameter class: available message detail options.
+    """
+    COMPLETE = "complete"  # all information
+    SUMMARY  = "summary"   # summarized information
 
 # Path parameter class for message output options
 class MessageOutputOptions(str, Enum):
-    STRUCTURE = "structure"
-    MESSAGE   = "message"
+    """
+    Path parameter class: available message output options.
+    """
+    STRUCTURE = "structure"  # as a JSON-friendly structure
+    MESSAGE   = "message"    # as a "console printed" message
 
 # Path parameter class for available representation properties
 class AvailableRepProperties(str, Enum):
+    """
+    Path parameter class: available properties of the Representation class.
+    """
     UNIQUE_ID  = "unique_id"
     NAME_TAG   = "name_tag"
     IMAGE_NAME = "image_name"
@@ -190,10 +202,16 @@ class VerificationParams(BaseModel):
 
 # Response class for face regions
 class Faces(BaseModel):
+    """
+    Response model class: defines the output for face regions.
+    """
     faces: List[Tuple[int, int, int, int]]
 
 # Response class for face verification matches
 class VerificationMatches(BaseModel):
+    """
+    Response model class: defines the output for face verification matches.
+    """
     unique_ids : List[UUID]
     name_tags  : List[str]
     image_names: List[str]
@@ -205,6 +223,10 @@ class VerificationMatches(BaseModel):
 
 # Response class for representation summary output
 class RepsSummaryOutput(BaseModel):
+    """
+    Response model class: defines the output for representation summary output.
+    This class can be seen as a subset of RepsInfoOutput.
+    """
     unique_id: UUID
     name_tag : str
     region   : List[int]
@@ -212,6 +234,10 @@ class RepsSummaryOutput(BaseModel):
 
 # Response class for representation information output
 class RepsInfoOutput(BaseModel):
+    """
+    Response model class: defines the output for representation information
+    output. This class can be seen as a superset of RepsSummaryOutput.
+    """
     unique_id : UUID
     name_tag  : str
     image_name: str
@@ -225,7 +251,7 @@ class RepsInfoOutput(BaseModel):
 # ------------------------------------------------------------------------------
 # Used internally in functions, may have methods.
 
-# Stores the representation (embeddings) of a face image
+# Stores the (database) Representation of a face image
 class Representation():
     """
     Class to store the model-specific embeddings for an image.
@@ -238,8 +264,10 @@ class Representation():
             4. embeddings - model-specific vector representation of the face
         
     Methods:
-        1. show_info() - prints the representation information in a condensed,
+        1. show_info() - prints the object's information in a condensed,
             easy-to-read form
+        2. show_summary() - prints a summary of the object's information in a
+            one-liner
     """
     def __init__(self, unique_id, image_name='', image_fp='', name_tag='',
                  region=[], embeddings={}):
@@ -281,8 +309,33 @@ class Representation():
               f'Region: {self.region}'.ljust(15),
               f'FP: {self.image_fp}', sep=' | ')
 
-# 
+# Stores the verification results (matches) of a target face image against a
+# database of Representations
 class VerificationResult():
+    """
+    Class to store the results of the face verification process for a single
+    image (with potentially multiple matches). Each match is a Representation
+    stored in the database.
+    
+    Attributes:
+        After __init__:
+            1. unique_ids  - list of matches' unique identifier number
+            2. image_names - list of matches' names
+            3. image_fps   - list of matches' full paths
+            4. name_tags   - list of matches' name tags
+            5. regions     - list of matches' regions (where each region depicts
+                                a face)
+            6. embeddings  - list of matches' face verifier names for which
+                                embeddings exist
+            7. distances   - list of matches' distance / similarity metric
+            8. threshold   - threshold value (float) which determines the
+                                decision's (match) cutoff point
+            9. num_matches - number of matches (which is simply the size of any
+                                of the aforementioned lists)
+        
+    Methods:
+        None
+    """
     def __init__(self, unique_ids, image_names, image_fps, name_tags,
                  regions, embeddings, distances, threshold):
         self.unique_ids  = unique_ids
