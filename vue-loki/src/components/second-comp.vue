@@ -4,12 +4,14 @@ export default {
 
   methods: {
       firethis() {
-          this.$emit('response', 'fired!')
+        this.$emit('response', 'msg fired!')
       }
   }
 }
 </script>
 
 <template>
-  <p><a href="#" @click.prevent="firethis">2nd component</a></p>
+  <p>
+    <a href="#" @click.prevent="firethis">test component</a>
+  </p>
 </template>
