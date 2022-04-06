@@ -5,6 +5,7 @@
 # Module / package imports
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import re
 import time
 import cv2
 import pickle
@@ -15,6 +16,7 @@ import tensorflow           as tf
 from tqdm                    import tqdm
 from uuid                    import uuid4
 from deepface                import DeepFace
+from sklearn.cluster         import DBSCAN
 from deepface.commons        import functions, distance as dst
 from deepface.DeepFace       import build_model         as build_verifier
 from deepface.basemodels     import Boosting
@@ -531,6 +533,26 @@ def get_property_from_database(db, param, do_sort=False, suppress_error=True):
 
     return list(propty)
 
+# ------------------------------------------------------------------------------
+
+def string_is_valid_uuid4(uuid_string):
+    """
+    Checks if the string provided 'uuid_string' is a valid uuid4 or not.
+
+    Input:
+        1. uuid_string - string representation of uuid including dashes ('-')
+             [string].
+    
+    Output:
+        1. boolean indicating if the string is a valid uuid4 or not.
+
+    Signature:
+        is_valid = string_is_valid_uuid4(uuid_string)
+    """
+    uuid4hex = re.compile('^[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?[89ab][a-f0-9]{3}-?[a-f0-9]{12}\Z', re.I)
+    match = uuid4hex.match(uuid_string)
+    return bool(match)
+
 # ______________________________________________________________________________
 #                DETECTORS & VERIFIERS BUILDING, SAVING & LOADING
 # ------------------------------------------------------------------------------
@@ -1019,26 +1041,28 @@ def find_image_in_db(img_path, db, shortcut=None):
 
 # ------------------------------------------------------------------------------
 
-def create_new_representation(img_path, region, embeddings, tag='', uid='',
-                                ignore_taglist=['--', '---']):
+def create_new_representation(img_path, region, embeddings, group_no=-1, uid='',
+                                tag='', ignore_taglist=['--', '---']):
     """
     Creates a new representation object. For more information see
     help(Representation).
 
     Inputs:
-        1. img_path - string containing image full path
+        1. img_path - string containing image full path.
         2. region - list of integers specifying face region on the original
-            image
+            image.
         3. embeddings - dictionary with face verifier name (key) and embedding
             (1-D numpy array) (item). Can have multiple verifier, embedding
             pairs (key, value pairs).
-        4. tags - string containing a name tag for this representation
-            ([tag=''])
+        4. group_no - group / cluster number. If group_no == -1 then this means
+             'no group'.
         5. uid - string containing unique object identifier. If left empty ('')
             a unique object identifier is created using uuid4 from uuid library
-            ([uid=''])
-        6. ignore_taglist - list of strings that are treated as equivalent to ''
-            (i.e. no tag) ([ignore_taglist=['--', '---']])
+            ([uid='']).
+        6. tag - string containing a name tag for this Representation
+             ([tag='']).
+        7. ignore_taglist - list of strings that are treated as equivalent to ''
+            (i.e. no tag) ([ignore_taglist=['--', '---']]).
     
     Output:
         1. Representation object
@@ -1056,10 +1080,15 @@ def create_new_representation(img_path, region, embeddings, tag='', uid='',
     if tag in ignore_taglist:
         tag = ''
 
+    # If group number is less than -1 (i.e. invalid) set it to -1 (i.e. no
+    # group)
+    if group_no < -1:
+        group_no = -1
+
     # Returns the new representation
     return Representation(uid, image_name=img_path.split('/')[-1], 
-                          image_fp=img_path, name_tag=tag, region=region,
-                          embeddings=embeddings)
+                          image_fp=img_path, group_no=group_no, name_tag=tag,
+                          region=region, embeddings=embeddings)
 
 # ------------------------------------------------------------------------------
 
@@ -1088,9 +1117,10 @@ def get_embeddings_as_array(db, verifier_name):
 
 # ------------------------------------------------------------------------------
 
-def create_reps_from_dir(img_dir, verifier_models, detector_name='opencv',
-                    align=True, verifier_names='VGG-Face', show_prog_bar=True,
-                    normalization='base', tags=[], uids=[], verbose=False):
+def create_reps_from_dir(img_dir, verifier_models, detector_name='retinaface',
+                    align=True, verifier_names='ArcFace', show_prog_bar=True,
+                    normalization='base', tags=[], uids=[], auto_grouping=True,
+                    eps=0.5, min_samples=2, metric='cosine', verbose=False):
     """
     Creates a representations from images in a directory 'img_dir'. The
     representations are returned in a list, and the list of representations. If
@@ -1098,44 +1128,62 @@ def create_reps_from_dir(img_dir, verifier_models, detector_name='opencv',
     correspond to the sorted (ascending) image names contained in 'img_dir'.
 
     Inputs:
-        1. img_dir - string with the full path to the directory containing the
-            images.
+        1. img_dir - full path to the directory containing the images [string].
 
-        2. verifier_models - dictionary containing model name (key) and model
-            object (value).
+        2. verifier_models - dictionary of model names (keys) and model objects
+             (values) [dictionary].
 
-        3. detector_name - string with the face detector name ([opencv], ssd,
-            dlib, mtcnn, retinaface).
+        3. detector_name - chosen face detector's name. Options: opencv, ssd,
+             dlib, mtcnn, retinaface (default=retinaface) [string].
         
-        4. align - boolean flag to indicate if face images should be aligned.
-            Improves face recognition performance at the cost of some speed
-            ([True], False).
+        4. align - toggles if face images should be aligned. This improves face
+             recognition performance at the cost of some speed (default=True)
+             [boolean].
 
-        5. verifier_names - string with the face verifier name ([VGG-Face],
-            OpenFace, Facenet, Facenet512, DeepFace, DeepID, ArcFace).
+        5. verifier_names - chosen face verifier's name. Options: VGG-Face,
+             OpenFace, Facenet, Facenet512, DeepFace, DeepID and ArcFace
+             (default=ArcFace) [string].
 
-        6. show_prog_bar - boolean that toggle the progress bar on or off
-            ([True], False).
+        6. show_prog_bar - toggles the progress bar on or off (default=True)
+             [boolean].
 
         7. normalization - normalizes the face image and may increase face
-            recognition performance depending on the normalization type and the
-            face verifier model ([base], raw, Facenet, Facenet2018, VGGFace,
-            VGGFace2, ArcFace).
+             recognition performance depending on the normalization type and the
+             face verifier model. Options: base, raw, Facenet, Facenet2018,
+             VGGFace, VGGFace2 and ArcFace (default='base') [string].
 
         8. tags - list of strings where each string corresponds to a tag for the
-            i-th image, i.e. tags[0] is the tag for the first image in the
-            sorted list of image name obtain from 'img_dir' directory. If an
-            empty list is provided, this is skipped during the representation
-            creation process ([tags=[]]).
+             i-th image, i.e. tags[0] is the tag for the first image in the
+             sorted list of image names obtained from 'img_dir' directory. If an
+             empty list is provided, this is skipped during the Representation
+             creation process (default='') [string or list of strings].
 
         9. uids - list of strings where each string corresponds to a unique
-            identifier (UID) for the i-th image, i.e. uids[0] is the UID for the
-            first image in the sorted list of image name obtain from 'img_dir'
-            directory. If an empty list is provided, a UID is created for each
-            image during the representation creation process ([uids=[]]).
+             identifier (UID) for the i-th image, i.e. uids[0] is the UID for
+             the first image in the sorted list of image name obtain from
+             'img_dir' directory. If an empty list is provided, a UID is created
+             for each image during the representation creation process
+             (default='') [string or list of strings].
+
+        10. auto_grouping - toggles whether Representations should be grouped /
+             clusted automatically using the DBSCAN algorithm (default=True)
+             [boolean].
+
+        11. eps - the maximum distance between two samples for one to be
+             considered as in the neighborhood of the other. This is the most
+             important DBSCAN parameter to choose appropriately for the
+             specific data set and distance function (default=0.5) [float].
+
+        12. min_samples - the number of samples (or total weight) in a
+             neighborhood for a point to be considered as a core point. This
+             includes the point itself (min_samples=2) [integer].
+
+        13. metric - the metric used when calculating distance between instances
+              in a feature array. It must be one of the options allowed by
+              sklearn.metrics.pairwise_distances (default='cosine') [string].
             
-        10. verbose - boolean to toggle function warnings and other messages
-            ([True], False).
+        14. verbose - toggles the function's warnings and other messages
+            (default=True) [boolean].
 
         Note: the 'tags' and 'uids' lists (inputs 8 and 9) must have the same
         number of elements (length) and must match the number of images in
@@ -1188,6 +1236,10 @@ def create_reps_from_dir(img_dir, verifier_models, detector_name='opencv',
     pbar    = tqdm(range(0, n_imgs), desc='Creating representations',
                     disable=disable)
 
+    # If auto grouping is True, then initialize the embeddings list
+    if auto_grouping:
+        embds = []
+
     # Loops through each image in the 'img_dir' directory
     for pb_idx, i, img_path in zip(pbar, range(0, n_imgs), img_paths):
         # Calculate the face image embedding
@@ -1196,6 +1248,10 @@ def create_reps_from_dir(img_dir, verifier_models, detector_name='opencv',
                                             detector_name=detector_name, 
                                             verifier_names=verifier_names,
                                             normalization=normalization)
+
+        # If auto grouping is True, then store each calculated embedding
+        if auto_grouping:
+            embds.append(embeddings[verifier_names])
 
         # Determines if tag was provided and should be used when creating this
         # representation
@@ -1214,6 +1270,21 @@ def create_reps_from_dir(img_dir, verifier_models, detector_name='opencv',
         # Create a new representation and adds it to the database
         rep_db.append(create_new_representation(img_path, region, embeddings,
                                                 tag=tag, uid=uid))
+
+    # Clusters Representations together using the DBSCAN algorithm
+    if auto_grouping:
+        # Clusters embeddings using DBSCAN algorithm
+        results = DBSCAN(eps=eps, min_samples=min_samples,
+                         metric=metric).fit(embds)
+
+        # Loops through each label and updates the 'group_no' attribute of each
+        # Representation IF group_no != -1 (because -1 is already the default
+        # value and means "no group")
+        for i, lbl in enumerate(results.labels_):
+            if lbl == -1:
+                continue
+            else:
+                rep_db[i].group_no = lbl
 
     # Return representation database
     return rep_db
@@ -1421,6 +1492,11 @@ def calc_embedding(img_path, verifier_models, detector_name='opencv',
                                 align=align, return_type='both',
                                 face_detector=None)
     except:
+        print('[calc_embedding] Error: face detection failed!')
+        return ([], {})
+
+    # Checks if the face detector was able to find any face
+    if len(output['faces']) == 0:
         print('[calc_embedding] Error: face detection failed!')
         return ([], {})
 
