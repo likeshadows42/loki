@@ -261,7 +261,13 @@ class Representation():
             1. unique_id  - unique identifier number that represents a face
             2. image_name - image name
             3. image_fp   - image full path
-            4. embeddings - model-specific vector representation of the face
+            4. group_no   - integer indicating which group / cluster this
+                            Representation belong to (-1 = no group / cluster)
+            5. name_tag   - custom name given to the image
+            6. region     - list of integers specifying the (rectangular) face
+                            region on the original image (top-left corner,
+                            bottom-right corner)
+            7. embeddings - model-specific vector representation of the face
         
     Methods:
         1. show_info() - prints the object's information in a condensed,
@@ -269,15 +275,16 @@ class Representation():
         2. show_summary() - prints a summary of the object's information in a
             one-liner
     """
-    def __init__(self, unique_id, image_name='', image_fp='', name_tag='',
-                 region=[], embeddings={}):
+    def __init__(self, unique_id, image_name='', image_fp='', group_no=-1,
+                 name_tag='', region=[], embeddings={}):
         """
         Initializes the object with appropriate attributes
         """
         self.unique_id  = unique_id
-        self.name_tag   = name_tag
         self.image_name = image_name
         self.image_fp   = image_fp
+        self.group_no   = group_no
+        self.name_tag   = name_tag
         self.region     = region
         self.embeddings = embeddings
         
@@ -286,8 +293,9 @@ class Representation():
         Shows detailed information about the Representation in a neat layout
         """
         print('Unique ID'.ljust(15) + f': {self.unique_id}',
-              'Name'.ljust(15) + f': {self.name_tag}',
               'Image name'.ljust(15) + f': {self.image_name}',
+              'Group'.ljust(15) + f': {self.group_no}',
+              'Tag'.ljust(15) + f': {self.name_tag}',
               'Image full path'.ljust(15) + f': {self.image_fp}',
               'Face region'.ljust(15) + f': {self.region}', sep='\n')
         
@@ -305,9 +313,10 @@ class Representation():
         Shows summarized information about the Representation in a one-liner
         """
         print(f'UID: {self.unique_id}'.ljust(25),
-              f'Name: {self.name_tag}'.ljust(15),
-              f'Region: {self.region}'.ljust(15),
-              f'FP: {self.image_fp}', sep=' | ')
+              f'Image name: {self.image_name}'.ljust(25),
+              f'Group: {self.group_no}'.ljust(15),
+              f'Tag: {self.name_tag}'.ljust(15),
+              f'Region: {self.region}'.ljust(15), sep=' | ')
 
 # Stores the verification results (matches) of a target face image against a
 # database of Representations
