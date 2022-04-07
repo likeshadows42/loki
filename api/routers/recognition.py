@@ -8,6 +8,7 @@ import pickle
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 import numpy                  as np
+import matplotlib.pyplot      as plt
 import api.global_variables   as glb
 
 from io                       import BytesIO
@@ -23,12 +24,13 @@ from IFR.functions            import create_reps_from_dir, calc_embedding,\
                         get_embeddings_as_array, calc_similarity, create_dir,\
                         load_representation_db, load_face_verifier,\
                         create_new_representation, get_matches_from_similarity,\
-                        string_is_valid_uuid4,\
-                        get_property_from_database as get_prop_from_db
+                        string_is_valid_uuid4, show_cluster_results,\
+                        get_property_from_database    as get_prop_from_db
+from fastapi.responses        import Response
 
-from shutil                   import rmtree, move             as sh_move
-from matplotlib               import image                    as mpimg
-from deepface.DeepFace        import build_model              as build_verifier
+from shutil                   import rmtree, move     as sh_move
+from matplotlib               import image            as mpimg
+from deepface.DeepFace        import build_model      as build_verifier
 
 data_dir = glb.DATA_DIR
 img_dir  = glb.IMG_DIR
@@ -116,15 +118,16 @@ async def verify_with_upload(value1: Optional[int] = Query(10),
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/debug/reset_server")
-async def reset_server():
+async def reset_server(no_database: bool = Query(False, description="Toggles if database should be empty or loaded [boolean]")):
     """
     API endpoint: reset_server()
 
     Allows the user to restart the server without manually requiring to shut it
     down and start it up.
 
-    Parameters:
-    - None
+    Parameter:
+        1. no_database - toggles if the database should be empty or loaded on
+             server reset (default=False) [boolean]
 
     Output:\n
         JSON-encoded dictionary with the following attributes:
@@ -172,12 +175,18 @@ async def reset_server():
             print('success.')
     print('')
 
-    # Tries to load a database if it exists. If not, create a new one.
+    # Tries to load a database if it exists and no_database == False. If not,
+    # either creates a new, empty database.
     print('  -> Loading / creating database:')
-    if not os.path.isfile(os.path.join(glb.RDB_DIR, 'rep_database.pickle')):
-        glb.db_changed = True
-    glb.rep_db = load_representation_db(os.path.join(glb.RDB_DIR,
-                                    'rep_database.pickle'), verbose=True)
+    if no_database:
+        print('Empty database loaded (no_database=True)')
+        glb.rep_db = []
+    else:
+        if not os.path.isfile(os.path.join(glb.RDB_DIR, 'rep_database.pickle')):
+            glb.db_changed = True
+        glb.rep_db = load_representation_db(os.path.join(glb.RDB_DIR,
+                                        'rep_database.pickle'), verbose=True)
+    
     print('')
     
     # Loads (or creates) all face verifiers
@@ -296,9 +305,10 @@ async def view_database(
     """
     API endpoint: view_database()
 
-    Gets a specific property from all Representations in the database. In the
-    specific case of the 'name_tag' property, only unique name tags are
-    returned.
+    Returns information about all Representations in the database. Either all
+    information or a summary is returned depending on the value of 'amt_detail'.
+    Similarly, the output can be either a JSON-encoded structure or a
+    string-like message depending on the value of 'output_type'.
 
     Parameters:
     - amt_detail : amount of detail in the output (string)
@@ -326,16 +336,19 @@ async def view_database(
             if len(glb.rep_db) > 0:
                 for rep in glb.rep_db:
                     output_obj.append(RepsSummaryOutput(unique_id=rep.unique_id,
-                                   name_tag=rep.name_tag, region=rep.region, 
-                                   image_fp=rep.image_fp))
+                                                    image_name=rep.image_name,
+                                                    group_no=rep.group_no,
+                                                    name_tag=rep.name_tag,
+                                                    region=rep.region))
 
         # Case 2: STRUCTURE & COMPLETE
         elif amt_detail == MessageDetailOptions.COMPLETE:
             if len(glb.rep_db) > 0:
                 for rep in glb.rep_db:
                     output_obj.append(RepsInfoOutput(unique_id=rep.unique_id,
-                        name_tag=rep.name_tag, image_name=rep.image_name,
-                        image_fp=rep.image_fp, region=rep.region,
+                        image_name=rep.image_name, group_no=rep.group_no,
+                        name_tag=rep.name_tag, image_fp=rep.image_fp,
+                        region=rep.region,
                         embeddings=[name for name in rep.embeddings.keys()]))
 
         # Case 3: [Exception] STRUCTURE & ???
@@ -352,10 +365,11 @@ async def view_database(
         if   amt_detail == MessageDetailOptions.SUMMARY:
             if len(glb.rep_db) > 0:
                 for rep in glb.rep_db:
-                    output_obj += f'UID: {rep.unique_id}'\
-                           +  f' | Name Tag: {rep.name_tag}'.ljust(30)\
-                           +  f' | Region: {rep.region}'.ljust(30)\
-                           +  f' | Image path: {rep.image_fp}'.ljust(30) + '\n'
+                    output_obj += f'UID: {rep.unique_id}'.ljust(25)\
+                           +  f' | Image name: {rep.image_name}'.ljust(25)\
+                           +  f' | Group: {rep.group_no}'.ljust(15)\
+                           +  f' | Tag: {rep.name_tag}'.ljust(25)\
+                           +  f' | Region: {rep.region}'.ljust(15) + '\n'
             else:
                 output_obj = 'Database is empty.'
 
@@ -365,9 +379,10 @@ async def view_database(
                 for rep in glb.rep_db:
                     embd_names = [name for name in rep.embeddings.keys()]
 
-                    output_obj += f'UID: {rep.unique_id}'\
-                           +  f' | Name Tag: {rep.name_tag}'.ljust(30)\
-                           +  f' | Image Name: {rep.image_name}'.ljust(30)\
+                    output_obj += f'UID: {rep.unique_id}'.ljust(25)\
+                           +  f' | Image name: {rep.image_name}'.ljust(25)\
+                           +  f' | Group: {rep.group_no}'.ljust(15)\
+                           +  f' | Tag: {rep.name_tag}'.ljust(15)\
                            +  f' | Region: {rep.region}'.ljust(30)\
                            +  f' | Image path: {rep.image_fp}'.ljust(30)\
                            + ' | embeddings: {}'.format(', '.join(embd_names))\
@@ -386,6 +401,28 @@ async def view_database(
 
     return output_obj
         
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/utility/clear_database")
+async def clear_database():
+    """
+    API endpoint: clear_database()
+
+    Clears the database. This is equivalent to setting the database to an empty
+    one.
+
+    Parameters:
+    - None
+
+    Output:\n
+        JSON-encoded dictionary with the following attributes:
+            1. message: message stating the database has been cleard [string]
+    """
+    # Clears the database
+    glb.rep_db = []
+
+    return {"message": "Database has been cleared."}
+
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/utility/edit_tag_by_uid/")
@@ -731,6 +768,315 @@ async def reload_database(
 
 # ------------------------------------------------------------------------------
 
+@fr_router.post("/utility/view_by_group_no")
+async def view_by_group_no(target_group_no: int = Query(None, description="Target group number (>= -1) [integer]"),
+    return_type  : str = Query('reps', description="Desired return type. Options: 'reps' or 'image' [str]"),
+    ncols        : int = Query(4, description="Number of columns in the output image [integer]"),
+    figsize      : Tuple[int, int] = Query((15, 15), description="Figure size in inches [tuple of 2 integers]"),
+    color        : str = Query('black', description="Text color [str]"),
+    add_separator: bool = Query(False, description="Adds a caption acting as a separator [boolean]")):
+    """
+    API endpoint: view_by_group_no()
+
+    Views all information of all Representations belonging to a group number 
+    specified by 'target_group_no'.
+
+    Parameters:
+    - target_group_no : desired group / cluster number [integer]
+
+    - return_type : determines if the output of this endpoint will be
+         JSON-encoded structures of the Representations ('reps') OR an image
+         ('image') (default='reps') [string]
+
+    - ncols : number of columns in the plot image. Ignored if return_type='reps'
+         (default=4) [integer]
+    
+    - figsize : output figure size in inches. Ignored if return_type='reps'
+         (default=(15, 15)) [tuple of 2 integers]
+
+    - color : text color (default='black') [string]
+
+    - add_separator : toggles between adding a caption acting as a separator or
+         not (default=False) [boolean]
+
+    Output:\n
+        - If return_type='reps':
+            JSON-encoded structure containing all attributes of each
+            Representation in the database belonging to the desired group.
+
+        - If return_type='image':
+            Plot of all images in the database belonging to the desired group.
+    """
+    # Initialize output object
+    reps_found = []
+
+    # Gets the Representations in the database which correspond to the desired
+    # group number
+    if len(glb.rep_db) == 0:   # no representations
+        return reps_found
+
+    elif len(glb.rep_db) >= 1: # one or many representations
+        for rep in glb.rep_db:
+            if target_group_no == rep.group_no:
+                reps_found.append(RepsInfoOutput(unique_id = rep.unique_id,
+                                                image_name = rep.image_name,
+                                                group_no   = rep.group_no,
+                                                name_tag   = rep.name_tag,
+                                                image_fp   = rep.image_fp,
+                                                region     = rep.region,
+                                                embeddings = [name for name in\
+                                                    rep.embeddings.keys()]))
+
+    else: # this should never happen
+        raise AssertionError('Representation database can '
+                            +'not have a negative size!')
+
+    # Returns the output as either an image or as Representations
+    if return_type == 'image':
+        # Obtains the subplot figure, seeks to the beginning (just to be safe)
+        # and returns the response as a png image
+        img_file = show_cluster_results(target_group_no, glb.rep_db,
+                                    ncols=ncols, figsize=figsize, color=color,
+                                    add_separator=add_separator)
+        img_file.seek(0)
+
+        return Response(content=img_file.read(), media_type="image/png")
+    
+    elif return_type == 'reps':
+        # Alternatively, returns the Representations
+        return reps_found
+
+    else:
+        raise ValueError("Return type should be either 'image' or 'reps'!")
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/utility/remove_from_group")
+async def remove_from_group(files: List[str]):
+    """
+    API endpoint: remove_from_group()
+
+    Allows the user to remove files from a particular group. Effectively, this
+    endpoint sets the group of all files (provided they are valid files) to -1
+    (i.e. group-less).
+
+    Images can be specified by either their unique identifier or their name. If
+    an image file can not be found (because the unique identifier or image name
+    does not match any present in the database) it will be skipped.
+
+    Note: one can mix and match image names and unique identifiers in the same
+    list.
+
+    Parameters:
+    - files: list of image names and/or unique identifiers [list of strings].
+
+    Output:\n
+        JSON-encoded dictionary containing the following key/value pairs:
+            1. removed : number of files removed
+            2. skipped : number of files skipped
+    """
+    # Initializes removed and skipped file / Representation counters
+    removed_count = 0
+    skipped_count = 0
+
+    # Loops through each file
+    for f in files:
+        # Tries to load (or find) the file and obtain its embedding
+        if string_is_valid_uuid4(f): # string is valid uuid
+            for i in range(0, len(glb.rep_db)):
+                # If the unique identifier of the current Representation
+                # matches the target identifier, remove its group
+                if glb.rep_db[i].unique_id == UUID(f):
+                    glb.rep_db[i].group_no = -1
+                    removed_count += 1 # increments removed counter
+                else:
+                    pass # do nothing
+
+        elif os.path.isfile(os.path.join(img_dir, f)): # string is a valid file
+            for i in range(0, len(glb.rep_db)):
+                # If this Representation's full path matches the target
+                # file's full path, remove its group
+                if glb.rep_db[i].image_fp == f:
+                    glb.rep_db[i].group_no = -1
+                    removed_count += 1 # increments removed counter
+                else:
+                    pass # do nothing
+
+        else: # string is not a valid uuid nor file
+            skipped_count += 1
+
+    return {'removed':removed_count, 'skipped':skipped_count}
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/utility/edit_tag_by_group_no")
+async def edit_tag_by_group_no(target_group_no: int = Query(None, description="Target group number (>= -1) [integer]"),
+    new_name_tag: str = Query(None, description="New name tag [string]")):
+    """
+    API endpoint: edit_tag_by_group_no()
+
+    Allows the user to edit the name tag of all images (Representations)
+    belonging to a same group.
+
+    Parameters:
+    - target_group_no: desired group number [integer]
+
+    - new_name_tag: new name tag [string]
+
+    Output:\n
+        JSON-encoded Representation structure with the following attributes:
+            1. unique_id : unique identifier [UUID]
+            2. image_name: image name [string]
+            3. group_no  : group number [integer]
+            4. name_tag  : name tag [string]
+            5. image_fp  : image full path [string]
+            6. region    : the region is a 4 element list [list of integers]
+            7. embedding : list of face verifier names for which this
+                            Representation has embeddings for [list of strings]
+    """
+    # Initializes the output object
+    output_obj = []
+
+    # Updates the database depending on its size
+    if len(glb.rep_db) == 0:   # no representations
+        return output_obj
+
+    elif len(glb.rep_db) > 0: # many representations
+        # Loops through each Representation in the database
+        for i in range(0, len(glb.rep_db)):
+            # If the Representation belongs to the group, update the name tag
+            if glb.rep_db[i].group_no == target_group_no:
+                # Updates name tag and database changed flag
+                glb.rep_db[i].name_tag = new_name_tag
+                glb.db_changed         = True
+
+                #
+                rep = glb.rep_db[i]
+                output_obj.append(RepsInfoOutput(unique_id  = rep.unique_id,
+                                                 image_name = rep.image_name,
+                                                 group_no   = rep.group_no,
+                                                 name_tag   = rep.name_tag,
+                                                 image_fp   = rep.image_fp,
+                                                 region     = rep.region,
+                                                 embeddings = [name for name in\
+                                                    rep.embeddings.keys()]))
+
+            # Otherwise, do nothing
+            else:
+                pass # do nothing
+    
+    else: # this should never happen
+        raise AssertionError('Representation database can '
+                            +'not have a negative size!')
+
+    return output_obj
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/utility/remove_images")
+async def remove_images(files: List[str],
+    remove_from: str = Query('database', description="Indicates if files should be removed from database ('database') or server ('server') [string]"),
+    img_dir: str = Query(glb.IMG_DIR, description="Full path to image directory (string)")):
+    """
+    API endpoint: remove_images()
+
+    Allows the user to remove:
+        - image Representations from the database (remove_from='database')
+                                        OR
+        - images from the server and their Representations from the database
+            (remove_from='server')
+
+    Images can be specified by either their unique identifier or their name (as
+    it is expected that each image in the server has exactly 1 Representation in
+    the database). If an image file can not be found (because the unique
+    identifier or image name does not match any present in the database) it will
+    be skipped.
+
+    Note: one can mix and match image names and unique identifiers in the same
+    list.
+
+    Parameters:
+    - files: list of image names and/or unique identifiers [list of strings].
+
+    - remove_from: specifies if images should be removed from the database or
+        from both the database AND the server. Options: database or server
+        (default='database') [string].
+    
+    - img_dir: full path of directory containing images [string].
+
+    Output:\n
+        JSON-encoded dictionary containing the following key/value pairs:
+            1. removed : number of files removed
+            2. skipped : number of files skipped
+    """
+    # Initializes removed and skipped file / Representation counters
+    removed_count = 0
+    skipped_count = 0
+
+    # Loops through each file
+    for f in files:
+        # Tries to load (or find) the file and obtain its embedding
+        if string_is_valid_uuid4(f): # string is valid uuid
+            if remove_from == 'database':
+                for rep in glb.rep_db:
+                    # If the unique identifier of the current Representation
+                    # matches the target identifier, remove this Representation
+                    # from the database
+                    if rep.unique_id == UUID(f):
+                        glb.rep_db.remove(rep)
+                        removed_count += 1 # increments removed counter
+                    else:
+                        pass # do nothing
+
+            elif remove_from == 'server':
+                for rep in glb.rep_db:
+                    # If the unique identifier of the current Representation
+                    # matches the target identifier, remove this file from the
+                    # server and its Representation from the database
+                    if rep.unique_id == UUID(f):
+                        os.remove(rep.image_fp)
+                        glb.rep_db.remove(rep)
+                        removed_count += 1 # increments removed counter
+                    else:
+                        pass # do nothing
+
+            else:
+                raise ValueError("remove_from should be either 'database' or 'server'")
+
+        elif os.path.isfile(os.path.join(img_dir, f)): # string is a valid file
+            if remove_from == 'database':
+                for rep in glb.rep_db:
+                    # If this Representation's full path matches the target
+                    # file's full path, remove this Representation from the
+                    # database
+                    if rep.image_fp == f:
+                        glb.rep_db.remove(rep)
+                        removed_count += 1 # increments removed counter
+                    else:
+                        pass # do nothing
+
+            elif remove_from == 'server':
+                for rep in glb.rep_db:
+                    # If this Representation's full path matches the target
+                    # file's full path, remove the file from the server and its
+                    # Representation from the database
+                    if rep.image_fp == f:
+                        os.remove(rep.image_fp)
+                        glb.rep_db.remove(rep)
+                        removed_count += 1 # increments removed counter
+                    else:
+                        pass # do nothing
+
+            else:
+                raise ValueError("remove_from should be either 'database' or 'server'")
+
+        else: # string is not a valid uuid nor file
+            skipped_count += 1
+
+    return {'removed':removed_count, 'skipped':skipped_count}
+
+# ------------------------------------------------------------------------------
+
 @fr_router.post("/create_database/from_directory")
 async def create_database_from_directory(cdb_params: CreateDatabaseParams,
     image_dir   : Optional[str]  = Query(glb.IMG_DIR, description="Full path to directory containing images (string)"),
@@ -745,14 +1091,30 @@ async def create_database_from_directory(cdb_params: CreateDatabaseParams,
 
     Parameters:
     - cdb_params: a structure with the following parameters:
-        1. detector_name  - name of face detector model (string)
-        2. verifier_names - list of names of face verifier models (list of
-                            strings)
-        3. align          - perform face alignment flag (boolean, default: True)
-        4. normalization  - name of image normalization (string)
-        5. tags           - list of name tags (list of strings)
-        6. uids           - list of uids (list of strings)
-        7. verbose        - output messages to server's console (boolean,
+        1. detector_name  - name of face detector model [string]
+        2. verifier_names - list of names of face verifier models [list of
+                            strings]
+        3. align          - perform face alignment flag (default=True) [boolean]
+        4. normalization  - name of image normalization [string]
+        5. tags           - list of name tags [list of strings]
+        6. uids           - list of uids [list of strings]
+        7. auto_grouping  - toggles whether Representations should be grouped /
+                            clusted automatically using the DBSCAN algorithm
+                            (default=True) [boolean]
+        8. eps            - maximum distance between two samples for one to be
+                            considered as in the neighborhood of the other. This
+                            is the most important DBSCAN parameter to choose
+                            appropriately for the specific data set and distance
+                            function (default=0.5) [float]
+        9. min_samples    - the number of samples (or total weight) in a
+                            neighborhood for a point to be considered as a core
+                            point. This includes the point itself
+                            (min_samples=2) [integer]
+       10. metric         - the metric used when calculating distance between
+                            instances in a feature array. It must be an option
+                            allowed by sklearn.metrics.pairwise_distances
+                            (default='cosine') [string]
+       11. verbose        - output messages to server's console (boolean,
                             default: False)
 
         [Example] JSON schema:
@@ -763,6 +1125,10 @@ async def create_database_from_directory(cdb_params: CreateDatabaseParams,
             "normalization": "base",
             "tags": [],
             "uids": [],
+            "auto_grouping": true,
+            "eps": 0.5,
+            "min_samples": 2,
+            "metric": "cosine",
             "verbose": false
         }
 
@@ -811,12 +1177,15 @@ async def create_database_from_directory(cdb_params: CreateDatabaseParams,
     elif len(glb.rep_db) == 0 or force_create:
         output_msg += 'Creating database: '
         glb.rep_db  = create_reps_from_dir(image_dir, glb.models,
-                                    detector_name=cdb_params.detector_name,
-                                    align=cdb_params.align, show_prog_bar=True,
-                                    verifier_names=cdb_params.verifier_names,
-                                    normalization=cdb_params.normalization,
-                                    tags=cdb_params.tags, uids=cdb_params.uids,
-                                    verbose=cdb_params.verbose)
+                                detector_name=cdb_params.detector_name,
+                                align=cdb_params.align, show_prog_bar=True,
+                                verifier_names=cdb_params.verifier_names,
+                                normalization=cdb_params.normalization,
+                                tags=cdb_params.tags, uids=cdb_params.uids,
+                                auto_grouping=cdb_params.auto_grouping,
+                                min_samples=cdb_params.min_samples,
+                                eps=cdb_params.eps, metric=cdb_params.metric,
+                                verbose=cdb_params.verbose)
         output_msg += 'success!\n'
 
     else:
@@ -863,14 +1232,30 @@ async def create_database_from_zip(myfile: UploadFile,
     Parameters:
     - myfile: a zip file
     - params: a structure with the following parameters:
-        1. detector_name  - name of face detector model (string)
-        2. verifier_names - list of names of face verifier models (list of
-                            strings)
-        3. align          - perform face alignment flag (boolean, default: True)
-        4. normalization  - name of image normalization (string)
-        5. tags           - list of name tags (list of strings)
-        6. uids           - list of uids (list of strings)
-        7. verbose        - output messages to server's console (boolean,
+        1. detector_name  - name of face detector model [string]
+        2. verifier_names - list of names of face verifier models [list of
+                            strings]
+        3. align          - perform face alignment flag (default=True) [boolean]
+        4. normalization  - name of image normalization [string]
+        5. tags           - list of name tags [list of strings]
+        6. uids           - list of uids [list of strings]
+        7. auto_grouping  - toggles whether Representations should be grouped /
+                            clusted automatically using the DBSCAN algorithm
+                            (default=True) [boolean]
+        8. eps            - maximum distance between two samples for one to be
+                            considered as in the neighborhood of the other. This
+                            is the most important DBSCAN parameter to choose
+                            appropriately for the specific data set and distance
+                            function (default=0.5) [float]
+        9. min_samples    - the number of samples (or total weight) in a
+                            neighborhood for a point to be considered as a core
+                            point. This includes the point itself
+                            (min_samples=2) [integer]
+       10. metric         - the metric used when calculating distance between
+                            instances in a feature array. It must be an option
+                            allowed by sklearn.metrics.pairwise_distances
+                            (default='cosine') [string]
+       11. verbose        - output messages to server's console (boolean,
                             default: False)
 
     - image_dir   : full path to directory containing images (string,
@@ -980,6 +1365,9 @@ async def create_database_from_zip(myfile: UploadFile,
                                         verifier_names=params.verifier_names,
                                         normalization=params.normalization,
                                         tags=params.tags, uids=params.uids,
+                                        auto_grouping=params.auto_grouping,
+                                        min_samples=params.min_samples,
+                                        eps=params.eps, metric=params.metric,
                                         verbose=params.verbose)
 
             # Loops through each representation
@@ -1244,7 +1632,7 @@ async def verify_with_upload(files: List[UploadFile],
                 response_model=List[VerificationMatches])
 async def verify_existing_file(files: List[str],
             params: VerificationParams = Depends(),
-            img_dir: str = Query(glb.IMG_DIR, description="Full path to image directory (string)"),):
+            img_dir: str = Query(glb.IMG_DIR, description="Full path to image directory (string)")):
     """
     API endpoint: verify_existing_file()
 
@@ -1269,9 +1657,8 @@ async def verify_existing_file(files: List[str],
     list.
 
     Parameters:
-    - files: list of image full paths and/or unique identifiers
-        [list of strings]. NOTE: CURRENTLY BUGGED FOR MULTIPLE FILES - PASS A 
-        SINGLE FILE FOR NOW!
+    - files: list of image names and/or unique identifiers [list of strings].
+        NOTE: CURRENTLY BUGGED FOR MULTIPLE FILES - PASS A SINGLE FILE FOR NOW!
 
     - params: a structure with the following parameters:
         1. detector_name - name of face detector model [string]
@@ -1371,3 +1758,4 @@ async def verify_existing_file(files: List[str],
     return verification_results
     
 # ------------------------------------------------------------------------------
+
