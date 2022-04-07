@@ -12,7 +12,10 @@ import pickle
 
 import numpy                as np
 import tensorflow           as tf
+import matplotlib.image     as mpimg
+import matplotlib.pyplot    as plt
 
+from io                      import BytesIO
 from tqdm                    import tqdm
 from uuid                    import uuid4
 from deepface                import DeepFace
@@ -465,12 +468,14 @@ def get_property_from_database(db, param, do_sort=False, suppress_error=True):
     elif len(db) == 1: # single representation
         if   param == 'unique_id':
             propty = [db[0].unique_id]
-        elif param == 'name_tag':
-            propty = [db[0].name_tag]
         elif param == 'image_name':
             propty = [db[0].image_name]
         elif param == 'image_fp':
             propty = [db[0].image_fp]
+        elif param == 'group_no':
+            propty = [db[0].group_no]
+        elif param == 'name_tag':
+            propty = [db[0].name_tag]
         elif param == 'region':
             propty = [db[0].region]
         elif param == 'embeddings':
@@ -489,13 +494,7 @@ def get_property_from_database(db, param, do_sort=False, suppress_error=True):
             propty = []
             for rep in db:
                 propty.append(rep.unique_id)
-            
-        elif param == 'name_tag':
-            propty = []
-            for rep in db:
-                propty.append(rep.name_tag)
-            propty = np.unique(propty) # only keep unique name tags
-            
+
         elif param == 'image_name':
             propty = []
             for rep in db:
@@ -505,6 +504,17 @@ def get_property_from_database(db, param, do_sort=False, suppress_error=True):
             propty = []
             for rep in db:
                 propty.append(rep.image_fp)
+
+        elif param == 'group_no':
+            propty = []
+            for rep in db:
+                propty.append(rep.group_no)
+            
+        elif param == 'name_tag':
+            propty = []
+            for rep in db:
+                propty.append(rep.name_tag)
+            propty = np.unique(propty) # only keep unique name tags
             
         elif param == 'region':
             propty = []
@@ -552,6 +562,55 @@ def string_is_valid_uuid4(uuid_string):
     uuid4hex = re.compile('^[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?[89ab][a-f0-9]{3}-?[a-f0-9]{12}\Z', re.I)
     match = uuid4hex.match(uuid_string)
     return bool(match)
+
+# ------------------------------------------------------------------------------
+
+def show_cluster_results(group_no, db, ncols=4, figsize=(15, 15),
+                         color='black', add_separator=False):
+    """
+    TODO: Flesh out description
+    Shows the results of image clustering and returns the handle to its figure.
+    
+    """
+    # Gets the group number of all Representations in the database
+    labels = []
+    for rep in db:
+        labels.append(rep.group_no)
+    labels = np.array(labels)
+
+    # Determines number of rows based on number of columns
+    nrows = (np.ceil(np.sum(labels == group_no) / ncols)).astype(int)
+
+    # Creates figure and suplot axes. Also flattens the axes into a single list
+    fig, axs = plt.subplots(nrows, ncols, figsize=figsize)
+    axs      = [ax for ax in axs.flat]
+
+    # Initializes the current axis and loops over each label & representation
+    cur_ax   = 0
+    for rep in db:
+        # If the current label matches the chosen cluster number
+        if rep.group_no == group_no:
+            # Plot the representation with title
+            axs[cur_ax].imshow(mpimg.imread(rep.image_fp), aspect="auto")
+            axs[cur_ax].set_title(rep.image_name\
+                                + f' (cluster: {rep.group_no})', color=color)
+            cur_ax += 1
+
+        # Otherwise, do nothing
+        else:
+            pass # do nothing
+
+    # Adds a divider / separator at the end of plot
+    if add_separator:
+        txt = "=" * 100
+        plt.figtext(0.5, 0.01, txt, wrap=True, horizontalalignment='center',
+                    fontsize=12, color=color)
+
+    #
+    img_file = BytesIO()
+    plt.savefig(img_file, format='png')
+
+    return img_file
 
 # ______________________________________________________________________________
 #                DETECTORS & VERIFIERS BUILDING, SAVING & LOADING
@@ -1166,8 +1225,9 @@ def create_reps_from_dir(img_dir, verifier_models, detector_name='retinaface',
              (default='') [string or list of strings].
 
         10. auto_grouping - toggles whether Representations should be grouped /
-             clusted automatically using the DBSCAN algorithm (default=True)
-             [boolean].
+             clusted automatically using the DBSCAN algorithm. If multiple
+             verifier names are passed, uses the embeddings of the first
+             verifier during the clustering procedure (default=True) [boolean].
 
         11. eps - the maximum distance between two samples for one to be
              considered as in the neighborhood of the other. This is the most
@@ -1251,7 +1311,7 @@ def create_reps_from_dir(img_dir, verifier_models, detector_name='retinaface',
 
         # If auto grouping is True, then store each calculated embedding
         if auto_grouping:
-            embds.append(embeddings[verifier_names])
+            embds.append(embeddings[verifier_names[0]])
 
         # Determines if tag was provided and should be used when creating this
         # representation
