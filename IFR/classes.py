@@ -100,9 +100,10 @@ class AvailableRepProperties(str, Enum):
     Path parameter class: available properties of the Representation class.
     """
     UNIQUE_ID  = "unique_id"
-    NAME_TAG   = "name_tag"
     IMAGE_NAME = "image_name"
     IMAGE_FP   = "image_fp"
+    GROUP_NO   = "group_no"
+    NAME_TAG   = "name_tag"
     REGION     = "region"
     EMBEDDINGS = "embeddings"
 
@@ -120,6 +121,10 @@ default_enforce_detection = True
 default_threshold         = -1
 default_tags              = []
 default_uids              = []
+default_auto_grouping     = True
+default_eps               = 0.5
+default_min_samples       = 2
+
 default_verbose           = False
 default_msg_detail        = MessageDetailOptions.SUMMARY
 default_msg_output        = MessageOutputOptions.STRUCTURE
@@ -173,6 +178,10 @@ class CreateDatabaseParams(BaseModel):
     normalization : NormalizationTypes        = default_normalization
     tags          : Optional[List[str]]       = default_tags
     uids          : Optional[List[str]]       = default_uids
+    auto_grouping : Optional[bool]            = default_auto_grouping
+    eps           : Optional[float]           = default_eps
+    min_samples   : Optional[int]             = default_min_samples
+    metric        : Optional[DistanceMetrics] = default_metric
     verbose       : bool                      = default_verbose
 
     class Config:
@@ -227,10 +236,11 @@ class RepsSummaryOutput(BaseModel):
     Response model class: defines the output for representation summary output.
     This class can be seen as a subset of RepsInfoOutput.
     """
-    unique_id: UUID
-    name_tag : str
-    region   : List[int]
-    image_fp : str
+    unique_id : UUID
+    image_name: str
+    group_no  : int
+    name_tag  : str
+    region    : List[int]
 
 # Response class for representation information output
 class RepsInfoOutput(BaseModel):
@@ -239,12 +249,12 @@ class RepsInfoOutput(BaseModel):
     output. This class can be seen as a superset of RepsSummaryOutput.
     """
     unique_id : UUID
-    name_tag  : str
     image_name: str
+    group_no  : int
+    name_tag  : str
     image_fp  : str
     region    : List[int]
     embeddings: List[str]
-
 
 # ______________________________________________________________________________
 #                                  CUSTOM CLASSES
