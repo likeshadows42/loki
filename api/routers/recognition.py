@@ -31,6 +31,7 @@ from fastapi.responses        import Response
 from shutil                   import rmtree, move     as sh_move
 from matplotlib               import image            as mpimg
 from deepface.DeepFace        import build_model      as build_verifier
+import pandas as pd
 
 data_dir = glb.DATA_DIR
 img_dir  = glb.IMG_DIR
