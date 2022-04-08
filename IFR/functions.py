@@ -508,7 +508,7 @@ def get_property_from_database(db, param, do_sort=False, suppress_error=True):
         elif param == 'group_no':
             propty = []
             for rep in db:
-                propty.append(rep.group_no)
+                propty.append(int(rep.group_no))
             
         elif param == 'name_tag':
             propty = []
