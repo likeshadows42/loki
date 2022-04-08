@@ -1482,7 +1482,7 @@ async def verify_no_upload(files: List[UploadFile],
         # Gets all matches based on the similarity object and append the result
         # to the results list
         result = get_matches_from_similarity(similarity_obj, glb.rep_db,
-                                             params.verifier_name)
+                                             params.verifier_name, verbose=False)
         # verification_results.append(result)
         result_df = pd.DataFrame(result)
         verification_results = result_df.to_dict('records')
