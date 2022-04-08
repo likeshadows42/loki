@@ -1589,7 +1589,7 @@ def calc_embedding(img_path, verifier_models, detector_name='opencv',
 
 # ------------------------------------------------------------------------------
 
-def get_matches_from_similarity(similarity_obj, db, verifier_name):
+def get_matches_from_similarity(similarity_obj, db, verifier_name, verbose=True):
     """
     Gets all matches from the database 'db' based on the current similairty
     object 'similairty_obj' and the face verifier 'verifier_name'. This object
@@ -1643,7 +1643,10 @@ def get_matches_from_similarity(similarity_obj, db, verifier_name):
         mtch_names.append(rep.image_name)
         mtch_fps.append(rep.image_fp)
         mtch_rgns.append(rep.region)
-        mtch_embds.append(list(rep.embeddings[verifier_name]))
+         if verbose:
+            mtch_embds.append(list(rep.embeddings[verifier_name]))
+        else:
+            mtch_embds.append([])
 
     return {'unique_ids':mtch_uids  , 'name_tags':mtch_tags,
             'image_names':mtch_names, 'image_fps':mtch_fps ,

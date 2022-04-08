@@ -228,7 +228,20 @@ class VerificationMatches(BaseModel):
     regions    : List[List[int]]
     embeddings : List[List[float]]
     distances  : List[float]
-    threshold  : float
+    # threshold  : float
+
+class VerificationMatchesItem(BaseModel):
+    """
+    Response model class: defines the output for face verification matches.
+    """
+    unique_ids : UUID
+    name_tags  : str
+    image_names: str
+    image_fps  : str
+    regions    : List[int]
+    embeddings : List[float]
+    distances  : float
+    # threshold  : float
 
 # Response class for representation summary output
 class RepsSummaryOutput(BaseModel):
