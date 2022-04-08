@@ -1643,7 +1643,7 @@ def get_matches_from_similarity(similarity_obj, db, verifier_name, verbose=True)
         mtch_names.append(rep.image_name)
         mtch_fps.append(rep.image_fp)
         mtch_rgns.append(rep.region)
-         if verbose:
+        if verbose:
             mtch_embds.append(list(rep.embeddings[verifier_name]))
         else:
             mtch_embds.append([])
