@@ -6,14 +6,33 @@
             @change="onChange($event)"
             accept=".jpg"
         />
-    </p>  
+    </p>
+    <!-- {{ returnData }} -->
+
+    <div v-if="returnToggler">
+        <div v-for="item in returnData" :key="item.unique_ids">
+            <img @click="clickImg(item)" :src="'/data/'+item.image_names" class="img_thumb"/>
+        </div>
+    </div>
 </template>
 
 <script>
+// import { nextTick } from 'vue'
 export default {
-    emits: ['response'],
+    emits: ['response', 'change'],
+
+    data() {
+        return {
+            returnToggler: true,
+            returnData: ''
+        }
+    },
 
     methods: {
+        clickImg(item) {
+            console.log(item.unique_ids)
+        },
+        
         async fetchData(evt) {
             let formData = new FormData()
             formData.append('files', evt.target.files[0])
@@ -46,8 +65,17 @@ export default {
         },
 
         onChange(evt) {
+            console.log('test')
             this.fetchData(evt)
-                .then(data => this.$emit('response', data))
+                .then(
+                    //data => console.log(data[0].image_names),
+                    data => this.returnData = data,
+                    // console.log('test2'),
+                    // nextTick(() => {
+                    //     console.log(this.returnData)
+                    // })
+                )
+                
         },
     },
 }

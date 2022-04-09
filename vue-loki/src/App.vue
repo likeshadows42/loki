@@ -2,21 +2,35 @@
   <div class="wrapper">
     <header class="header"><Home msg="Loki MVP"/></header>
     <aside class="aside aside-1">
-      <p><a href="#" @click.prevent="getGlobaldata">Show global variables</a></p>
-      <p><a href="#" @click.prevent="zipUploaderToggle">Upload zip file</a></p>
-      <p><a href="#" @click.prevent="imgUploaderAdvToggle">Upload multiple images</a></p>
-      <p><a href="#" @click.prevent="imgVerWithoutUpToggle">Verify image (without upload)</a></p>
-      <p><a href="#" @click.prevent="imgVerWithUpToggle">Verify image (with upload)</a></p>
+    
+      <h3>Face recognition</h3>    
+      <p><a href="#" @click.prevent="imgUngroupedShow">OK Show ungrouped images</a></p>
+      <!-- <p><a href="#" @click.prevent="imgGroupsShow">Show groups</a></p>  -->
+      <p><a>Show groups</a></p> 
+      <!-- <p><a href="#" @click.prevent="imgUploaderAdvToggle">Upload multiple images</a></p> -->
+      <p><a>Upload multiple images</a></p>
+      <p><a href="#" @click.prevent="imgVerWithoutUpToggle">OK Verify image (without upload)</a></p>
+      <!-- <p><a href="#" @click.prevent="imgVerWithUpToggle">Verify image (with upload)</a></p> -->
+      <p><a>Verify image (with upload)</a></p>
       <!-- <SecondComp @response="(msg) => MainContent = msg"/>
       <SecondComp @response="mainClear"/> -->
-      
+
+      <h3>Database</h3>
+      <p><a href="#" @click.prevent="dbLoadFromDir">OK Load images from directory</a></p>
+      <p><a href="#" @click.prevent="zipUploaderToggle">OK Load images from zip</a></p>
+      <p><a href="#" @click.prevent="dbClear">OK Clear database</a></p>
+      <p><a href="#" @click.prevent="dbReload">OK Reload database</a></p>
+
+      <h3>Utility</h3>
+      <p><a href="#" @click.prevent="getGlobaldata">OK Get global parameters</a></p>
+      <p><a href="#" @click.prevent="serverReset">OK Server reset&restart</a></p>
     </aside>
     <article class="main">
        <!-- <ImagesUploader @changed="handleImages" @response="(msg) => MainContent = msg"/> -->
-       
-      <GlobalsGet
-        v-if="globalDataToggler"
-      /> 
+
+      <compImgUngrouped v-if="compImgUngroupedToggler"/>
+
+       <compGroupsShow v-if="compGroupsToggler"/>
 
       <ImagesVerifiedWithUpload
         v-if="imgUploaderWithUpToggler"
@@ -50,14 +64,17 @@
 
 
 <script>
+
 // imports
 import Home from './components/home.vue'
-import GlobalsGet from './components/globals-get.vue'
+import compImgUngrouped from './components/img-ungrouped-show.vue'
+import compGroupsShow from './components/img-groups-show.vue'
 // import SecondComp from './components/second-comp.vue'
 import ImagesVerifiedWithUpload from './components/img-verifier-with-upload.vue'
 import ImagesVerifiedWithoutUpload from './components/img-verifier-without-upload.vue'
 import ImagesUploaderAdv from './components/img-uploader-adv.vue'
 import zipUploader from './components/zip-uploader.vue'
+import axios from "axios"
 
 // exports
 export default {
@@ -65,7 +82,8 @@ export default {
 
   components: {
     Home,
-    GlobalsGet,
+    compImgUngrouped,
+    compGroupsShow,
     // SecondComp,
     ImagesVerifiedWithUpload,
     ImagesVerifiedWithoutUpload,
@@ -73,14 +91,81 @@ export default {
     zipUploader
   },
 
+  data() {
+    return {
+      MainContent: null,
+      MainContentRaw: null,
+      imgUploaderWithUpToggler: false,
+      imgUploaderWithoutUpToggler: false,
+      imgUploaderAdvToggler: false,
+      zipUploaderToggler: false,
+      compImgUngroupedToggler: false,
+      compGroupsToggler: false,
+    }
+  },
+
   methods: {
+    async axiosGet(url) {
+      try {
+        const res = await axios.get(url)
+        // console.log(res.data)
+        return res.data
+      } catch(error) {
+        console.log(error)
+      }
+    },
+
+    async axiosPost(url, params={}) {
+      try {
+        const res = await axios.post(url, params)
+        // console.log(res.data)
+        return res.data
+      } catch(error) {
+        console.log(error)
+      }
+    },
+
+    async getGlobaldata() {
+      console.log("Getting global parameters")
+      this.MainContent = await this.axiosGet('http://localhost:8000/fr/debug/inspect_globals')
+    },
+    
+    async dbLoadFromDir() {
+      console.log("Loading database from directory")
+      const params = {"force_create": true}
+      this.MainContent = await this.axiosPost('http://localhost:8000/fr/create_database/from_directory', params)
+    },
+
+    async dbClear() {
+      console.log("Clearing database")
+      this.MainContent = await this.axiosPost('http://localhost:8000/fr/utility/clear_database')
+    },
+
+    async dbReload() {
+      console.log("Reload database")
+      this.MainContent = await this.axiosPost('http://localhost:8000/fr/utility/reload_database')
+    },
+
+    async serverReset(){
+      console.log("Reset server&restart")
+      const params = {"no_database": true}
+      this.MainContent = await this.axiosPost('http://localhost:8000/fr/debug/reset_server', params)
+    },
+
+    // sectionsToggler(sec) {
+    //   switch(sec) {
+    //     case 
+    //   }
+    // },
+
     mainClear() {
       this.imgUploaderWithUpToggler = false
       this.imgUploaderWithoutUpToggler = false
       this.imgUploaderAdvToggler = false
       this.zipUploaderToggler = false
-      this.globalDataToggler = false
       this.MainContentRaw = null
+      this.compImgUngroupedToggler = false
+      this.compGroupsToggler = false
     },
 
     handleImages(files) {
@@ -93,8 +178,9 @@ export default {
       this.imgUploaderWithoutUpToggler = false
       this.imgUploaderAdvToggler = false
       this.zipUploaderToggler = true
-      this.globalDataToggler = false
       this.MainContentRaw = null
+      this.compImgUngroupedToggler = false
+      this.compGroupsToggler = false
     },
 
     imgVerWithUpToggle() {
@@ -103,8 +189,9 @@ export default {
       this.imgUploaderWithoutUpToggler = false
       this.imgUploaderAdvToggler = false
       this.zipUploaderToggler = false
-      this.globalDataToggler = false
       this.MainContentRaw = null
+      this.compImgUngroupedToggler = false
+      this.compGroupsToggler = false
     },
 
     imgVerWithoutUpToggle() {
@@ -113,8 +200,9 @@ export default {
       this.imgUploaderWithoutUpToggler = true
       this.imgUploaderAdvToggler = false
       this.zipUploaderToggler = false
-      this.globalDataToggler = false
       this.MainContentRaw = null
+      this.compImgUngroupedToggler = false
+      this.compGroupsToggler = false
     },
 
     imgUploaderAdvToggle() {
@@ -123,18 +211,33 @@ export default {
       this.imgUploaderWithoutUpToggler = false
       this.imgUploaderAdvToggler = true
       this.zipUploaderToggler = false
-      this.globalDataToggler = false
       this.MainContentRaw = null
+      this.compImgUngroupedToggler = false
+      this.compGroupsToggler = false
     },
 
-    getGlobaldata() {
+    imgUngroupedShow() {
       this.MainContent = null
       this.imgUploaderWithUpToggler = false
       this.imgUploaderWithoutUpToggler = false
       this.imgUploaderAdvToggler = false
       this.zipUploaderToggler = false
-      this.globalDataToggler = true
+      this.globalDataToggler = false
       this.MainContentRaw = null
+      this.compImgUngroupedToggler = true
+      this.compGroupsToggler = false
+    },
+
+    imgGroupsShow() {
+      this.MainContent = null
+      this.imgUploaderWithUpToggler = false
+      this.imgUploaderWithoutUpToggler = false
+      this.imgUploaderAdvToggler = false
+      this.zipUploaderToggler = false
+      this.globalDataToggler = false
+      this.MainContentRaw = null
+      this.compImgUngroupedToggler = false
+      this.compGroupsToggler = true
     },
 
     testLog(evt) {
@@ -149,10 +252,15 @@ export default {
       const imgURLs = msg[0].image_names
       let imgs = ''
       for (const imgURL of imgURLs) {
-        imgs += '<img src="'+ imgBase + imgURL +'" class="img_thumb"/>'
-        // imgs += '<p>'+imgURL+'</p>'
+        imgs += '<img @click="testLog(1)" src="'+ imgBase + imgURL +'" class="img_thumb"/>'
       }
       
+      // imgs = `
+      // <div v-for="imgURL in imgURLs">
+      //   <img src="{{ imgBase }}{{imgURL}}" class="img_thumb"/>
+      // </div>
+      // `
+
       // let output = '<div class="container"><div class="row">' + imgs + '</div></div>'
 
       this.MainContentRaw = imgs
@@ -163,18 +271,7 @@ export default {
        this.MainContent = msg
     },
 
-  },
 
-  data(){
-    return {
-      MainContent: null,
-      MainContentRaw: null,
-      imgUploaderWithUpToggler: false,
-      imgUploaderWithoutUpToggler: false,
-      imgUploaderAdvToggler: false,
-      zipUploaderToggler: false,
-      globalDataToggler: false,
-    }
   },
 
   created() {

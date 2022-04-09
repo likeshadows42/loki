@@ -47,7 +47,11 @@ export default {
 
         onChange(evt) {
             this.fetchData(evt)
-                .then(data => this.$emit('response', data))
+                .then(
+                    data => this.$emit('response', data),
+                    console.log('fired')
+                )
+
         },
     },
 }

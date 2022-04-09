@@ -508,7 +508,9 @@ def get_property_from_database(db, param, do_sort=False, suppress_error=True):
         elif param == 'group_no':
             propty = []
             for rep in db:
-                propty.append(rep.group_no)
+                propty.append(str(rep.group_no))
+            propty = np.unique(propty)  # only keep unique groups
+            propty = sorted(propty, key=lambda x: int(x))   # and sort them
             
         elif param == 'name_tag':
             propty = []
