@@ -6,11 +6,9 @@ import pickle
 import api.global_variables         as glb
 
 from fastapi                        import FastAPI
-from IFR.functions                  import load_representation_db,\
-                                           create_dir, load_face_verifier,\
-                                           save_face_verifier
-
-from api.routers.deepface           import df_router
+from IFR.api                        import load_representation_db,\
+                                        load_face_verifier, save_face_verifier
+from IFR.functions                  import create_dir
 from api.routers.recognition        import fr_router
 
 from deepface.DeepFace              import build_model    as build_verifier
@@ -19,11 +17,8 @@ from deepface.DeepFace              import build_model    as build_verifier
 #                               APP INITIALIZATION
 # ------------------------------------------------------------------------------
 
-app = FastAPI()
-
-app.include_router(df_router, prefix="/df", tags=["Deepface"])
-app.include_router(fr_router, prefix="/fr", tags=["Face Recognition"])
-
+app = FastAPI(name='Face Recognition API')
+app.include_router(fr_router , prefix="/fr" , tags=["Face Recognition"])
 
 # ______________________________________________________________________________
 #                                   APP METHODS
