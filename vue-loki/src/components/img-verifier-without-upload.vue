@@ -8,10 +8,9 @@
         />
     </p>
     <!-- {{ returnData }} -->
-
-    <div v-if="returnToggler">
-        <div v-for="item in returnData" :key="item.unique_ids">
-            <img @click="clickImg(item)" :src="'/data/'+item.image_names" class="img_thumb"/>
+    <div v-if="returnData">
+        <div v-for="item in returnData[0]" :key="item.unique_id">
+            <img @click="clickImg(item)" :src="'/data/'+item.image_name" class="img_thumb"/>
         </div>
     </div>
 </template>
@@ -23,7 +22,6 @@ export default {
 
     data() {
         return {
-            returnToggler: true,
             returnData: ''
         }
     },

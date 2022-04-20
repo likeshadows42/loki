@@ -221,26 +221,14 @@ class VerificationMatch(BaseModel):
     """
     Response model class: defines the output for face verification match.
     """
-    unique_ids : List[UUID]
-    name_tags  : List[str]
-    image_names: List[str]
-    image_fps  : List[str]
-    regions    : List[List[int]]
-    embeddings : List[List[float]]
-    distances  : List[float]
-    # threshold  : float
-
-class VerificationMatchesItem(BaseModel):
-    """
-    Response model class: defines the output for face verification matches.
-    """
-    unique_ids : UUID
-    name_tags  : str
-    image_names: str
-    image_fps  : str
-    regions    : List[int]
-    embeddings : List[float]
-    distances  : float
+    unique_id : UUID
+    image_name: str
+    group_no  : int
+    name_tag  : str
+    image_fp  : str
+    region    : List[int]
+    embeddings: List[str]
+    distance  : float
     # threshold  : float
 
 # Response class for representation summary output

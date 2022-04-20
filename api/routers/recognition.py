@@ -1124,7 +1124,7 @@ async def create_database_from_zip(myfile: UploadFile,
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/verify/no_upload", response_model=List[VerificationMatchesItem])
+@fr_router.post("/verify/no_upload", response_model=List[List[VerificationMatch]])
 async def verify_no_upload(files: List[UploadFile],
                           params: VerificationParams = Depends()):
     """
@@ -1194,9 +1194,9 @@ async def verify_no_upload(files: List[UploadFile],
 
         # Gets all matches based on the similarity object and append the result
         # to the results list
-        result = get_matches_from_similarity(similarity_obj, glb.rep_db,
-                                             params.verifier_name, verbose=False)
+        result = get_matches_from_similarity(similarity_obj, glb.rep_db)
         #result_df = pd.DataFrame(result)
+        #print(result_df)
         #verification_results = result_df.to_dict('records')
         verification_results.append(result)
         # TODO: check for multiple file, not working at the moment!
