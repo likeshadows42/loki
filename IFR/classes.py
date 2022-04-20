@@ -769,7 +769,7 @@ class RepDatabase():
 
     def update_record(self, term, unique_id=None, image_name: str = None,
             image_fp: str = None, group_no: int = None, name_tag: str = None,
-            region: list[tuple] = None, embeddings: dict = None):
+            region: List[tuple] = None, embeddings: dict = None):
         """
         Updates a single record (Representation) in the database. This record is
         searched by the term in 'term'. In this case, a term is a:
