@@ -4,6 +4,8 @@
 
 import os
 
+from IFR.classes import RepDatabase
+
 # Path variables
 API_DIR      = os.path.join(os.path.dirname(os.path.realpath("__file__")),'api')
 DATA_DIR     = os.path.join(API_DIR     , 'data')
@@ -25,6 +27,6 @@ verifier_names = ('ArcFace', '') # to avoid long startups during developing
                                  # (dont forget to include '' to avoid a bug)
 
 # Other variables
-models      = {}    # stores all face verifier models
-rep_db      = []    # stores representation database
-db_changed  = False # indicates whether database has been modified (and should be saved)
+models      = {}             # stores all face verifier models
+rep_db      = RepDatabase()  # stores representation database
+db_changed  = False          # indicates whether database has been modified (and should be saved)
