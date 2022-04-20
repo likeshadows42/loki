@@ -467,6 +467,15 @@ async def get_attribute_from_database(
 
 # ------------------------------------------------------------------------------
 
+@fr_router.post("/utility/get_groups")
+async def get_groups():
+    attributes = glb.rep_db.get_attribute('group_no')
+    attributes = np.unique(attributes)  # only keep unique groups
+    attributes = sorted(attributes, key=lambda x: int(x))   # and sort them
+    return [str(x) for x in attributes]
+
+# ------------------------------------------------------------------------------
+
 @fr_router.post("/utility/update_record/", response_model=RepsInfoOutput)
 async def update_record(
     term          : str = Query(None, description="String Representation of valid unique identifier (including dashes '-') or a valid image name (string)"),
