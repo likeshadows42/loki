@@ -67,6 +67,35 @@ def person_add(conn, person):
     conn.commit()
     return cur.lastrowid
 
+
+def person_sel_by_id(conn, person_id):
+    """
+    Select a person by person_id
+    :param conn:
+    :param person_id:
+    :return person record (always single)
+    """
+    sql = 'SELECT * FROM Person WHERE person_id = ?'
+    cur = conn.cursor()
+    cur.execute(sql, person_id)
+    rec = cur.fetchall()
+    return rec
+
+
+def person_sel_by_name(conn, name):
+    """
+    Select person by name (could be not unique)
+    :param conn:
+    :param name:
+    :return person record (could be multiple)
+    """
+    sql = 'SELECT * FROM Person WHERE name = ?'
+    cur = conn.cursor()
+    cur.execute(sql, name)
+    rec = cur.fetchall()
+    return rec
+
+
 def person_remove(conn, person_id):
     """
     Add a new person into the Person table
@@ -75,8 +104,9 @@ def person_remove(conn, person_id):
     """
     sql = 'DELETE FROM Person WHERE person_id = ?'
     cur = conn.cursor()
-    cur.execute(sql)
+    
     conn.commit()
+
 
 def person_update_name(conn, name, person_id):
     """
