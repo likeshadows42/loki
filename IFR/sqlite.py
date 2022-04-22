@@ -104,9 +104,8 @@ def person_remove(conn, person_id):
     """
     sql = 'DELETE FROM Person WHERE person_id = ?'
     cur = conn.cursor()
-    
+    cur.execute(sql, person_id)
     conn.commit()
-
 
 def person_update_name(conn, name, person_id):
     """
