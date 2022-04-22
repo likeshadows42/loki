@@ -2,22 +2,30 @@
   <div class="wrapper">
     <header class="header"><Home msg="Loki MVP"/></header>
     <aside class="aside aside-1">
-    
+      
+      <h3>Load images</h3>
+      <p><a href="#" @click.prevent="dbLoadFromDir">OK Load images from directory</a></p>
+      <p><a href="#" @click.prevent="zipUploaderToggle">OK Load images from zip</a></p>
+
       <h3>Face recognition</h3>    
       <p><a href="#" @click.prevent="imgUngroupedShow">OK Show ungrouped images</a></p>
-      <!-- <p><a href="#" @click.prevent="imgGroupsShow">Show groups</a></p>  -->
-      <p><a>Show groups</a></p> 
+      <p><a href="#" @click.prevent="imgGroupsShow">OK Show groups</a></p> 
       <!-- <p><a href="#" @click.prevent="imgUploaderAdvToggle">Upload multiple images</a></p> -->
+      
       <p><a>Upload multiple images</a></p>
       <p><a href="#" @click.prevent="imgVerWithoutUpToggle">OK Verify image (without upload)</a></p>
       <!-- <p><a href="#" @click.prevent="imgVerWithUpToggle">Verify image (with upload)</a></p> -->
+      
       <p><a>Verify image (with upload)</a></p>
       <!-- <SecondComp @response="(msg) => MainContent = msg"/>
       <SecondComp @response="mainClear"/> -->
 
+      
+
       <h3>Database</h3>
-      <p><a href="#" @click.prevent="dbLoadFromDir">OK Load images from directory</a></p>
-      <p><a href="#" @click.prevent="zipUploaderToggle">OK Load images from zip</a></p>
+      <p><a href="#" @click.prevent="">Load database</a></p>
+      <p><a href="#" @click.prevent="">Save database</a></p>
+      
       <p><a href="#" @click.prevent="dbClear">OK Clear database</a></p>
       <p><a href="#" @click.prevent="dbReload">OK Reload database</a></p>
 
@@ -30,7 +38,7 @@
 
       <compImgUngrouped v-if="compImgUngroupedToggler"/>
 
-       <compGroupsShow v-if="compGroupsToggler"/>
+      <compGroupsShow v-if="compGroupsToggler"/>
 
       <ImagesVerifiedWithUpload
         v-if="imgUploaderWithUpToggler"

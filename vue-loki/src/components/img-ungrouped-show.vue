@@ -56,7 +56,7 @@ export default {
     <!-- <button @click="removeImg(img)">X</button> -->
   </span>
 </span>
-<p v-if="all_grouped == true">No ungrouped images</p>
+<p v-if="imgs == true">No ungrouped images</p>
 
 </template>
 
