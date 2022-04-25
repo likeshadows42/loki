@@ -19,7 +19,8 @@ from zipfile                 import ZipFile
 from tempfile                import TemporaryDirectory
 from IFR.classes             import RepDatabase, Representation,\
                                     VerificationMatch
-from IFR.functions           import get_image_paths, calc_embeddings
+from IFR.functions           import get_image_paths, do_face_detection,\
+                                    calc_embeddings
 from sklearn.cluster         import DBSCAN
 
 from shutil                  import move             as sh_move
@@ -32,8 +33,40 @@ from shutil                  import move             as sh_move
 def show_cluster_results(group_no, db, ncols=4, figsize=(15, 15), color='black',
                          add_separator=False):
     """
-    TODO: Flesh out description
-    Shows the results of image clustering and returns the handle to its figure.
+    Creates a figure with all images belonging to a group with 'group_no' and
+    returns the handle to its figure. Each image belonging to the group is
+    displayed in a 'ncols' by nrows grid. Nrows is calculated by:
+
+        nrows = (np.ceil(np.sum(labels == group_no) / ncols)).astype(int)
+
+    Example: 10 matches with ncols=4 results in nrows=3. The figure will have 4
+    images on the first row, another 4 images on the second row and 2 images
+    (and 2 'blank' images) on the third row.
+
+    Inputs:
+        1. group_no      - a group number [integer].
+
+        2. db            - representation database [RepDatabase].
+
+        3. ncols         - number of columns (or images per row)
+                            [integer, default=4].
+
+        4. figsize       - size of figure (in X and Y directions) in inches
+                            [tuple of floats, default=(15, 15)].
+
+        5. color         - font color (must be a valid matplotlib color string)
+                            [string, default='black'].
+
+        6. add_separator - adds a 'textual' separator at the bottom of the
+                            figure. This separator is simply a sequence of '='
+                            characters [boolean, default=False].
+
+    Output:
+        1. image file handle (handle to a file-like object).
+
+    Signature:
+        img_file = show_cluster_results(group_no, db, ncols=4, figsize=(15, 15),
+                                        color='black', add_separator=False)
     """
     # Gets the group number of all Representations in the database
     labels = []
@@ -58,10 +91,6 @@ def show_cluster_results(group_no, db, ncols=4, figsize=(15, 15), color='black',
             axs[cur_ax].set_title(rep.image_name\
                                 + f' (cluster: {rep.group_no})', color=color)
             cur_ax += 1
-
-        # Otherwise, do nothing
-        else:
-            pass # do nothing
 
     # Adds a divider / separator at the end of plot
     if add_separator:
@@ -361,8 +390,8 @@ def get_embeddings_as_array(db, verifier_name):
     embeddings and M is the number of elements of each embeddings.
 
     Inputs:
-        1. db - database object (list of Representation objects)
-        2. verifier_name - name of verifier
+        1. db            - Representation database [RepDatabase object].
+        2. verifier_name - name of verifier [string].
 
     Output:
         1. N x M numpy array where each row corresponds to a face image's
@@ -379,10 +408,11 @@ def get_embeddings_as_array(db, verifier_name):
 
 # ------------------------------------------------------------------------------
 
-def create_reps_from_dir(img_dir, verifier_models, detector_name='retinaface',
-                    align=True, verifier_names='ArcFace', show_prog_bar=True,
-                    normalization='base', tags=[], uids=[], auto_grouping=True,
-                    eps=0.5, min_samples=2, metric='cosine', verbose=False):
+def create_reps_from_dir(img_dir, detector_models, verifier_models,
+            detector_name='retinaface', align=True, verifier_names=['ArcFace'],
+            show_prog_bar=True, normalization='base', tags=[], uids=[],
+            auto_grouping=True, eps=0.5, min_samples=2, metric='cosine',
+            verbose=False):
     """
     Creates a representations from images in a directory 'img_dir'. The
     representations are returned in a list, and the list of representations. If
@@ -467,7 +497,7 @@ def create_reps_from_dir(img_dir, verifier_models, detector_name='retinaface',
     # Initializes skip flags and database (list of Representation objects)
     skip_tag = False
     skip_uid = False
-    rep_db   = []
+    rep_list = []
     
     # Assuming img_dir is a directory containing images
     img_paths = get_image_paths(img_dir)
@@ -475,7 +505,7 @@ def create_reps_from_dir(img_dir, verifier_models, detector_name='retinaface',
 
     # No images found, return empty database
     if len(img_paths) == 0:
-        return []
+        return RepDatabase()
 
     # If tags list does not have the same number of elements as the images (i.e.
     # 1 tag per image), ignore it
@@ -505,12 +535,24 @@ def create_reps_from_dir(img_dir, verifier_models, detector_name='retinaface',
 
     # Loops through each image in the 'img_dir' directory
     for pb_idx, i, img_path in zip(pbar, range(0, n_imgs), img_paths):
+        # Detects faces
+        output = do_face_detection(img_path, detector_models=detector_models,
+                                    detector_name=detector_name, align=align,
+                                    verbose=verbose)
+
+        # Assumes only 1 face is detect (even if multiple are present). If no
+        # face are detected, skips this image file
+        if output is not None:
+            face   = [output['faces'][0]]
+            region = output['regions'][0]
+        else:
+            continue
+
         # Calculate the face image embedding
-        region, embeddings = calc_embeddings(img_path, verifier_models,
-                                            align=align,
-                                            detector_name=detector_name, 
-                                            verifier_names=verifier_names,
-                                            normalization=normalization)
+        embeddings = calc_embeddings(face, verifier_models,
+                                     verifier_names=verifier_names,
+                                     normalization=normalization)
+        embeddings = embeddings[0]
 
         # If auto grouping is True, then store each calculated embedding
         if auto_grouping:
@@ -531,8 +573,8 @@ def create_reps_from_dir(img_dir, verifier_models, detector_name='retinaface',
             uid = uids[i]
 
         # Create a new representation and adds it to the database
-        rep_db.append(create_new_rep(img_path, img_path, region, embeddings,
-                                     tag=tag, uid=uid))
+        rep_list.append(create_new_rep(img_path, img_path, region, embeddings,
+                                        tag=tag, uid=uid))
 
     # Clusters Representations together using the DBSCAN algorithm
     if auto_grouping:
@@ -547,16 +589,40 @@ def create_reps_from_dir(img_dir, verifier_models, detector_name='retinaface',
             if lbl == -1:
                 continue
             else:
-                rep_db[i].group_no = lbl
+                rep_list[i].group_no = lbl
 
     # Return representation database
-    return RepDatabase(*rep_db)
+    return RepDatabase(*rep_list)
 
 # ------------------------------------------------------------------------------
 
 def process_image_zip_file(myfile, image_dir, auto_rename=True):
     """
-    TODO: Add documentation
+    Processes a zip file containing image files. The zip file ('myfile') is
+    assumed to have only valid image files (i.e. '.jpg', '.png', etc).
+    
+    First, the contents of the zip file are extracted to a named temporary
+    directory. All file names in the save directory 'image_dir' is obtained. If
+    'auto_rename' is True, then each image with the same name as a file in
+    'image_dir' directory gets renamed. Each image is then moved from the
+    temporary directory to the 'image_dir' directory, and the temporary
+    directory is deleted. If 'auto_rename' is False then images with the same
+    name are simply ignored.
+
+    Inputs:
+        1. myfile      - zip file obtained through FastAPI [zip file].
+
+        2. image_dir   - path to directory in which the extracted images will be
+                            saved to [string].
+
+        3. auto_rename - toggles between automatic renaming of image files with
+                            a non-unique name [boolean, default=True].
+
+    Output:
+        1. list with the names of each image file saved [list of strings].
+
+    Signature:
+        new_names = process_image_zip_file(myfile, image_dir, auto_rename=True)
     """
     # Create temporary directory and extract all files to it
     with TemporaryDirectory(prefix="create_database_from_zip-") as tempdir:
@@ -602,7 +668,19 @@ def process_image_zip_file(myfile, image_dir, auto_rename=True):
 
 def fix_uid_of_renamed_imgs(new_names):
     """
-    TODO: Add documentation
+    Ensures that the unique identifier of the renamed images matches the name of
+    the image (names of renamed images are valid unique identifiers). This
+    function modifies entries in the database contained in the 'rep_db' global
+    variable (for more information see global_variables.py).
+
+    Input:
+        1. new_names - new names (of renamed files) [list of strings].
+
+    Output:
+        1. None
+
+    Signature:
+        fix_uid_of_renamed_imgs(new_names)
     """
     # Loops through each representation
     for i, rep in enumerate(glb.rep_db.reps):
@@ -619,6 +697,8 @@ def fix_uid_of_renamed_imgs(new_names):
             glb.rep_db.reps[i].unique_id = UUID(cur_img_name)
             glb.db_changed               = True
 
+    return None
+
 # ______________________________________________________________________________
 #                               OTHER FUNCTIONS
 # ------------------------------------------------------------------------------
@@ -632,8 +712,9 @@ def get_matches_from_similarity(similarity_obj, db):
     Inputs:
         1. similarity_obj - dictionary containing the indexes of matches (key:
             idxs), the threshold value used (key: threshold) and the distances
-            of the matches (key: distances).
-        2. db - list of Representations
+            of the matches (key: distances) [dictionary].
+        
+        2. db             - representation database [RepDatabase object].
 
     Output:
         1. List containing each matched Representation. Note that the length of
