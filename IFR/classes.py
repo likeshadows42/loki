@@ -27,7 +27,6 @@ class FaceDetectorOptions(str, Enum):
     """
     OPENCV = "opencv",
     SSD    = "ssd",
-    DLIB   = "dlib",
     MTCNN  = "mtcnn",
     RETINA = "retinaface"
 
@@ -43,7 +42,6 @@ class FaceVerifierOptions(str, Enum):
     DEEPFACE   = "DeepFace"
     DEEPID     = "DeepID"
     ARCFACE    = "ArcFace"
-    DLIB       = "Dlib"
 
 # Path parameter class for distance metric options
 class DistanceMetrics(str, Enum):
@@ -270,15 +268,17 @@ class Representation():
     Attributes:
         After __init__:
             1. unique_id  - unique identifier number that represents a face
-            2. image_name - image name
-            3. image_fp   - image full path
-            4. group_no   - integer indicating which group / cluster this
+            2. orig_name  - original image's name
+            3. orig_fp    - original image's full path
+            4. image_name - image name
+            5. image_fp   - image full path
+            6. group_no   - integer indicating which group / cluster this
                             Representation belongs to (-1 = no group / cluster)
-            5. name_tag   - custom name given to the image
-            6. region     - list of integers specifying the (rectangular) face
+            7. name_tag   - custom name given to the image
+            8. region     - list of integers specifying the (rectangular) face
                             region on the original image (top-left corner,
                             bottom-right corner)
-            7. embeddings - model-specific vector representation of the face
+            9. embeddings - model-specific vector representation of the face
         
     Methods:
         1. show_info() - prints the object's information in a condensed,
@@ -286,12 +286,15 @@ class Representation():
         2. show_summary() - prints a summary of the object's information in a
             one-liner
     """
-    def __init__(self, unique_id, image_name='', image_fp='', group_no=-1,
-                 name_tag='', region=[], embeddings={}):
+    def __init__(self, unique_id, orig_name='', orig_fp='', image_name='',
+                 image_fp='', group_no=-1, name_tag='', region=[],
+                 embeddings={}):
         """
         Initializes the object with appropriate attributes
         """
         self.unique_id  = unique_id
+        self.orig_name  = orig_name
+        self.orig_fp    = orig_fp
         self.image_name = image_name
         self.image_fp   = image_fp
         self.group_no   = group_no
@@ -303,12 +306,14 @@ class Representation():
         """
         Shows detailed information about the Representation in a neat layout
         """
-        print('Unique ID'.ljust(15) + f': {self.unique_id}',
-              'Image name'.ljust(15) + f': {self.image_name}',
-              'Group'.ljust(15) + f': {self.group_no}',
-              'Tag'.ljust(15) + f': {self.name_tag}',
-              'Image full path'.ljust(15) + f': {self.image_fp}',
-              'Face region'.ljust(15) + f': {self.region}', sep='\n')
+        print('Unique ID'.ljust(20) + f': {self.unique_id}',
+              'Original name'.ljust(20) + f': {self.orig_name}',
+              'Original full path'.ljust(20) + f': {self.orig_fp}',
+              'Image name'.ljust(20) + f': {self.image_name}',
+              'Group'.ljust(20) + f': {self.group_no}',
+              'Tag'.ljust(20) + f': {self.name_tag}',
+              'Image full path'.ljust(20) + f': {self.image_fp}',
+              'Face region'.ljust(20) + f': {self.region}', sep='\n')
         
         if self.embeddings: # embeddings dictionary is NOT empty
             print('Embeddings:')
@@ -324,6 +329,7 @@ class Representation():
         Shows summarized information about the Representation in a one-liner
         """
         print(f'UID: {self.unique_id}'.ljust(25),
+              f'Original name: {self.image_name}'.ljust(25),
               f'Image name: {self.image_name}'.ljust(25),
               f'Group: {self.group_no}'.ljust(15),
               f'Tag: {self.name_tag}'.ljust(15),
@@ -1194,4 +1200,3 @@ class RepDatabase():
                                 +'not have a negative size!')
 
         return reps_found
-
