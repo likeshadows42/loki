@@ -30,3 +30,8 @@ verifier_names = ('ArcFace', '') # to avoid long startups during developing
 models      = {}             # stores all face verifier models
 rep_db      = RepDatabase()  # stores representation database
 db_changed  = False          # indicates whether database has been modified (and should be saved)
+
+# SQLAlchemy global variables
+
+SQLITE_DB = 'loki.sqlite'    # SQLite storage name
+sqla_engine = None           # SQLAlchemy engine object

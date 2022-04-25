@@ -8,6 +8,10 @@ from uuid               import UUID
 from typing             import List, Tuple, Optional
 from pydantic           import BaseModel
 
+from sqlalchemy import Table, Column, String, Integer, ForeignKey
+from sqlalchemy.orm import relationship
+from sqlalchemy.ext.declarative import declarative_base
+
 # IMPLEMENTATION NOTE:
 # Pydantic expects a dictionary by default. You can configure your model to also
 # support loading from standard ORM parameters (i.e. attributes on the object
@@ -1195,3 +1199,56 @@ class RepDatabase():
 
         return reps_found
 
+
+# ------------------------------------------------------------------------------
+# SQLAlchemy tables definition
+# ------------------------------------------------------------------------------
+
+Base = declarative_base()
+
+
+class Person(Base):
+    """
+    Person data structure
+
+    Fields:
+        person_id
+        name
+        note
+    """
+
+    __tablename__ = 'person'
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    note = Column(String)
+
+    reps = relationship("FaceRep",
+                        back_populates="person",
+                        cascade="all, delete, delete-orphan",  # important for deleting children
+                        )
+    # standard repr for the class
+    def __repr__(self):
+      return "(id=%s) - %s\n%s" % (self.id, self.name, self.note)
+
+
+class FaceRep(Base):
+    """
+        Initializes the object with appropriate attributes
+    """
+
+    __tablename__ = 'representation'
+
+    id = Column(Integer, primary_key=True)
+    person_id = Column(Integer, ForeignKey('person.id'))
+    image_name = Column(String)
+    image_fp   = Column(String)
+    group_no   = Column(Integer)
+    region     = Column(String)
+    embeddings = Column(String)
+
+    person = relationship("Person", back_populates="reps")
+
+    # standard repr for the class
+    def __repr__(self):
+        return "(id=%s)\nimage name: %s\nimage path: %s\ngroup: %s" % (self.id, self.image_name, self.image_fp, self.group_no)
