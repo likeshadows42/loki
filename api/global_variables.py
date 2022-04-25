@@ -6,6 +6,8 @@ import os
 
 from IFR.classes import RepDatabase
 
+DEBUG = True
+
 # Path variables
 API_DIR      = os.path.join(os.path.dirname(os.path.realpath("__file__")),'api')
 DATA_DIR     = os.path.join(API_DIR     , 'data')
@@ -34,4 +36,5 @@ db_changed  = False          # indicates whether database has been modified (and
 # SQLAlchemy global variables
 
 SQLITE_DB = 'loki.sqlite'    # SQLite storage name
+SQLITE_PATH = os.path.join(RDB_DIR, SQLITE_DB)
 sqla_engine = None           # SQLAlchemy engine object
