@@ -293,8 +293,8 @@ class Representation():
         Initializes the object with appropriate attributes
         """
         self.unique_id  = unique_id
-        self.orig_name  = orig_name
-        self.orig_fp    = orig_fp
+        self.orig_name  = orig_name     # Currently not implemented in API
+        self.orig_fp    = orig_fp       # Currently not implemented in API
         self.image_name = image_name
         self.image_fp   = image_fp
         self.group_no   = group_no
@@ -1200,3 +1200,5 @@ class RepDatabase():
                                 +'not have a negative size!')
 
         return reps_found
+
+
