@@ -1243,7 +1243,7 @@ class FaceRep(Base):
     person_id       = Column(Integer, ForeignKey('person.id'))
     image_name_orig = Column(String(100))
     image_name      = Column(String(100))
-    image_rp_orig   = Column(String(255))
+    image_fp_orig   = Column(String(255))
     image_fp        = Column(String(255))
     group_no        = Column(Integer)
     region          = Column(PickleType)
