@@ -22,341 +22,7 @@ from deepface.DeepFace               import build_model        as build_verifier
 from deepface.detectors.FaceDetector import build_model        as build_detector
 
 # ______________________________________________________________________________
-#                           OTHER / OLDISH? FUNCTIONS
-# ------------------------------------------------------------------------------
-
-def detect_faces(img_path, detector_backend='opencv', align=True,
-                 return_type='both', face_detector=None):
-    """
-    Detects faces in an image (and optionally aligns them).
-    
-    Inputs:
-        1. img_path - image path, base64 image or numpy array image
-        2. detector_backend - string corresponding to detector ([opencv],
-            ssd, dlib, mtcnn, retinaface, mediapipe).
-        3. align - flag indicating if face should be aligned ([align=True]).
-        4. return_type - string indicating if faces, regions or both should
-            be returned ('faces', 'regions', ['both']).
-            
-    Outputs:
-        If return_type='regions':
-            Dictionary containing list of face detections. The face detections
-            (or regions of interest - rois) are lists with the format
-            [top-left x, top-left y, width, height]. The dictionary key is
-            'regions'.
-            
-        If return_type='faces':
-            Dictionary containing list of detected faces. Each detection is an
-            image with 'target_size' size (the number of color channels is
-            unchanged). The dictionary key is 'faces'.
-            
-        If return_type='both':
-            Dictionary containing both of the above outputs: face detections and
-            detected faces. The dictionary keys are 'faces' and 'regions'. 
-    
-    Signature:
-        output = detect_faces(img_path, detector_backend = 'opencv',
-                              align = True, return_type = 'both')
-    """
-    # Raises an error if return type is not 'faces', 'regions' or 'both'.
-    # Otherwise, initializes lists.
-    if return_type == 'faces' or return_type == 'regions' or \
-        return_type == 'both':
-        faces = []
-        rois  = []
-    else:
-        raise ValueError("Return type should be 'faces', 'regions' or 'both'.")
-    
-    # Loads image. Image might be path, base64 or numpy array. Convert it to numpy
-    # whatever it is.
-    img = functions.load_image(img_path)
-
-    # The detector is stored in a global variable in FaceDetector object.
-    # This call should be completed very fast because it will return found in
-    # memory and it will not build face detector model in each call (consider for
-    # loops)
-    if face_detector == None:
-        face_detector = FaceDetector.build_model(detector_backend)
-    detections = FaceDetector.detect_faces(face_detector, detector_backend,
-                                            img, align)
-
-    # Prints a warning and returns an empty dictionary and error if no faces were
-    # found, otherwise processes faces & regions
-    if len(detections) == 0:
-        print('Face could not be detected or the image contains no faces.')
-
-    else:
-        # Loops through each face & region pair
-        for face, roi in detections:
-
-            # Only process images (faces) if the return type is 'faces' or 'both'
-            if return_type == 'faces' or return_type == 'both':
-                # Appends processed face
-                faces.append(face)
-    
-            # Only process regions (rois) if the return type is 'regions' or 'both'
-            if return_type == 'regions' or return_type == 'both':
-                rois.append(roi)
-
-  # ------------------------
-  
-    if return_type == 'faces':
-        return {'faces':faces}
-    elif return_type == 'regions':
-        return {'regions':rois}
-    else:
-        assert return_type == 'both', "Return type should be 'both' here."
-        return {'faces':faces, 'regions':rois}
-
-# ------------------------------------------------------------------------------
-
-def verify_faces(img1_path, img2_path = '', model_name = 'VGG-Face',
-                 distance_metric = 'cosine', model = None,
-                 enforce_detection = True, detector_backend = 'opencv',
-                 align = True, prog_bar = True, normalization = 'base',
-                 threshold = -1):
-
-    """
-    This function verifies if an image pair is the same person or different
-    ones.
-
-    Parameters:
-        img1_path, img2_path: exact image path, numpy array or based64 encoded
-        images could be passed. If you are going to call verify function for a
-        list of image pairs, then you should pass an array instead of calling
-        the function in for loops.
-
-        e.g. img1_path = [
-            ['img1.jpg', 'img2.jpg'],
-            ['img2.jpg', 'img3.jpg']
-        ]
-
-        model_name (string): VGG-Face, Facenet, OpenFace, DeepFace, DeepID, Dlib, ArcFace or Ensemble
-        distance_metric (string): cosine, euclidean, euclidean_l2
-        model: Built deepface model. A face recognition model is built every call of verify function. You can pass pre-built face recognition model optionally if you will call verify function several times.
-            model = DeepFace.build_model('VGG-Face')
-        enforce_detection (boolean): If any face could not be detected in an image, then verify function will return exception. Set this to False not to have this exception. This might be convenient for low resolution images.
-        detector_backend (string): set face detector backend as retinaface, mtcnn, opencv, ssd or dlib
-        prog_bar (boolean): enable/disable a progress bar
-    Returns:
-        Verify function returns a dictionary. If img1_path is a list of image pairs, then the function will return list of dictionary.
-        {
-            "verified": True
-            , "distance": 0.2563
-            , "max_threshold_to_verify": 0.40
-            , "model": "VGG-Face"
-            , "similarity_metric": "cosine"
-        }
-    """
-
-    tic = time.time()
-
-    img_list, bulkProcess = functions.initialize_input(img1_path, img2_path)
-
-    resp_objects = []
-
-    #--------------------------------
-
-    if model_name == 'Ensemble':
-        model_names = ["VGG-Face", "Facenet", "OpenFace", "DeepFace"]
-        metrics = ["cosine", "euclidean", "euclidean_l2"]
-    else:
-        model_names = []; metrics = []
-        model_names.append(model_name)
-        metrics.append(distance_metric)
-
-    #--------------------------------
-
-    if model == None:
-        if model_name == 'Ensemble':
-            models = Boosting.loadModel()
-        else:
-            model = DeepFace.build_model(model_name)
-            models = {}
-            models[model_name] = model
-    else:
-        if model_name == 'Ensemble':
-            Boosting.validate_model(model)
-            models = model.copy()
-        else:
-            models = {}
-            models[model_name] = model
-
-    #------------------------------
-
-    disable_option = (False if len(img_list) > 1 else True) or not prog_bar
-
-    pbar = tqdm(range(0, len(img_list)), desc='Verification',
-                      disable = disable_option)
-
-    for index in pbar:
-        instance = img_list[index]
-
-        if type(instance) == list and len(instance) >= 2:
-            img1_path = instance[0]; img2_path = instance[1]
-
-            ensemble_features = []
-
-            for i in model_names:
-                custom_model = models[i]
-
-                img1_representation = DeepFace.represent(img_path = img1_path,
-                            model_name = model_name, model = custom_model,
-                            enforce_detection = enforce_detection,
-                            detector_backend = detector_backend,
-                            align = align, normalization = normalization)
-
-                img2_representation = DeepFace.represent(img_path = img2_path,
-                            model_name = model_name, model = custom_model,
-                            enforce_detection = enforce_detection,
-                            detector_backend = detector_backend, align = align,
-                            normalization = normalization)
-
-                #----------------------
-                #find distances between embeddings
-
-                for j in metrics:
-
-                    if j == 'cosine':
-                        distance = dst.findCosineDistance(img1_representation,
-                                                          img2_representation)
-                    elif j == 'euclidean':
-                        distance = dst.findEuclideanDistance(\
-                                                        img1_representation,
-                                                        img2_representation)
-                    elif j == 'euclidean_l2':
-                        distance = dst.findEuclideanDistance(\
-                                    dst.l2_normalize(img1_representation),
-                                    dst.l2_normalize(img2_representation))
-                    else:
-                        raise ValueError("Invalid distance_metric passed - ",
-                                         distance_metric)
-
-                    # Issue #175: causes trobule for euclideans in api calls if
-                    # this is not set
-                    distance = np.float64(distance)
-                    #----------------------
-                    #decision
-
-                    if model_name != 'Ensemble':
-                        if threshold < 0:
-                            threshold = dst.findThreshold(i, j)
-
-                        if distance <= threshold:
-                            identified = True
-                        else:
-                            identified = False
-
-                        resp_obj = {"verified": identified,
-                                    "distance": distance,
-                                    "threshold": threshold,
-                                    "model": model_name,
-                                    "detector_backend": detector_backend,
-                                    "similarity_metric": distance_metric}
-
-                        if bulkProcess == True:
-                            resp_objects.append(resp_obj)
-                        else:
-                            return resp_obj
-
-                    else: #Ensemble
-
-                        #this returns same with OpenFace - euclidean_l2
-                        if i == 'OpenFace' and j == 'euclidean':
-                            continue
-                        else:
-                            ensemble_features.append(distance)
-
-            #----------------------
-
-            if model_name == 'Ensemble':
-
-                boosted_tree = Boosting.build_gbm()
-                prediction   = boosted_tree.predict(np.expand_dims(\
-                                        np.array(ensemble_features), axis=0))[0]
-
-                verified = np.argmax(prediction) == 1
-                score = prediction[np.argmax(prediction)]
-
-                resp_obj = {"verified": verified, "score": score,
-                   "distance": ensemble_features,
-                   "model": ["VGG-Face", "Facenet", "OpenFace", "DeepFace"],
-                   "similarity_metric": ["cosine", "euclidean", "euclidean_l2"]}
-
-                if bulkProcess == True:
-                    resp_objects.append(resp_obj)
-                else:
-                    return resp_obj
-
-            #----------------------
-
-        else:
-            raise ValueError("Invalid arguments passed to verify function: ",
-                             instance)
-
-    #-------------------------
-
-    toc = time.time()
-
-    if bulkProcess == True:
-
-        resp_obj = {}
-
-        for i in range(0, len(resp_objects)):
-            resp_item = resp_objects[i]
-            resp_obj["pair_%d" % (i+1)] = resp_item
-
-        return resp_obj
-
-# ------------------------------------------------------------------------------
-
-def calculate_similarity(rep1, rep2,
-                         metrics=('cosine', 'euclidean', 'euclidean_l2')):
-    """
-    Calculates the similarity between two face images, represented as two vector
-    embeddings. If a metric in 'metrics' is not valid, the function raises a
-    Value error.
-
-    Inputs:
-        1. rep1 - vector embedding representing the face in image 1
-
-        2. rep2 - vector embedding representing the face in image 2
-
-        3. metrics - tupple containing names of the distance metrics to be used
-            ([metrics=('cosine', 'euclidean', 'euclidean_l2')]). Available
-            metrics are 'cosine', 'euclidean' and 'euclidean_l2'. If the user
-            only requires 1 metric be sure to pass it using this format:
-                metrics=('<distance_metric>',), i.e. metrics=('cosine',)
-
-    Outputs:
-        1. dictionary containing the metric (key) and its corresponding distance
-            (value) or 'similarity'
-
-    Signature:
-        distances = calculate_similarity(rep1, rep2,
-                         metrics=('cosine', 'euclidean', 'euclidean_l2')
-    """
-    distances = {} # initializes output dictionary
-
-    # Loops through each metric
-    for metric in metrics:
-        if metric == 'cosine':
-            distances[metric] = dst.findCosineDistance(rep1, rep2)
-        elif metric == 'euclidean':
-            distances[metric] = dst.findEuclideanDistance(rep1, rep2)
-        elif metric == 'euclidean_l2':
-            distances[metric] = \
-                dst.findEuclideanDistance(dst.l2_normalize(rep1),
-                                          dst.l2_normalize(rep2))
-        else:
-            raise ValueError(f"Invalid metric passed: {metric}")
-
-        distances[metric] = np.float64(distances[metric]) #causes trobule for euclideans in api calls if this is not set (issue #175)
-        
-    return distances
-
-# ______________________________________________________________________________
-#                       UTILITY & GENERAL USE FUNCTIONS
+#                           UTILITY & GENERAL USE
 # ------------------------------------------------------------------------------
 
 def get_image_paths(root_path, file_types=('.jpg', '.png')):
@@ -366,17 +32,16 @@ def get_image_paths(root_path, file_types=('.jpg', '.png')):
     functions simply returns that path as a list with 1 element.
 
     Inputs:
-        1. root_path  - full path of a directory
-        2. file_types - tuple containing strings of file extensions
-            ([file_types=('.jpg', '.png')])
+        1. root_path  - full path of a directory [string].
 
+        2. file_types - file extensions to be considered [tuple of strings,
+                        default=('.jpg', '.png')].
     Output:
         1. list containing full path of all files in the directory and its
             subdirectories
 
-    Example call:
-        ROOT_PATH = path/to/some/folder/dude
-        all_images = get_image_paths(ROOT_PATH, file_types=('.png'))
+    Signature:
+        all_images_fps = get_image_paths(root_path, file_types=('.jpg', '.png'))
     """
     # If the root path points to file, simply return it as a list with 1 element
     if os.path.isfile(root_path):
@@ -397,143 +62,30 @@ def get_image_paths(root_path, file_types=('.jpg', '.png')):
 # ------------------------------------------------------------------------------
 
 def create_dir(dir_path):
-  """
-  Creates a directory at the specified directory path 'dir_path' IF it does not
-  exist. Returns a status of 0 is the directory was successfully created and 
-  returns a status of 1 if a directory already exists.
-
-  Inputs:
-    1. dir_path - directory path of new directory.
-    
-  Outputs:
-    1. status - 0 to indicate success (directory creation) or 1 to indicate
-       failure (directory already exists)
-    
-  Signature:
-    status = create_dir(dir_path)
-  """
-  # Create directory
-  try:
-    os.makedirs(dir_path)
-    status = 0
-  except FileExistsError:
-    # Directory already exists
-    status = 1
-
-  return status
-
-# ------------------------------------------------------------------------------
-
-def get_property_from_database(db, param, do_sort=False, suppress_error=True):
     """
-    Gets a specific property 'param' from each representation the in the
-    database 'db'. If the flag 'do_sort' is True, then the output is sorted. If
-    the 'suppress_error' flag is set to True, then if the chosen property
-    'param' does not exist an empty list is returned. Otherwise, an Assertion
-    error is raised.
+    Creates a directory at the specified directory path 'dir_path' IF it does not
+    exist. Returns a status of 0 is the directory was successfully created and 
+    returns a status of 1 if a directory already exists.
 
     Inputs:
-        1. db - list of representation objects.
-        2. param - string with the property / parameter name (unique_id,
-            name_tag, image_name, image_fp, region or embeddings).
-        3. do_sort - boolean flag controlling if sorting of all properties
-            should be performed ([False], True).
-        4. suppress_error - boolean flag controlling if errors should be
-            suppressed, i.e. if the chosen property does not exist, an empty
-            list should be returned instead of an exception (False, [True]).
-
-    Output:
-        1. list containing the chosen property from each representation. The
-            list is sorted if 'do_sort' is set to True. The list will be empty
-            if the representation database has a length of zero or if
-            'suppress_error' is True and a non-existant property 'param' is
-            chosen.
-
-    Signature:
-        propty = get_property_from_database(db, param, do_sort=False,
-                                            suppress_error=True)
-    """
-    # Gets the names in the database depending on the database's size
-    if len(db) == 0:   # no representations
-        propty = []
-
-    elif len(db) == 1: # single representation
-        if   param == 'unique_id':
-            propty = [db[0].unique_id]
-        elif param == 'image_name':
-            propty = [db[0].image_name]
-        elif param == 'image_fp':
-            propty = [db[0].image_fp]
-        elif param == 'group_no':
-            propty = [db[0].group_no]
-        elif param == 'name_tag':
-            propty = [db[0].name_tag]
-        elif param == 'region':
-            propty = [db[0].region]
-        elif param == 'embeddings':
-            propty = [db[0].embeddings]
-        else:
-            if suppress_error:
-                propty = []
-            else:
-                raise AttributeError('Representation does not have '
-                                   + 'the chosen property.')
-
-    elif len(db) > 1:  # many representations
-        # Loops through each representation in the database and gets the
-        # specified property / parameter
-        if   param == 'unique_id':
-            propty = []
-            for rep in db:
-                propty.append(rep.unique_id)
-
-        elif param == 'image_name':
-            propty = []
-            for rep in db:
-                propty.append(rep.image_name)
-            
-        elif param == 'image_fp':
-            propty = []
-            for rep in db:
-                propty.append(rep.image_fp)
-
-        elif param == 'group_no':
-            propty = []
-            for rep in db:
-                propty.append(int(rep.group_no))
-            
-        elif param == 'name_tag':
-            propty = []
-            for rep in db:
-                propty.append(rep.name_tag)
-            propty = np.unique(propty) # only keep unique name tags
-            
-        elif param == 'region':
-            propty = []
-            for rep in db:
-                propty.append(rep.region)
-            
-        elif param == 'embeddings':
-            propty = []
-            for rep in db:
-                propty.append(rep.embeddings)
-            
-        else:
-            if suppress_error:
-                propty = []
-            else:
-                raise AttributeError('Representation does not have '
-                                   + 'the chosen property.')
-
-        # Sorts the property if do_sort flag is set to True
-        if do_sort:
-            propty.sort()
+        1. dir_path - full path of new directory [string].
     
-    else: # this should never happen (negative size for a database? preposterous!)
-        raise AssertionError('Representation database can '
-                            +'not have a negative size!')
+    Outputs:
+        1. boolean to indicate successfull directory creation (0) or failure
+            because directory already exists (1)
+    
+    Signature:
+        status = create_dir(dir_path)
+    """
+    # Create directory
+    try:
+        os.makedirs(dir_path)
+        status = 0
+    except FileExistsError:
+        # Directory already exists
+        status = 1
 
-    return list(propty)
+    return status
 
 # ------------------------------------------------------------------------------
 
@@ -551,9 +103,308 @@ def string_is_valid_uuid4(uuid_string):
     Signature:
         is_valid = string_is_valid_uuid4(uuid_string)
     """
-    uuid4hex = re.compile('^[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?[89ab][a-f0-9]{3}-?[a-f0-9]{12}\Z', re.I)
+    # Creates the regular expression pattern
+    uuid4hex = re.compile('^[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?[89ab]'
+                        + '[a-f0-9]{3}-?[a-f0-9]{12}\Z', re.I)
+
+    # Tries to find a match
     match = uuid4hex.match(uuid_string)
+
+    # Returns a boolean indicating if a match was found or not (i.e. a valid
+    # uuid4 exists or not)
     return bool(match)
+
+# ______________________________________________________________________________
+#                    FACE DETECTION / VERIFICATION RELATED
+# ------------------------------------------------------------------------------
+
+def detect_faces(img_path, use_detector='retinaface', align=True,
+                 return_type='both', face_detector=None):
+    """
+    Detects faces in an image (and optionally aligns them).
+    
+    Inputs:
+        1. img_path      - image path, base64 image or numpy array image [string
+                            / base64 image / numpy array].
+        
+        2. use_detector  - face detector name. Options: opencv, ssd, dlib, mtcnn
+                            or retinaface [string, default='retinaface'].
+        
+        3. align         - toggles if the faces should be aligned [boolean,
+                            default=True].
+        
+        4. return_type   - controls if the function should return the faces,
+                            regions or both. Options: faces, regions, both
+                            [string, default='both'].
+
+        5. face_detector - face detector object or None. If a face detector
+                            object is provided, then the function does not build
+                            one from scratch, improving execution time. For more
+                            information see help(FaceDetector.build_model)
+                            [face detector object / None].
+            
+    Outputs:
+        If return_type='regions':
+            Dictionary containing list of face detections. The face detections
+            (or regions of interests - rois) are lists with the format
+            [top-left x, top-left y, width, height]. The dictionary key is
+            'regions'.
+            
+        If return_type='faces':
+            Dictionary containing list of detected faces. Each detection is an
+            image with 'target_size' size (the number of color channels is
+            unchanged). The dictionary key is 'faces'.
+            
+        If return_type='both':
+            Dictionary containing both of the above outputs: face detections and
+            detected faces. The dictionary keys are 'faces' and 'regions'. 
+    
+    Signature:
+        output = detect_faces(img_path, use_detector='retinaface', align=True,
+                              return_type='both', face_detector=None)
+    """
+    # Raises an error if return type is not 'faces', 'regions' or 'both'.
+    # Otherwise, initializes lists.
+    if   return_type == 'both':
+        faces = []
+        rois  = []
+    
+    elif return_type == 'faces':
+        faces = []
+        
+    elif return_type == 'regions':
+        rois  = []
+
+    else:
+        raise ValueError("Return type should be 'faces', 'regions' or 'both'.")
+    
+    # Loads image. Image might be path, base64 or numpy array. Convert it to
+    # numpy whatever it is.
+    img = functions.load_image(img_path)
+
+    # The detector is stored in a global variable in FaceDetector object.
+    # This call should be completed very fast because it will return found in
+    # memory and it will not build face detector model in each call (consider
+    # for loops)
+    if face_detector == None:
+        face_detector = FaceDetector.build_model(use_detector)
+
+    # Tries to detect faces
+    try:
+        detections = FaceDetector.detect_faces(face_detector, use_detector, img,
+                                                align)
+    except Exception as excpt:
+        print(f'[detect_faces] Face detection failed! (reason: {excpt})')
+
+    # Prints a warning and returns an empty dictionary and error if no faces
+    # were found, otherwise processes faces & regions
+    if len(detections) == 0:
+        print('[detect_faces] Face detection failed!',
+              '(check if the image contains any faces)')
+
+    else:
+        # Loops through each face & region pair
+        for face, roi in detections:
+            # Only stores images (faces) if the return type is 'faces' or 'both'
+            if return_type == 'faces' or return_type == 'both':
+                faces.append(face)
+    
+            # Only stores regions (rois) if the return type is 'regions' or
+            # 'both'
+            if return_type == 'regions' or return_type == 'both':
+                rois.append(roi)
+  
+    # Returns the appropriate dictionary based on 'return_type'
+    if return_type == 'faces':
+        return {'faces':faces}
+    elif return_type == 'regions':
+        return {'regions':rois}
+    else:
+        assert return_type == 'both', "Return type should be 'both'."
+        return {'faces':faces, 'regions':rois}
+
+# ------------------------------------------------------------------------------
+
+def do_face_detection(img_path, detector_models={}, detector_name='retinaface',
+                        align=True, verbose=False):
+    """
+    Performs the face detection step:
+
+        1. The function tries to load the chosen face detector 'detector_name'
+            from the 'detector_models' dictionary. If this fails, the function
+            builds the face detector from scratch.
+
+        2. The functions tries to detect faces in the image provided. If the
+            face detection fails or finds no faces, then a None output is
+            returned.
+
+    The result (success / failure) of each stage is printed to the console if
+    verbose is True. In case of failures, the reason for the failure is also
+    printed.
+
+    Inputs:
+        1. img_path        - image path, base64 image or numpy array image
+                              [string / base64 image / numpy array].
+
+        2. detector_models - all face detector models, where each face detector
+                              name (key) corresponds to a built model object
+                              (value) [dictionary, default={}].
+
+        3. detector_name   - face detector name [string, default='retinaface'].
+
+        4. align           - toggles if face alignment should be performed
+                             [boolean, default=True].
+
+        5. verbose         - toggles if the function should output information
+                              to the console [boolean, default=True].
+
+    Output:
+        1. dictionary containing the faces detected (key:'faces') [list of numpy
+            arrays] and face regions (key:'regions') [list of lists of 4
+            integers].
+
+    Signature:
+        output = do_face_detection(img_path, detector_models={},
+                        detector_name='retinaface', align=True, verbose=False)
+    """
+    # Initializes output object
+    output = None
+
+    # Tries to load the chosen face detector. On failure, builds the face
+    # detector from scratch
+    if verbose:
+            print('[do_face_detection] Loading face detector: ', end='')
+    
+    try:
+        face_detector = detector_models[detector_name]
+
+        if verbose:
+            print('success!')
+    
+    except Exception as excpt:
+        if verbose:
+            print(f'failed! (reason: {excpt})')
+            print('[do_face_detection] Building face detector: ', end='')
+
+        face_detector = build_detector(detector_name)
+
+        if verbose:
+            print('success!')
+
+    # Tries to detect faces in the image provided and align (if required):
+    try:
+        if verbose:
+            print('[do_face_detection] Detecting faces: ', end='')
+
+        output = detect_faces(img_path, use_detector=detector_name,
+                                align=align, return_type='both',
+                                face_detector=face_detector)
+    except Exception as excpt:
+        if verbose:
+            print(f'failed! (reason: {excpt})')
+
+    # Checks if the face detector was able to find any face if verbose is True
+    if verbose:
+        if len(output['faces']) == 0:
+            print(f'failed! (reason: No face found.',
+                   'Ensure the image provided has at least 1 face.)')
+        else:
+            print('success!')
+
+    return output
+
+# ------------------------------------------------------------------------------
+
+def process_face(img_path, target_size=(224, 224), normalization='base',
+                    grayscale=False):
+    """
+    Applies some processing to an image of a face:
+        1. Loads the image from an image path, base64 encoding or numpy array
+        2. If the 'grayscale' flag is True, converts the image to grayscale
+        3. Resizes the image based on the smallest factor (target_size /
+            dimension) and zero pads the resized image to match the target size.
+        4. If for some reason the image is still not the target size, resizes
+            the modified image once again.
+        5. Normalizes the image based on the normalization option:
+            a. 'base': do nothing
+            b. 'raw': restore input in scale of [0, 255]
+            c. 'Facenet': 'raw' then subtract image mean and divide by image
+                    standard deviation
+            d. 'Facenet2018': 'raw' then divide by 127.5 and subtract 1
+            e. 'VGGFace': 'raw' then mean subtraction based on VGGFace1 training
+                    data
+            f. 'VGGFace2': 'raw' then mean subtraction based on VGGFace2
+                    training data
+            g. 'ArcFace': based on a reference study, 'raw', then pixels are
+                    normalized by subtracting 127.5 then dividing by 128.
+
+    Inputs:
+        1. img_path      - image path, base64 image or numpy array
+
+        2. target_size   - desired X and Y dimensions [tuple or 2 integers,
+                            default=(224, 224)]
+        
+        3. normalization - defines a type of normalization [string,
+                            default='base']
+        
+        4. grayscale     - toggles if an image should be converted to grayscale
+                            [boolean, default=False]
+
+    Output:
+        1. processed image as a numpy array
+
+    Signature:
+        face_image = process_face(img_path, target_size=(224, 224),
+                                  normalization='base', grayscale=False)
+    """
+    # Loads the face image. Image might be path, base64 or numpy array. Convert
+    # it to numpy whatever it is.
+    face = functions.load_image(img_path)
+    
+    # Ensures that both dimensions are >0, otherwise raises error
+    if face.shape[0] == 0 or face.shape[1] == 0:
+        raise ValueError(f'Detected face shape is {face.shape}.')
+
+    # Converts to grayscale if face is 
+    if grayscale:
+        face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
+                
+    # Resizes face
+    if face.shape[0] > 0 and face.shape[1] > 0:
+        factor_0 = target_size[0] / face.shape[0]
+        factor_1 = target_size[1] / face.shape[1]
+        factor   = min(factor_0, factor_1)
+
+    dsize  = (int(face.shape[1] * factor), int(face.shape[0] * factor))
+    face   = cv2.resize(face, dsize)
+
+    # Then pad the other side to the target size by adding black pixels
+    diff_0 = target_size[0] - face.shape[0]
+    diff_1 = target_size[1] - face.shape[1]
+                
+    if not grayscale:
+        # Put the base image in the middle of the padded image
+        face = np.pad(face, ((diff_0 // 2, diff_0 - diff_0 // 2),
+                             (diff_1 // 2, diff_1 - diff_1 // 2), (0, 0)),
+                             'constant')
+    else:
+        face = np.pad(face, ((diff_0 // 2, diff_0 - diff_0 // 2),
+                             (diff_1 // 2, diff_1 - diff_1 // 2)),
+                             'constant')
+
+    # Double check if target image is not still the same size with target.
+    if face.shape[0:2] != target_size:
+        face = cv2.resize(face, target_size)
+
+    # Normalizing the image pixels
+    if normalization == 'base':
+        face  = image.img_to_array(face) #what this line doing? must?
+        face  = np.expand_dims(face, axis = 0)
+        face /= 255 # normalize input in [0, 1]
+    else:
+        face = functions.normalize_input(face, normalization=normalization)
+    
+    return face
 
 # ______________________________________________________________________________
 #                DETECTORS & VERIFIERS BUILDING, SAVING & LOADING
@@ -621,170 +472,96 @@ def build_face_verifier(model_name='VGG-Face', distance_metric='cosine',
 
 # ------------------------------------------------------------------------------
 
-def batch_build_detectors(detector_names, show_prog_bar=True, verbose=True):
+def batch_build_detectors(detector_names, show_prog_bar=True, verbose=False):
     """
     Builds batches of face detectors. The face detectors to be built are
-    specified by the 'detector_names' list of names. If a face detectors cannot
-    be built (or results in an error), it is simply skipped.
+    specified by the 'detector_names' list of names. If a face detector cannot
+    be built (or results in an error), it is simply skipped. All errors are
+    suppressed unless verbose is True, in which case they are printed to the
+    console.
     
     Inputs:
-        1. detector_names - list (of strings) of face detectors names
-        2. show_prog_bar - boolean toggling a progress bar
-            ([show_prog_bar=True])
+        1. detector_names - face detectors names [list of strings].
+
+        2. show_prog_bar  - toggles if a progress bar is shown [boolean,
+                            default=True].
+
+        3. verbose        - toggles the amount of text output [boolean,
+                            default=False].
         
-    Outputs:
+    Output:
         1. dictionary of built face detector models
         
     Signature:
-        detectors = batch_build_detectors(detector_names, show_prog_bar=True)
+        detectors = batch_build_detectors(detector_names, show_prog_bar=True,
+                                            verbose=False)
     """
     # Creates the progress bar
-    n_detectors    = len(detector_names)
-    disable_option = not show_prog_bar
-    pbar           = tqdm(range(0, n_detectors), desc='Saving verifiers',
-                            disable=disable_option)
+    n_detectors = len(detector_names)
+    pbar        = tqdm(range(0, n_detectors), desc='Building detectors',
+                        disable=(not show_prog_bar))
     
-    # 
-    detectors      = {}
+    # Builds the face detector models and stores them in a dictionary
+    detectors = {}
     for index, detector_name in zip(pbar, detector_names):
         try:
-            cur_detector = build_detector(detector_name)
-            detectors[detector_name] = cur_detector
+            detectors[detector_name] = build_detector(detector_name)
             
         except Exception as excpt:
-            pass
+            if verbose:
+                print('[batch_build_detectors]',
+                     f'Building {detector_name} failed!',
+                     f'(reason: {excpt})')
     
     return detectors
 
 # ------------------------------------------------------------------------------
 
-def batch_build_verifiers(verifier_names, show_prog_bar=True):
+def batch_build_verifiers(verifier_names, show_prog_bar=True, verbose=False):
     """
     Builds batches of face verifiers. The face verifiers to be built are
     specified by the 'verifier_names' list of names. If a face verifier cannot
-    be built (or results in an error), it is simply skipped.
+    be built (or results in an error), it is simply skipped. All errors are
+    suppressed unless verbose is True, in which case they are printed to the
+    console.
     
     Inputs:
-        1. verifier_names - list (of strings) of face verifier names
-        2. show_prog_bar - boolean toggling a progress bar
-                ([show_prog_bar=True])
+        1. detector_names - face detectors names [list of strings].
+
+        2. show_prog_bar  - toggles if a progress bar is shown [boolean,
+                            default=True].
+
+        3. verbose        - toggles the amount of text output [boolean,
+                            default=False].
         
-    Outputs:
+    Output:
         1. dictionary of built face verifier models
         
     Signature:
-        verifiers = batch_build_verifiers(verifier_names, show_prog_bar=True)
+        verifiers = batch_build_verifiers(verifier_names, show_prog_bar=True,
+                                            verbose=False)
     """
     # Creates the progress bar
     n_verifiers    = len(verifier_names)
-    disable_option = not show_prog_bar
     pbar           = tqdm(range(0, n_verifiers), desc='Building verifiers',
-                            disable = disable_option)
+                            disable = (not show_prog_bar))
 
-    # 
-    verifiers      = {}
+    # Builds the face verifier models and stores them in a dictionary
+    verifiers = {}
     for index, verifier_name in zip(pbar, verifier_names):
         try:
-            cur_verifier = build_verifier(verifier_name)
-            verifiers[verifier_name] = cur_verifier
+            verifiers[verifier_name] = build_verifier(verifier_name)
 
         except Exception as excpt:
-            pass
+            if verbose:
+                print('[batch_build_verifiers]',
+                     f'Building {verifier_name} failed!',
+                     f'(reason: {excpt})')
         
     return verifiers
 
-# ------------------------------------------------------------------------------
-
-def process_face(img_path, target_size=(224, 224), normalization='base',
-                    grayscale=False):
-    """
-    Applies some processing to an image of a face:
-        1. Loads the image from an image path, base64 encoding or numpy array
-        2. If the 'grayscale' flag is True, converts the image to grayscale
-        3. Resizes the image based on the smallest factor (target_size /
-            dimension) and zero pads the resized image to match the target size.
-        4. If for some reason the image is still not the target size, resizes
-            the modified image once again.
-        5. Normalizes the image based on the normalization option:
-            a. 'base': do nothing
-            b. 'raw': restore input in scale of [0, 255]
-            c. 'Facenet': 'raw' then subtract image mean and divide by image
-                    standard deviation
-            d. 'Facenet2018': 'raw' then divide by 127.5 and subtract 1
-            e. 'VGGFace': 'raw' then mean subtraction based on VGGFace1 training
-                    data
-            f. 'VGGFace2': 'raw' then mean subtraction based on VGGFace2
-                    training data
-            g. 'ArcFace': based on a reference study, 'raw', then pixels are
-                    normalized by subtracting 127.5 then dividing by 128.
-
-    Inputs:
-        1. img_path - image path, base64 image or numpy array
-        2. target_size - tuple containing desired X and Y dimensions
-            ([target_size=(224, 224)])
-        3. normalization - defines a type of normalization
-            ([normalization='base'])
-        4. grayscale - flag indicating if image should be converted to grayscale
-            ([grayscale=False])
-
-    Output:
-        1. processed image as a numpy array
-
-    Signature:
-        face_image = process_face(img_path, target_size=(224, 224),
-                                  normalization='base', grayscale=False)
-    """
-    # Loads the face image. Image might be path, base64 or numpy array. Convert
-    # it to numpy whatever it is.
-    face = functions.load_image(img_path)
-    
-    # Ensures that both dimensions are >0, otherwise raises error
-    if face.shape[0] == 0 or face.shape[1] == 0:
-        raise ValueError(f'Detected face shape is {face.shape}.')
-
-    # Converts to grayscale if face is 
-    if grayscale:
-        face = cv2.cvtColor(face, cv2.COLOR_BGR2GRAY)
-                
-    # Resizes face
-    if face.shape[0] > 0 and face.shape[1] > 0:
-        factor_0 = target_size[0] / face.shape[0]
-        factor_1 = target_size[1] / face.shape[1]
-        factor   = min(factor_0, factor_1)
-
-    dsize  = (int(face.shape[1] * factor), int(face.shape[0] * factor))
-    face   = cv2.resize(face, dsize)
-
-    # Then pad the other side to the target size by adding black pixels
-    diff_0 = target_size[0] - face.shape[0]
-    diff_1 = target_size[1] - face.shape[1]
-                
-    if not grayscale:
-        # Put the base image in the middle of the padded image
-        face = np.pad(face, ((diff_0 // 2, diff_0 - diff_0 // 2),
-                             (diff_1 // 2, diff_1 - diff_1 // 2), (0, 0)),
-                             'constant')
-    else:
-        face = np.pad(face, ((diff_0 // 2, diff_0 - diff_0 // 2),
-                             (diff_1 // 2, diff_1 - diff_1 // 2)),
-                             'constant')
-
-    # Double check if target image is not still the same size with target.
-    if face.shape[0:2] != target_size:
-        face = cv2.resize(face, target_size)
-
-    # Normalizing the image pixels
-    if normalization == 'base':
-        face  = image.img_to_array(face) #what this line doing? must?
-        face  = np.expand_dims(face, axis = 0)
-        face /= 255 # normalize input in [0, 1]
-    else:
-        face = functions.normalize_input(face, normalization=normalization)
-    
-    return face
-
 # ______________________________________________________________________________
-#                   SIMILARITY & DISTANCE RELATED FUNCTIONS
+#                           SIMILARITY & DISTANCE RELATED
 # ------------------------------------------------------------------------------
 
 def calc_cosine_similarity(A, B):
@@ -794,8 +571,9 @@ def calc_cosine_similarity(A, B):
     calculated normally.
 
     Inputs:
-        1. A - N x M matrix with N embeddings with M elements
-        2. A - I x M matrix with I embeddings with M elements
+        1. A - N x M matrix with N embeddings with M elements [numpy array].
+
+        2. A - I x M matrix with I embeddings with M elements [numpy array].
 
     Outputs:
         1. matrix of cosine similarity metric between A and B
@@ -803,12 +581,17 @@ def calc_cosine_similarity(A, B):
     Signature:
         csm = calc_cosine_similarity(A, B)
     """
+    # Creates a new axis if necessary to ensure the sizes match
     if A.ndim == 1:
         A = A[np.newaxis, :]
 
+    # Calculates (in a vectorized manner) elements required for the cosine
+    # distance
     num = np.dot(A, B.T)
     p1  = np.sqrt(np.sum(A**2, axis=1))[:, np.newaxis]
     p2  = np.sqrt(np.sum(B**2, axis=1))[np.newaxis, :]
+
+    # Returns the cosine distance metric
     return 1 - (num / (p1 * p2))
 
 # ------------------------------------------------------------------------------
@@ -819,16 +602,22 @@ def calc_euclidean_similarity(A, B, l2_normalize=False):
     a vector, it is converted into a matrix by repeating (and stacking) it
     horizontally until it has the correct dimensions. If 'l2_normalize' is set
     to True, then the function applies L2 normalization to the inputs before
-    calculating the Euclidean similarity (distance).
+    calculating the Euclidean similarity (distance). All of this is vectorized
+    to improve execution times.
 
     Inputs:
-        1. A - N x M matrix with N embeddings with M elements
-        2. A - I x M matrix with I embeddings with M elements
-        3. l2_normalize - boolean to indicate if the inputs should be L2
-            normalized before calculating the similarity ([l2_normalize=True])
+        1. A            - N x M matrix with N embeddings with M elements
+                            [numpy array].
+
+        2. A            - I x M matrix with I embeddings with M elements
+                            [numpy array].
+
+        3. l2_normalize - toggles the L2 normalization of inputs before
+                            calculating the similarity [boolean, default=True].
 
     Outputs:
-        1. matrix of Euclidean similarity metric between A and B
+        1. matrix of (possibly L2 normalized) Euclidean similarity metric
+            between A and B.
 
     Signature:
         edm = calc_euclidean_similarity(A, B, l2_normalize=False)
@@ -855,26 +644,30 @@ def calc_euclidean_similarity(A, B, l2_normalize=False):
 
 # ------------------------------------------------------------------------------
 
-def calc_similarity(tgt_embd, embds, metric='cosine', model_name='VGG-Face',
+def calc_similarity(tgt_embd, embds, metric='cosine', face_verifier='ArcFace',
                     threshold=-1):
     """
     Calculates the similarity (distance) between both embeddings ('tgt_embd'
     and 'embds') using the 'metric' distance metric. If the 'threshold' < 0 then
-    it is automatically determined based on the 'model_name' provided. If a 
-    custom threshold is specified, then the 'model_name' input is unused.
+    it is automatically determined based on the 'face_verifier' provided. If a 
+    custom threshold is specified, then the 'face_verifier' input is unused.
 
     Note that 'embds' can be a N x M matrix (N embeddings each with M elements)
     and 'tgt_embd' can only be a 1 x M embedding.
 
     Inputs:
-        1. tgt_embd - 1-D numpy array containing the embedding.
-        2. embds - 1-D or 2-D numpy array containing the embedding(s).
-        3. metric - string specifying the distance metric to be used
-            (['cosine'], 'euclidean', 'l2_euclidean').
-        4. model_name - string specifying the model name (['VGG-Face']).
-        5. threshold - if a negative float is provided, then the threshold is
-            calculated automatically based on the model name provided.
-            Otherwise, the threshold provided is used ([threshold=-1]).
+        1. tgt_embd   - 1-D target embedding [numpy array].
+
+        2. embds      - 1-D embedding or 2-D embedding matrix [numpy array].
+
+        3. metric     - chosen distance metric. Options: cosine, euclidean or
+                        l2_euclidean [string, default='cosine'].
+
+        4. model_name - face verifier name [string, default='ArcFace'].
+
+        5. threshold  - threshold provided. If it is negative, then the it is
+                        automatically determined based on the face verifier
+                        name [float, default=-1].
 
     Output:
         1. dictionary containing the indexes of matches (key: idxs), the
@@ -885,11 +678,11 @@ def calc_similarity(tgt_embd, embds, metric='cosine', model_name='VGG-Face',
     
     Signature:
         similarity_obj = calc_similarity(tgt_embd, embds, metric='cosine',
-                                         model_name='VGG-Face', threshold=-1)
+                                         face_verifier='ArcFace', threshold=-1)
     """
     # Calculates the distance based on the metric provided, otherwise raises a
     # value error
-    if metric == 'cosine':
+    if   metric == 'cosine':
         distances = calc_cosine_similarity(tgt_embd, embds)
     elif metric == 'euclidean':
         distances = calc_euclidean_similarity(tgt_embd, embds)
@@ -902,7 +695,7 @@ def calc_similarity(tgt_embd, embds, metric='cosine', model_name='VGG-Face',
     # If threshold is negative, determine threshold automatically based on the
     # model name and distance metric
     if threshold < 0:
-        threshold = dst.findThreshold(model_name, metric)
+        threshold = dst.findThreshold(face_verifier, metric)
     
     # Processes distances
     distances = distances.flatten() # flattens into 1-D array
@@ -935,93 +728,82 @@ def calc_similarity(tgt_embd, embds, metric='cosine', model_name='VGG-Face',
 
 # ------------------------------------------------------------------------------
 
-def calc_embedding(img_path, verifier_models, detector_name='opencv',
-                    align=True, verifier_names='VGG-Face',
+def calc_embeddings(faces, verifier_models, verifier_names=['ArcFace'],
                     normalization='base'):
     """
-    Calculates the embedding (1-D numpy array) of a face image. Each embedding
-    is associated with a face verifier model. Multiple verifiers can be passed
-    (as model names) to this function so that multiple embeddings are calculated
-    in a single function call.
+    Calculates the embeddings for each face verifier in 'verifier_names', for
+    each face in 'faces'. An embedding is a vector representation of a face
+    image, obtained from a face verifier.
+    
+    A 'normalization' is performed on each face image prior to embedding
+    calculation.
+    
+    If a face verifier does not exist in the 'verifier_models' dictionary, or if
+    the embedding calculation fails, it is skipped. This results in a dictionary
+    with successfully calculated (verifier name, embedding) key, value pairs.
 
     Inputs:
-        1. img_dir - string with the full path to the directory containing the
-            images.
-        2. verifier_models - dictionary containing pre-built models (key: model
-            name, value: built model object)
-        3. detector_name - string with the chosen face detector name ([opencv],
-            ssd, dlib, mtcnn, retinaface)
-        4. align - boolean indicating if alignment of face images should be
-            performed (may improve recognition performance around 1-2%)
-            ([align=True])
-        5. verifier_names - string or list of strings with face verifier name(s)
-            ([VGG-Face], OpenFace, Facenet, Facenet512, DeepFace, DeepID, Dlib,
-            ArcFace)
-        6. normalization - string indicating the type of image normalization to
-            be performed ([base], raw, Facenet, Facenet2018, VGGFace, VGGFace2,
-            ArcFace)
+        1. faces           - 3-D numpy arrays corresponding to face images
+                                [list of numpy arrays].
         
-    Outputs:
-        1. region - list of lists of 4 integers specifying the faces' region on
-            the original image. The 4 integers correspond to the top-left
-            corner's and bottom-right corner's x & y coordinates respectively
-        2. embeddings - dictionary containing the embedding (value) for each
-            face verifier model provided in 'verifier_names' (key)
+        2. verifier_models - all face verifier models, where each face verifier
+                                name (key) corresponds to a built model object
+                                (value) [dictionary].
+        
+        3. verifier_names  - face verifiers' names [list of strings,
+                                default=['ArcFace']].
+        
+        4. normalization   - type of normalization to be performed on the face
+                                image prior to embedding calculation [string,
+                                default='base'].
 
-        The outputs are returned as a tuple.
+    Output:
+        1. list of embedding dictionaries, where each element of the list
+            corresponds to embeddings of the input faces. E.g. faces = [face1,
+            face2, ...] then output = [face1 embeddings, face2 embeddings, ...].
 
     Signature:
-        region, embeddings = calc_embedding(img_path, verifier_models,
-                                            detector_name='opencv', align=True,
-                                            verifier_names='VGG-Face',
-                                            normalization='base')
+        output = calc_embeddings(faces, verifier_models,
+                            verifier_names=['ArcFace'], normalization='base')
     """
     # Converts verifier names into a list if it is a single entry
     if not isinstance(verifier_names, list):
         verifier_names = [verifier_names]
 
-    # Tries to detect faces & align:
-    try:
-        output = detect_faces(img_path, detector_backend=detector_name,
-                                align=align, return_type='both',
-                                face_detector=None)
-    except:
-        print('[calc_embedding] Error: face detection failed!')
-        return ([], {})
+    # Initializes 'embeddings' list
+    embeddings = []
 
-    # Checks if the face detector was able to find any face
-    if len(output['faces']) == 0:
-        print('[calc_embedding] Error: face detection failed!')
-        return ([], {})
-    else:
-        pass # do nothing
+    # Loops through each detected face
+    for face in faces:
+        # Initializes current embeddings
+        cur_embds = {}
 
-    # TODO: MAKE THE FUNCTION ACCEPT MULTIPLE FACES IN ONE IMAGE
-    # Since we assume there is only 1 face (and region):
-    face   = output['faces'][0]
-    region = output['regions'][0]
+        # Loops through each face verifier in verifier names
+        for verifier_name in verifier_names:
+            # Tries to calculate the face's embeddings using the current face
+            # verifier model
+            try:
+                # Gets the current face verifier model
+                verifier  = verifier_models[verifier_name]
 
-    # For each verifier model provided
-    embeddings={}
-    for verifier_name in verifier_names:
-        try:
-            # Gets the current verifier model
-            model = verifier_models[verifier_name]
+                # Determine target size
+                input_x, input_y = functions.find_input_shape(verifier)
 
-            # Determine target size
-            input_x, input_y = functions.find_input_shape(model)
+                # Process face
+                p_face = process_face(face, target_size=(input_x, input_y),
+                                normalization=normalization, grayscale=False)
 
-            # Process face
-            processed_face = process_face(face, target_size=(input_x, input_y),
-                                   normalization=normalization, grayscale=False)
+                # Calculates the embeddings
+                cur_embds[verifier_name] = verifier.predict(p_face)[0]
 
-            # Calculate embeddings
-            embeddings[verifier_name] = model.predict(processed_face)[0]
-        except Exception as excpt:
-            print(f'[calc_embedding] Error when calculting {verifier_name}. ',
-                  f'Reason: {excpt}', sep='')
+            except Exception as excpt:
+                print('[calc_embedding]',
+                     f'Calculation of {verifier_name} embeddings failed!',
+                     f'(reason: {excpt})')
 
-    return (region, embeddings)
+        # Stores the calculated embeddings
+        embeddings.append(cur_embds)
+
+    return embeddings
 
 # ------------------------------------------------------------------------------
-
