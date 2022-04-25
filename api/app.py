@@ -69,7 +69,7 @@ async def initialization():
                                    verbose=True)
 
         # If successful, save the model in a dictionary
-        if not isinstance(model, list):
+        if model is not None:
             glb.models[verifier_name] = model
 
         # Otherwise, build the model from scratch
@@ -98,7 +98,7 @@ async def initialization():
                                    verbose=True)
 
         # If successful, save the model in a dictionary
-        if not isinstance(model, list):
+        if model is not None:
             glb.models[detector_name] = model
 
         # Otherwise, build the model from scratch
@@ -144,8 +144,9 @@ async def finish_processes():
             continue
 
         # Saving face verifiers
-        save_built_model(verifier_name, glb.models[verifier_name],
-                            glb.SVD_VRF_DIR, overwrite=False, verbose=True)
+        if glb.models[verifier_name] is not None:
+            save_built_model(verifier_name, glb.models[verifier_name],
+                                glb.SVD_VRF_DIR, overwrite=False, verbose=True)
 
     
     # Saves (built) face detectors (if needed)
@@ -158,8 +159,9 @@ async def finish_processes():
             continue
 
         # Saving face detectors
-        save_built_model(detector_name, glb.models[detector_name],
-                            glb.SVD_DTC_DIR, overwrite=False, verbose=True)
+        if glb.models[detector_name] is not None:
+            save_built_model(detector_name, glb.models[detector_name],
+                                glb.SVD_DTC_DIR, overwrite=False, verbose=True)
 
     print('\n -------- Exitting program: goodbye! -------- \n')
 
