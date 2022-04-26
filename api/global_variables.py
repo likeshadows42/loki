@@ -6,6 +6,8 @@ import os
 
 from IFR.classes import RepDatabase
 
+DEBUG = True
+
 # Path variables
 API_DIR      = os.path.join(os.path.dirname(os.path.realpath("__file__")),'api')
 DATA_DIR     = os.path.join(API_DIR     , 'data')
@@ -33,3 +35,9 @@ verifier_names = ('ArcFace', '') # to avoid long startups during developing
 models      = {}             # stores all face verifier & detector models
 rep_db      = RepDatabase()  # stores representation database
 db_changed  = False          # indicates whether database has been modified (and should be saved)
+
+# SQLAlchemy global variables
+
+SQLITE_DB = 'loki.sqlite'    # SQLite storage name
+SQLITE_PATH = os.path.join(RDB_DIR, SQLITE_DB)
+sqla_engine = None           # SQLAlchemy engine object

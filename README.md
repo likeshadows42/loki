@@ -4,11 +4,12 @@ The objective of this project is to implement a face recognition (FR) solution l
 
 
 # Progress checklist
- - [x] Phase 1: Face Detection
- - [x] Phase 2: Face Alignment
- - [x] Phase 3: Face Recognition
- - [x] Creation of proof of concepts (POCs) demonstrations
- - [ ] Creation of Restful API using FastAPI
+ [x] Phase 1: Face Detection  
+ [x] Phase 2: Face Alignment  
+ [x] Phase 3: Face Recognition  
+ [x] Creation of proof of concepts (POCs) demonstrations  
+ [X] Creation of Restful API using FastAPI  
+ [ ] Creation of a basic frontend for a basic MVP (see [related documentation](README-VUE.md))
 
 
 # Face detector app

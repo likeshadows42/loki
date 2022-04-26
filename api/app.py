@@ -3,13 +3,14 @@
 # ==============================================================================
 import os
 import pickle
-import api.global_variables         as glb
+import api.global_variables          as glb
 
 from fastapi                         import FastAPI
 from IFR.api                         import load_representation_db,\
                                         load_built_model, save_built_model
 from IFR.functions                   import create_dir
 from api.routers.recognition         import fr_router
+from fastapi.middleware.cors         import CORSMiddleware
 
 from deepface.DeepFace               import build_model    as build_verifier
 from deepface.detectors.FaceDetector import build_model    as build_detector
@@ -19,7 +20,19 @@ from deepface.detectors.FaceDetector import build_model    as build_detector
 # ------------------------------------------------------------------------------
 
 app = FastAPI(name='Face Recognition API')
-app.include_router(fr_router , prefix="/fr" , tags=["Face Recognition"])
+
+origins = ['http://localhost:8080']
+
+app.add_middleware(
+    CORSMiddleware,
+     allow_origins=origins,
+     allow_credentials=True,
+     allow_methods=["*"],
+     allow_headers=["*"],
+)
+
+app.include_router(fr_router, prefix="/fr", tags=["Face Recognition"])
+
 
 # ______________________________________________________________________________
 #                                   APP METHODS

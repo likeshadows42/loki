@@ -8,6 +8,10 @@ from uuid               import UUID
 from typing             import List, Tuple, Optional
 from pydantic           import BaseModel
 
+from sqlalchemy import Table, Column, String, Integer, PickleType, ForeignKey
+from sqlalchemy.orm import relationship
+from sqlalchemy.ext.declarative import declarative_base
+
 # IMPLEMENTATION NOTE:
 # Pydantic expects a dictionary by default. You can configure your model to also
 # support loading from standard ORM parameters (i.e. attributes on the object
@@ -227,7 +231,7 @@ class VerificationMatch(BaseModel):
     region    : List[int]
     embeddings: List[str]
     distance  : float
-    threshold : float
+    # threshold  : float
 
 # Response class for representation summary output
 class RepsSummaryOutput(BaseModel):
@@ -763,7 +767,7 @@ class RepDatabase():
 
     def update_record(self, term, unique_id=None, image_name: str = None,
             image_fp: str = None, group_no: int = None, name_tag: str = None,
-            region: list[tuple] = None, embeddings: dict = None):
+            region: List[tuple] = None, embeddings: dict = None):
         """
         Updates a single record (Representation) in the database. This record is
         searched by the term in 'term'. In this case, a term is a:
@@ -1201,4 +1205,59 @@ class RepDatabase():
 
         return reps_found
 
+# ______________________________________________________________________________
+#                         SQLALCHEMY TABLES DEFINITIONS
+# ------------------------------------------------------------------------------
 
+Base = declarative_base()
+
+class Person(Base):
+    """
+    Person data structure
+
+    Fields:
+        person_id
+        name
+        note
+    """
+    # Table name
+    __tablename__ = 'person'
+
+    # Object attributes (as database columns)
+    id   = Column(Integer, primary_key=True)
+    name = Column(String)
+    note = Column(String)
+
+    # Establishes connection to associated Face Representations
+    reps = relationship("FaceRep", back_populates="person",
+                        cascade="all, delete, delete-orphan") # important for deleting children
+    
+    # Standard repr for the class
+    def __repr__(self):
+        return "(id=%s) - %s\n%s" % (self.id, self.name, self.note)
+
+class FaceRep(Base):
+    """
+    Initializes the object with appropriate attributes
+    """
+    # Table name
+    __tablename__ = 'representation'
+
+    # Object attributes (as database columns)
+    id              = Column(Integer, primary_key=True)
+    person_id       = Column(Integer, ForeignKey('person.id'))
+    image_name_orig = Column(String(100))
+    image_name      = Column(String(100))
+    image_fp_orig   = Column(String(255))
+    image_fp        = Column(String(255))
+    group_no        = Column(Integer)
+    region          = Column(PickleType)
+    embeddings      = Column(PickleType)
+
+    # Establishes connection to associated Person
+    person = relationship("Person", back_populates="reps")
+
+    # Standard repr for the class
+    def __repr__(self):
+        return "(id=%s)\nimage name: %s\nimage path: %s\ngroup: %s" % (self.id,
+                    self.image_name, self.image_fp, self.group_no)
