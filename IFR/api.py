@@ -19,7 +19,8 @@ from zipfile                 import ZipFile
 from tempfile                import TemporaryDirectory
 from IFR.classes             import RepDatabase, Representation,\
                                     VerificationMatch
-from IFR.functions           import get_image_paths, calc_embedding
+from IFR.functions           import get_image_paths, do_face_detection,\
+                                    calc_embeddings
 from sklearn.cluster         import DBSCAN
 
 from shutil                  import move             as sh_move
@@ -32,8 +33,40 @@ from shutil                  import move             as sh_move
 def show_cluster_results(group_no, db, ncols=4, figsize=(15, 15), color='black',
                          add_separator=False):
     """
-    TODO: Flesh out description
-    Shows the results of image clustering and returns the handle to its figure.
+    Creates a figure with all images belonging to a group with 'group_no' and
+    returns the handle to its figure. Each image belonging to the group is
+    displayed in a 'ncols' by nrows grid. Nrows is calculated by:
+
+        nrows = (np.ceil(np.sum(labels == group_no) / ncols)).astype(int)
+
+    Example: 10 matches with ncols=4 results in nrows=3. The figure will have 4
+    images on the first row, another 4 images on the second row and 2 images
+    (and 2 'blank' images) on the third row.
+
+    Inputs:
+        1. group_no      - a group number [integer].
+
+        2. db            - representation database [RepDatabase].
+
+        3. ncols         - number of columns (or images per row)
+                            [integer, default=4].
+
+        4. figsize       - size of figure (in X and Y directions) in inches
+                            [tuple of floats, default=(15, 15)].
+
+        5. color         - font color (must be a valid matplotlib color string)
+                            [string, default='black'].
+
+        6. add_separator - adds a 'textual' separator at the bottom of the
+                            figure. This separator is simply a sequence of '='
+                            characters [boolean, default=False].
+
+    Output:
+        1. image file handle (handle to a file-like object).
+
+    Signature:
+        img_file = show_cluster_results(group_no, db, ncols=4, figsize=(15, 15),
+                                        color='black', add_separator=False)
     """
     # Gets the group number of all Representations in the database
     labels = []
@@ -59,10 +92,6 @@ def show_cluster_results(group_no, db, ncols=4, figsize=(15, 15), color='black',
                                 + f' (cluster: {rep.group_no})', color=color)
             cur_ax += 1
 
-        # Otherwise, do nothing
-        else:
-            pass # do nothing
-
     # Adds a divider / separator at the end of plot
     if add_separator:
         txt = "=" * 100
@@ -79,62 +108,70 @@ def show_cluster_results(group_no, db, ncols=4, figsize=(15, 15), color='black',
 #                DETECTORS & VERIFIERS BUILDING, SAVING & LOADING
 # ------------------------------------------------------------------------------
 
-def saved_verifier_exists(verifier_name, save_dir):
+def saved_model_exists(model_name, save_dir):
     """
-    Checks if a saved verifier exists with name 'verifier_name'. Does that by
-    comparing the 'verifier_name' against the name of all files in 'save_dir'.
+    Checks if a saved model exists with name 'model_name'. Does that by
+    comparing the 'model_name' against the name of all files in 'save_dir'.
     
     Inputs:
-        1. verifier_name - string with the name of the verifier.
-        2. save_dir - string with the full path of the save directory
+        1. model_name - model name [string].
+
+        2. save_dir   - full path of the save directory [string].
         
     Output:
-        1. Boolean value indicating if saved verifier exists or not.
+        1. Boolean value indicating if the saved model exists or not.
     
     Signature:
-        verifier_exists = saved_verifier_exists(verifier_name, save_dir)
+        model_exists = saved_model_exists(model_name, save_dir)
     """
     # Save directory provided is not a directory
     if not os.path.isdir(save_dir):
         return False
     
-    # Otherwise, check if verifier name is in the names of files in the
+    # Otherwise, check if model name is in the names of files in the
     # 'save_dir' directory
     is_in = False
     for file_name in os.listdir(save_dir):
-        is_in = is_in or verifier_name in file_name
+        is_in = is_in or model_name in file_name
     
     return is_in
 
 # ------------------------------------------------------------------------------
 
-def save_face_verifier(verifier_name, verifier_obj, save_dir, overwrite=False,
+def save_built_model(model_name, model_obj, save_dir, overwrite=False,
                         verbose=False):
     """
-    Save a face verifier model specified in 'verifier' as a pickled object. The
-    model is saved in the 'save_dir' directory. If a model already exists, this
-    function does not overwrite it unless the 'overwrite' flag is set to True.
-    All errors are suppressed unless verbose is True.
+    Saves a built face verifier or detector model ('model_obj') with name
+    'model_name' as a pickled object. The model is saved in the 'save_dir'
+    directory. If a model already exists with the same name, this function does
+    not overwrite it unless the 'overwrite' flag is set to True. All errors are
+    suppressed unless verbose is True, in which case they are printed to the
+    console.
     
     Inputs:
-        1. verifier_name - string with the verifier name.
-        2. verifier_obj  - built verifier model object.
-        3. save_dir      - string with the full path of the save directory
-        4. overwrite     - boolean that indicates if the function should
-            overwrite any saved models ([overwrite=False]).
-        5. verbose       - boolean that toggles the amount of text output
-            ([False] - silent, True - verbose)
+        1. model_name - model's name [string].
+
+        2. model_obj  - built model object [model object].
+
+        3. save_dir   - full path of the save directory [string].
+
+        4. overwrite  - toggles if the function should overwrite any existing
+                        model with the new model if both have the same name
+                        [boolean, default=False].
+
+        5. verbose    - toggles the amount of text output [boolean,
+                        default=False].
                         
-    Outputs:
+    Output:
         1. returns a status flag of True on error (otherwise returns False)
     
     Signature:
-        status = save_face_verifier(verifier_name, verifier_obj, save_dir,
-                                    overwrite=False, verbose=False)
+        status = save_built_model(model_name, model_obj, save_dir,
+                                  overwrite=False, verbose=False)
     """
     # Prints message
     if verbose:
-        print(f'[save_face_verifier] Saving {verifier_name}: ', end='')
+        print(f'[save_built_model] Saving {model_name}: ', end='')
 
     # Checks if the save directory provided is a directory
     if not os.path.isdir(save_dir):
@@ -143,58 +180,65 @@ def save_face_verifier(verifier_name, verifier_obj, save_dir, overwrite=False,
                    'or does not exist.')
         return True
     
-    # Saves verifier if it does not exist or if 'overwrite' is set to True
-    if not saved_verifier_exists(verifier_name, save_dir=save_dir) or overwrite:
+    # Saves model if it does not exist or if 'overwrite' is set to True
+    if not saved_model_exists(model_name, save_dir=save_dir) or overwrite:
         try:
             # Creates the file's full path
-            file_fp  = os.path.join(save_dir, verifier_name) + '.pickle'
+            file_fp  = os.path.join(save_dir, model_name) + '.pickle'
         
             # Saves the built model as a pickled object
             with open(file_fp, 'wb') as handle:
-                pickle.dump(verifier_obj, handle,
-                            protocol=pickle.HIGHEST_PROTOCOL)
+                pickle.dump(model_obj, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
             # Prints success message
             if verbose:
                 print('success!')
             
         except Exception as excpt:
-            # Prints exception and returns True
+            # Prints exception, deletes pickle file and returns True
+            try:
+                os.remove(file_fp)
+            except:
+                pass
+            
             if verbose:
                 print(f'failed! Reason: {excpt}')
+            
             return True
     
-    # Otherwise, skips saving because verifier exists
+    # Otherwise, skips saving because the model exists
     else:
         # Prints skip message
         if verbose:
-            print(f'skipped! Reason: {verifier_name} already exists.')
+            print(f'skipped! Reason: {model_name} already exists.')
             
     return False
 
 # ------------------------------------------------------------------------------
 
-def load_face_verifier(verifier_name, save_dir, verbose=False):
+def load_built_model(model_name, save_dir, verbose=False):
     """
-    Loads a face verifier model specified in 'verifier_name'. The model is
+    Loads a face detector or verifier model named 'model_name'. The model is
     loaded from the 'save_dir' directory. Errors are suppressed if 'verbose' is
-    set to False, but an empty list is returned on error (instead of the built)
-    model object.
+    set to False, otherwise they are printed to the console. A 'None' object is
+    returned on error, instead of the built model object.
     
     Inputs:
-        1. verifier_name - string with the name of the face verifiers.
-        2. save_dir      - string with the full path of the save directory.
-        3. verbose       - boolean that toggles the amount of text output
-            ([False] - silent, True - verbose)
+        1. model_name - model's name [string].
+
+        2. save_dir   - full path of the save directory [string].
+
+        3. verbose    - toggles the amount of text output [boolean,
+                        default=False].
                         
-    Outputs:
-        1. returns the built model object (or returns an empty list on error)
+    Output:
+        1. returns the built model object (or 'None' object on error)
             
     Signature:
-        model = load_face_verifier(verifier_name, save_dir, verbose=False)
+        model = load_built_model(model_name, save_dir, verbose=False)
     """
     # Initializes output
-    model = []
+    model = None
 
     # Checks if the save directory provided is a directory
     if not os.path.isdir(save_dir):
@@ -202,13 +246,13 @@ def load_face_verifier(verifier_name, save_dir, verbose=False):
     
     # Prints message
     if verbose:
-        print('[load_face_verifier] Loading model',
-             f'{verifier_name}: ', end='')
+        print('[load_built_model] Loading model',
+             f'{model_name}: ', end='')
 
-    # Checks if the face verifier model exists
-    if saved_verifier_exists(verifier_name, save_dir=save_dir):
+    # Checks if the saved model exists
+    if saved_model_exists(model_name, save_dir=save_dir):
         # Loads the model
-        file_fp = os.path.join(save_dir, verifier_name)
+        file_fp = os.path.join(save_dir, model_name)
         try:
             with open(file_fp, 'rb') as handle:
                 model = pickle.load(handle)
@@ -221,7 +265,7 @@ def load_face_verifier(verifier_name, save_dir, verbose=False):
     # Model does not exist at specified path
     else:
         if verbose:
-            print(f'failed! Reason: {verifier_name}'
+            print(f'failed! Reason: {model_name}'
                   f' does not exist in {save_dir}', sep='')
     
     return model
@@ -275,97 +319,47 @@ def load_representation_db(file_path, verbose=False):
 #                   REPRESENTATION DATABASE RELATED FUNCTIONS
 # ------------------------------------------------------------------------------
 
-def find_image_in_db(img_path, db, shortcut=None):
-    """
-    Finds the corresponding Representation in the database 'db'. Uses the
-    image's name obtained from its full path ('img_path') to match the
-    Representation to the image. An optional dictionary ('shortcut') can be
-    provided where each letter corresponds to an index to speed up the search.
-    Consider a sorted database where the first image with a name starting with
-    a 'g' is at position 156. Then a shortcut dictionary with the key/value pair
-    'g':155 will ensure this function starts at the position 156 and wont waste
-    time previous database entries.
-
-    Inputs:
-        1. img_path - image path, base64 image or numpy array
-        2. db - database object (list of Representation objects)
-        3. shortcut - optional dictionary with letter/index key/value pairs
-            ([shortcut=None])
-
-    Output:
-        1. tuple containing the matching Representation object and the index
-            corresponding to that object in the database (i.e. output
-            representation == database[output index]). If no match is found,
-            both representation and index are returned as empty lists. If
-            multiple entries are found, multiple Representations and indexs are
-            returned as lists.
-
-    Signature:
-        rep_objs, rep_idxs = find_image_in_db(img_path, db, shortcut=None)
-    """
-    rep_objs = [] # empty representation object
-    rep_idxs = [] # no matching index
-
-    # Database is empty
-    if len(db) == 0:
-        pass # do nothing
-
-    # 'shortcut' dictionary is provided
-    elif not shortcut == None:
-        # Get image name
-        img_name = img_path.split('/')[-1].lower()
-        idx      = shortcut[img_name[0]]
-
-        # 
-        for i, rep in enumerate(db[idx::]):
-            if img_name.lower() == rep.image_name:
-                rep_objs.append(rep)
-                rep_idxs.append(i + idx)
-
-    # 'shortcut' dictionary is not provided
-    else:
-        # Get image name
-        img_name = img_path.split('/')[-1].lower()
-
-        # 
-        for i, rep in enumerate(db):
-            if img_name.lower() == rep.image_name:
-                rep_objs.append(rep)
-                rep_idxs.append(i)
-
-    return (rep_objs, rep_idxs)
-
-# ------------------------------------------------------------------------------
-
-def create_new_representation(img_path, region, embeddings, group_no=-1, uid='',
-                                tag='', ignore_taglist=['--', '---']):
+def create_new_rep(original_fp, img_fp, region, embeddings, uid='',
+                   group_no=-1, tag='', ignore_taglist=['--', '---']):
     """
     Creates a new representation object. For more information see
     help(Representation).
 
     Inputs:
-        1. img_path - string containing image full path.
-        2. region - list of integers specifying face region on the original
-            image.
-        3. embeddings - dictionary with face verifier name (key) and embedding
-            (1-D numpy array) (item). Can have multiple verifier, embedding
-            pairs (key, value pairs).
-        4. group_no - group / cluster number. If group_no == -1 then this means
-             'no group'.
-        5. uid - string containing unique object identifier. If left empty ('')
-            a unique object identifier is created using uuid4 from uuid library
-            ([uid='']).
-        6. tag - string containing a name tag for this Representation
-             ([tag='']).
-        7. ignore_taglist - list of strings that are treated as equivalent to ''
-            (i.e. no tag) ([ignore_taglist=['--', '---']]).
+        1. original_fp    - original image's full path [string].
+
+        2. img_fp         - image's full path [string].
+
+        3. region         - face region on the original image [list of 4
+            integers].
+
+        4. embeddings     - face verifier name (key) and embedding
+            [1-D numpy array] (item). Can have multiple verifier, embedding
+            pairs (key, value pairs) [dictionary].
+
+        5. uid            - valid unique object identifier. If left empty ('') a
+            unique object identifier is created using uuid4 from the uuid
+            library [string, default=''].
+        
+            Note: a valid uid string representation obeys the following (case
+            insensitive) regular expression:
+                        '^[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?' + 
+                        '[89ab][a-f0-9]{3}-?[a-f0-9]{12}\Z'
+
+        6. group_no       - group number. If group_no == -1 then this means
+            'no group' / 'groupless' [integer, default=-1].
+
+        7. tag            - name tag or nickname [string, default=''].
+
+        8. ignore_taglist - list of strings that are treated as equivalent to ''
+            (i.e. no tag) [list of strings, default=['--', '---']].
     
     Output:
         1. Representation object
 
     Signature:
-        new_rep = create_new_representation(img_path, region, embeddings,
-                                tag='', uid='', ignore_taglist=['--', '---'])
+        new_rep = create_new_rep(original_fp, img_fp, region, embeddings,
+                    uid='', group_no=-1, tag='', ignore_taglist=['--', '---'])
     """
 
     # If Unique IDentifier (UID) is not provided, generate one
@@ -382,8 +376,9 @@ def create_new_representation(img_path, region, embeddings, group_no=-1, uid='',
         group_no = -1
 
     # Returns the new representation
-    return Representation(uid, image_name=img_path.split('/')[-1], 
-                          image_fp=img_path, group_no=group_no, name_tag=tag,
+    return Representation(uid, orig_name=original_fp.split('/')[-1],
+                          image_name=img_fp.split('/')[-1], orig_fp=original_fp,
+                          image_fp=img_fp, group_no=group_no, name_tag=tag,
                           region=region, embeddings=embeddings)
 
 # ------------------------------------------------------------------------------
@@ -395,8 +390,8 @@ def get_embeddings_as_array(db, verifier_name):
     embeddings and M is the number of elements of each embeddings.
 
     Inputs:
-        1. db - database object (list of Representation objects)
-        2. verifier_name - name of verifier
+        1. db            - Representation database [RepDatabase object].
+        2. verifier_name - name of verifier [string].
 
     Output:
         1. N x M numpy array where each row corresponds to a face image's
@@ -413,10 +408,11 @@ def get_embeddings_as_array(db, verifier_name):
 
 # ------------------------------------------------------------------------------
 
-def create_reps_from_dir(img_dir, verifier_models, detector_name='retinaface',
-                    align=True, verifier_names='ArcFace', show_prog_bar=True,
-                    normalization='base', tags=[], uids=[], auto_grouping=True,
-                    eps=0.5, min_samples=2, metric='cosine', verbose=False):
+def create_reps_from_dir(img_dir, detector_models, verifier_models,
+            detector_name='retinaface', align=True, verifier_names=['ArcFace'],
+            show_prog_bar=True, normalization='base', tags=[], uids=[],
+            auto_grouping=True, eps=0.5, min_samples=2, metric='cosine',
+            verbose=False):
     """
     Creates a representations from images in a directory 'img_dir'. The
     representations are returned in a list, and the list of representations. If
@@ -501,7 +497,7 @@ def create_reps_from_dir(img_dir, verifier_models, detector_name='retinaface',
     # Initializes skip flags and database (list of Representation objects)
     skip_tag = False
     skip_uid = False
-    rep_db   = []
+    rep_list = []
     
     # Assuming img_dir is a directory containing images
     img_paths = get_image_paths(img_dir)
@@ -509,7 +505,7 @@ def create_reps_from_dir(img_dir, verifier_models, detector_name='retinaface',
 
     # No images found, return empty database
     if len(img_paths) == 0:
-        return []
+        return RepDatabase()
 
     # If tags list does not have the same number of elements as the images (i.e.
     # 1 tag per image), ignore it
@@ -539,12 +535,24 @@ def create_reps_from_dir(img_dir, verifier_models, detector_name='retinaface',
 
     # Loops through each image in the 'img_dir' directory
     for pb_idx, i, img_path in zip(pbar, range(0, n_imgs), img_paths):
+        # Detects faces
+        output = do_face_detection(img_path, detector_models=detector_models,
+                                    detector_name=detector_name, align=align,
+                                    verbose=verbose)
+
+        # Assumes only 1 face is detect (even if multiple are present). If no
+        # face are detected, skips this image file
+        if output is not None:
+            face   = [output['faces'][0]]
+            region = output['regions'][0]
+        else:
+            continue
+
         # Calculate the face image embedding
-        region, embeddings = calc_embedding(img_path, verifier_models,
-                                            align=align,
-                                            detector_name=detector_name, 
-                                            verifier_names=verifier_names,
-                                            normalization=normalization)
+        embeddings = calc_embeddings(face, verifier_models,
+                                     verifier_names=verifier_names,
+                                     normalization=normalization)
+        embeddings = embeddings[0]
 
         # If auto grouping is True, then store each calculated embedding
         if auto_grouping:
@@ -565,8 +573,8 @@ def create_reps_from_dir(img_dir, verifier_models, detector_name='retinaface',
             uid = uids[i]
 
         # Create a new representation and adds it to the database
-        rep_db.append(create_new_representation(img_path, region, embeddings,
-                                                tag=tag, uid=uid))
+        rep_list.append(create_new_rep(img_path, img_path, region, embeddings,
+                                        tag=tag, uid=uid))
 
     # Clusters Representations together using the DBSCAN algorithm
     if auto_grouping:
@@ -581,16 +589,40 @@ def create_reps_from_dir(img_dir, verifier_models, detector_name='retinaface',
             if lbl == -1:
                 continue
             else:
-                rep_db[i].group_no = lbl
+                rep_list[i].group_no = lbl
 
     # Return representation database
-    return RepDatabase(*rep_db)
+    return RepDatabase(*rep_list)
 
 # ------------------------------------------------------------------------------
 
 def process_image_zip_file(myfile, image_dir, auto_rename=True):
     """
-    TODO: Add documentation
+    Processes a zip file containing image files. The zip file ('myfile') is
+    assumed to have only valid image files (i.e. '.jpg', '.png', etc).
+    
+    First, the contents of the zip file are extracted to a named temporary
+    directory. All file names in the save directory 'image_dir' is obtained. If
+    'auto_rename' is True, then each image with the same name as a file in
+    'image_dir' directory gets renamed. Each image is then moved from the
+    temporary directory to the 'image_dir' directory, and the temporary
+    directory is deleted. If 'auto_rename' is False then images with the same
+    name are simply ignored.
+
+    Inputs:
+        1. myfile      - zip file obtained through FastAPI [zip file].
+
+        2. image_dir   - path to directory in which the extracted images will be
+                            saved to [string].
+
+        3. auto_rename - toggles between automatic renaming of image files with
+                            a non-unique name [boolean, default=True].
+
+    Output:
+        1. list with the names of each image file saved [list of strings].
+
+    Signature:
+        new_names = process_image_zip_file(myfile, image_dir, auto_rename=True)
     """
     # Create temporary directory and extract all files to it
     with TemporaryDirectory(prefix="create_database_from_zip-") as tempdir:
@@ -636,7 +668,19 @@ def process_image_zip_file(myfile, image_dir, auto_rename=True):
 
 def fix_uid_of_renamed_imgs(new_names):
     """
-    TODO: Add documentation
+    Ensures that the unique identifier of the renamed images matches the name of
+    the image (names of renamed images are valid unique identifiers). This
+    function modifies entries in the database contained in the 'rep_db' global
+    variable (for more information see global_variables.py).
+
+    Input:
+        1. new_names - new names (of renamed files) [list of strings].
+
+    Output:
+        1. None
+
+    Signature:
+        fix_uid_of_renamed_imgs(new_names)
     """
     # Loops through each representation
     for i, rep in enumerate(glb.rep_db.reps):
@@ -653,6 +697,8 @@ def fix_uid_of_renamed_imgs(new_names):
             glb.rep_db.reps[i].unique_id = UUID(cur_img_name)
             glb.db_changed               = True
 
+    return None
+
 # ______________________________________________________________________________
 #                               OTHER FUNCTIONS
 # ------------------------------------------------------------------------------
@@ -666,8 +712,9 @@ def get_matches_from_similarity(similarity_obj, db):
     Inputs:
         1. similarity_obj - dictionary containing the indexes of matches (key:
             idxs), the threshold value used (key: threshold) and the distances
-            of the matches (key: distances).
-        2. db - list of Representations
+            of the matches (key: distances) [dictionary].
+        
+        2. db             - representation database [RepDatabase object].
 
     Output:
         1. List containing each matched Representation. Note that the length of

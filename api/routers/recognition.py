@@ -1,5 +1,5 @@
 # ==============================================================================
-#                        TEST API METHODS
+#                              RECOGNITION API METHODS
 # ==============================================================================
 import os
 import cv2
@@ -15,20 +15,19 @@ from pydoc                   import describe
 from pandas                  import describe_option
 from typing                  import List, Optional
 from fastapi                 import APIRouter, UploadFile, Depends, Query, Body
-from IFR.api                 import load_representation_db, load_face_verifier,\
+from IFR.api                 import load_representation_db, load_built_model,\
                             create_reps_from_dir, get_embeddings_as_array,\
                             fix_uid_of_renamed_imgs, process_image_zip_file,\
                             get_matches_from_similarity, show_cluster_results,\
-                            create_new_representation
+                            create_new_rep, do_face_detection
 from IFR.classes             import *
 from IFR.functions           import create_dir, string_is_valid_uuid4,\
-                               calc_embedding, calc_similarity
+                               calc_embeddings, calc_similarity
 from fastapi.responses       import Response
 
-# from shutil                   import rmtree, move     as sh_move
-from matplotlib               import image            as mpimg
-from deepface.DeepFace        import build_model      as build_verifier
-import pandas as pd
+from matplotlib                      import image          as mpimg
+from deepface.DeepFace               import build_model    as build_verifier
+from deepface.detectors.FaceDetector import build_model    as build_detector
 
 
 glb_data_dir = glb.DATA_DIR
@@ -43,6 +42,71 @@ fr_router = APIRouter()
 
 # ______________________________________________________________________________
 #                                  API METHODS
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/debug/inspect_globals")
+async def inspect_globals(print2console: bool = Query(True, description="Toggles if global variables should be printed to the server's console [boolean]")):
+    
+    # Obtains all current directory paths
+    directories = [glb.API_DIR    , glb.DATA_DIR   , glb.IMG_DIR, glb.RDB_DIR,
+                   glb.SVD_MDL_DIR, glb.SVD_VRF_DIR, glb.SVD_DTC_DIR]
+
+    # Prints the path variables along with their names
+    if print2console:
+        dir_names = ['API root dir', 'Data dir', 'Image dir',
+                     'Rep. database dir', 'Saved models dir',
+                     'Saved face verifiers dir', 'Saved face detectors dir']
+
+        print("  > Paths:")
+        for dir, name in zip(directories, dir_names):
+            print(name.ljust(24) + ':', dir)
+        print('')
+        
+    # Prints all face detectors, indicating if they have been loaded (or build
+    # from scratch) successfully
+    if print2console:
+        print("  > All face detectors:")
+        for i, name in enumerate(glb.detector_names):
+            if name == '':
+                continue
+            print(f'{i+1}'.ljust(2) + ':', name, end=' ')
+
+            try:
+                glb.models[name]
+                print('[loaded]')
+            except:
+                print('[not loaded]')
+        print('')
+
+    # Prints all face verifiers, indicating if they have been loaded (or build
+    # from scratch) successfully
+    if print2console:
+        print("  > All face verifiers:")
+        for i, name in enumerate(glb.verifier_names):
+            if name == '':
+                continue
+            print(f'{i+1}'.ljust(2) + ':', name, end=' ')
+
+            try:
+                glb.models[name]
+                print('[loaded]')
+            except:
+                print('[not loaded]')
+        print('')
+
+    # Prints all other global variables
+    if print2console:
+        print("  > Other variables:")
+        print("Models".ljust(17)           + ':', glb.models)
+        print("Rep. database".ljust(17)    + ':', glb.rep_db)
+        print("Database changed".ljust(17) + ':', glb.db_changed)
+
+    return {'dirs':directories, 'dir_names':dir_names,
+            'detector_names':glb.detector_names,
+            'verifier_names':glb.verifier_names,
+            'model_names':list(glb.models.keys()),
+            'rep_db':glb.rep_db, 'db_changed':glb.db_changed}
+
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/debug/reset_server")
@@ -70,7 +134,7 @@ async def reset_server(no_database: bool = Query(False, description="Toggles if 
                                'api')
     print('[PATH]'.ljust(12), 'API_DIR'.ljust(12),
          f': reset! ({glb.API_DIR})')
-
+    
     glb.DATA_DIR    = os.path.join(glb.API_DIR    , 'data')
     print('[PATH]'.ljust(12), 'DATA_DIR'.ljust(12),
          f': reset! ({glb.DATA_DIR})')
@@ -90,6 +154,10 @@ async def reset_server(no_database: bool = Query(False, description="Toggles if 
     glb.SVD_VRF_DIR = os.path.join(glb.SVD_MDL_DIR   , 'verifiers')
     print('[PATH]'.ljust(12), 'SVD_VRF_DIR'.ljust(12),
          f': reset! ({glb.SVD_VRF_DIR})')
+
+    glb.SVD_DTC_DIR = os.path.join(glb.SVD_MDL_DIR   , 'detectors')
+    print('[PATH]'.ljust(12), 'SVD_VRF_DIR'.ljust(12),
+         f': reset! ({glb.SVD_DTC_DIR})')
     print('')
 
     glb.models     = {}
@@ -106,7 +174,7 @@ async def reset_server(no_database: bool = Query(False, description="Toggles if 
     # Directories & paths initialization
     print('  -> Directory creation:')
     directory_list = [glb.API_DIR, glb.DATA_DIR, glb.IMG_DIR, glb.RDB_DIR,
-                      glb.SVD_MDL_DIR, glb.SVD_VRF_DIR]
+                      glb.SVD_MDL_DIR, glb.SVD_VRF_DIR, glb.SVD_DTC_DIR]
     
     for directory in directory_list:
         print(f'Creating {directory} directory: ', end='')
@@ -130,6 +198,34 @@ async def reset_server(no_database: bool = Query(False, description="Toggles if 
     
     print('')
     
+    # Loads (or creates) all face detectors
+    print('  -> Loading / creating face detectors:')
+    for detector_name in glb.detector_names:
+        # Quick fix to avoid problems when len(glb.detector_names) == 1. In this
+        # case, FOR loops over each letter in the string instead of considering
+        # the entire string as one thing.
+        if detector_name == '':
+            continue
+
+        # First, try loading (opening) the model
+        model = load_built_model(detector_name + '.pickle', glb.SVD_DTC_DIR,
+                                   verbose=True)
+
+        # If successful, save the model in a dictionary
+        if model is not None:
+            glb.models[detector_name] = model
+
+        # Otherwise, build the model from scratch
+        else:
+            print(f'[build_detector] Building {detector_name}: ', end='')
+            try:
+                glb.models[detector_name] = build_detector(detector_name)
+                print('success!\n')
+
+            except Exception as excpt:
+                print(f'failed! Reason: {excpt}\n')
+
+
     # Loads (or creates) all face verifiers
     print('  -> Loading / creating face verifiers:')
     for verifier_name in glb.verifier_names:
@@ -140,11 +236,11 @@ async def reset_server(no_database: bool = Query(False, description="Toggles if 
             continue
 
         # First, try loading (opening) the model
-        model = load_face_verifier(verifier_name + '.pickle', glb.SVD_VRF_DIR,
+        model = load_built_model(verifier_name + '.pickle', glb.SVD_VRF_DIR,
                                    verbose=True)
 
         # If successful, save the model in a dictionary
-        if not isinstance(model, list):
+        if model is not None:
             glb.models[verifier_name] = model
 
         # Otherwise, build the model from scratch
@@ -954,7 +1050,7 @@ async def create_database_from_directory(cdb_params: CreateDatabaseParams,
 
     elif glb.rep_db.size == 0 or force_create:
         output_msg += 'Creating database: '
-        glb.rep_db  = create_reps_from_dir(image_dir, glb.models,
+        glb.rep_db  = create_reps_from_dir(image_dir, glb.models, glb.models,
                                 detector_name=cdb_params.detector_name,
                                 align=cdb_params.align, show_prog_bar=True,
                                 verifier_names=cdb_params.verifier_names,
@@ -1093,15 +1189,15 @@ async def create_database_from_zip(myfile: UploadFile,
         if dont_skip:
             output_msg += 'Creating database: '
             glb.rep_db  = create_reps_from_dir(image_dir, glb.models,
-                                        detector_name=params.detector_name,
-                                        align=params.align, show_prog_bar=True,
-                                        verifier_names=params.verifier_names,
-                                        normalization=params.normalization,
-                                        tags=params.tags, uids=params.uids,
-                                        auto_grouping=params.auto_grouping,
-                                        min_samples=params.min_samples,
-                                        eps=params.eps, metric=params.metric,
-                                        verbose=params.verbose)
+                                glb.models, detector_name=params.detector_name,
+                                align=params.align, show_prog_bar=True,
+                                verifier_names=params.verifier_names,
+                                normalization=params.normalization,
+                                tags=params.tags, uids=params.uids,
+                                auto_grouping=params.auto_grouping,
+                                min_samples=params.min_samples,
+                                eps=params.eps, metric=params.metric,
+                                verbose=params.verbose)
 
             # Fixes unique ids of renamed images (ensuring that the unique id in
             # the image name matches the Representation's unique id and
@@ -1184,21 +1280,29 @@ async def verify_no_upload(files: List[UploadFile],
         image = cv2.imdecode(data, cv2.IMREAD_UNCHANGED)
         image = image[:, :, ::-1]
 
-        # Calculate the face image embedding
-        region, embeddings = calc_embedding(image, glb.models,
-                                            align=params.align,
-                                            detector_name=params.detector_name, 
-                                            verifier_names=params.verifier_name,
-                                            normalization=params.normalization)
+        # Detects faces
+        output = do_face_detection(image, detector_models=glb.models,
+                                    detector_name=params.detector_name,
+                                    align=params.align, verbose=False)
 
-        # Calculates the embedding of the current image
-        cur_emb  = embeddings[params.verifier_name]
+        # Assumes only 1 face is detected (even if multiple are present). If no
+        # face are detected, skips this image file
+        if output is not None:
+            face   = [output['faces'][0]]
+        else:
+            continue
+
+        # Calculate the face image embedding
+        embeddings = calc_embeddings(face, glb.models,
+                                     verifier_names=params.verifier_name,
+                                     normalization=params.normalization)
+        cur_emb    = embeddings[0][params.verifier_name]
 
         # Calculates the similarity between the current embedding and all
         # embeddings from the database
         similarity_obj = calc_similarity(cur_emb, dtb_embs,
                                          metric=params.metric,
-                                         model_name=params.verifier_name,
+                                         face_verifier=params.verifier_name,
                                          threshold=params.threshold)
 
         # Gets all matches based on the similarity object and append the result
@@ -1324,20 +1428,30 @@ async def verify_with_upload(files: List[UploadFile],
         else:
             continue  # skips verification using this file
 
-        # Calculate the face image embedding
-        region, embeddings = calc_embedding(img, glb.models, align=params.align,
-                                            detector_name=params.detector_name, 
-                                            verifier_names=params.verifier_name,
-                                            normalization=params.normalization)
+        # Detects faces
+        output = do_face_detection(img, detector_models=glb.models,
+                                    detector_name=params.detector_name,
+                                    align=params.align, verbose=False)
 
-        # Calculates the embedding of the current image
-        cur_emb = embeddings[params.verifier_name]
+        # Assumes only 1 face is detected (even if multiple are present). If no
+        # face are detected, skips this image file
+        if output is not None:
+            face   = [output['faces'][0]]
+            region = output['regions'][0]
+        else:
+            continue
+
+        # Calculate the face image embedding
+        embeddings = calc_embeddings(face, glb.models,
+                                     verifier_names=params.verifier_name,
+                                     normalization=params.normalization)
+        cur_emb    = embeddings[0][params.verifier_name]
 
         # Calculates the similarity between the current embedding and all
         # embeddings from the database
         similarity_obj = calc_similarity(cur_emb, dtb_embs,
                                          metric=params.metric,
-                                         model_name=params.verifier_name,
+                                         face_verifier=params.verifier_name,
                                          threshold=params.threshold)
 
         # Gets all matches based on the similarity object and append the result
@@ -1369,8 +1483,8 @@ async def verify_with_upload(files: List[UploadFile],
 
         # Creates a representation object for this image and adds it to the
         # database
-        new_rep = create_new_representation(img_fp, region, embeddings,
-                                            group_no=group_no, tag=tag, uid=uid)
+        new_rep = create_new_rep(img_fp, img_fp, region, embeddings,
+                                 group_no=group_no, tag=tag, uid=uid)
         glb.rep_db.reps.append(new_rep)
         glb.db_changed = True
 
@@ -1479,15 +1593,24 @@ async def verify_existing_file(files: List[str],
             image = cv2.imread(os.path.join(img_dir, f))
             image = image[:, :, ::-1]
 
-            # Calculate the face image embedding
-            region, embeddings = calc_embedding(image, glb.models,
-                                        align=params.align,
-                                        detector_name=params.detector_name, 
-                                        verifier_names=params.verifier_name,
-                                        normalization=params.normalization)
+            # Detects faces
+            output = do_face_detection(image, detector_models=glb.models,
+                                        detector_name=params.detector_name,
+                                        align=params.align, verbose=False)
 
-            # Calculates the embedding of the current image
-            cur_emb = embeddings[params.verifier_name]
+            # Assumes only 1 face is detected (even if multiple are present). If no
+            # face are detected, skips this image file
+            if output is not None:
+                face   = [output['faces'][0]]
+                region = output['regions'][0]
+            else:
+                continue
+
+            # Calculate the face image embedding
+            embeddings = calc_embeddings(face, glb.models,
+                                         verifier_names=params.verifier_name,
+                                         normalization=params.normalization)
+            cur_emb    = embeddings[0][params.verifier_name]
 
         else: # string is not a valid uuid nor file
             continue
@@ -1496,7 +1619,7 @@ async def verify_existing_file(files: List[str],
         # embeddings from the database
         similarity_obj = calc_similarity(cur_emb, dtb_embs,
                                         metric=params.metric,
-                                        model_name=params.verifier_name,
+                                        face_verifier=params.verifier_name,
                                         threshold=params.threshold)
 
         # Gets all matches based on the similarity object and append the result

@@ -5,14 +5,14 @@ import os
 import pickle
 import api.global_variables         as glb
 
-from fastapi                        import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from IFR.api                        import load_representation_db,\
-                                        load_face_verifier, save_face_verifier
-from IFR.functions                  import create_dir
-from api.routers.recognition        import fr_router
+from fastapi                         import FastAPI
+from IFR.api                         import load_representation_db,\
+                                        load_built_model, save_built_model
+from IFR.functions                   import create_dir
+from api.routers.recognition         import fr_router
 
-from deepface.DeepFace              import build_model    as build_verifier
+from deepface.DeepFace               import build_model    as build_verifier
+from deepface.detectors.FaceDetector import build_model    as build_detector
 
 import sqlalchemy as sqla
 # ______________________________________________________________________________
@@ -46,7 +46,7 @@ async def initialization():
     # Directories & paths initialization
     print('  -> Directory creation:')
     directory_list = [glb.API_DIR, glb.DATA_DIR, glb.IMG_DIR, glb.RDB_DIR,
-                      glb.SVD_MDL_DIR, glb.SVD_VRF_DIR]
+                      glb.SVD_MDL_DIR, glb.SVD_VRF_DIR, glb.SVD_DTC_DIR]
     
     for directory in directory_list:
         print(f'Creating {directory} directory: ', end='')
@@ -86,11 +86,11 @@ async def initialization():
             continue
 
         # First, try loading (opening) the model
-        model = load_face_verifier(verifier_name + '.pickle', glb.SVD_VRF_DIR,
+        model = load_built_model(verifier_name + '.pickle', glb.SVD_VRF_DIR,
                                    verbose=True)
 
         # If successful, save the model in a dictionary
-        if not isinstance(model, list):
+        if model is not None:
             glb.models[verifier_name] = model
 
         # Otherwise, build the model from scratch
@@ -103,6 +103,34 @@ async def initialization():
             except Exception as excpt:
                 print(f'failed! Reason: {excpt}\n')
 
+
+    # Loads (or creates) all face detectors
+    print('  -> Loading / creating face detectors:')
+
+    for detector_name in glb.detector_names:
+        # Quick fix to avoid problems when len(glb.detector_names) == 1. In this
+        # case, FOR loops over each letter in the string instead of considering
+        # the entire string as one thing.
+        if detector_name == '':
+            continue
+
+        # First, try loading (opening) the model
+        model = load_built_model(detector_name + '.pickle', glb.SVD_DTC_DIR,
+                                   verbose=True)
+
+        # If successful, save the model in a dictionary
+        if model is not None:
+            glb.models[detector_name] = model
+
+        # Otherwise, build the model from scratch
+        else:
+            print(f'[build_detector] Building {detector_name}: ', end='')
+            try:
+                glb.models[detector_name] = build_detector(detector_name)
+                print('success!\n')
+
+            except Exception as excpt:
+                print(f'failed! Reason: {excpt}\n')
 
     print('\n -------- End of initialization process -------- \n')
 
@@ -137,9 +165,24 @@ async def finish_processes():
             continue
 
         # Saving face verifiers
-        save_face_verifier(verifier_name, glb.models[verifier_name],
-                           glb.SVD_VRF_DIR, overwrite=False, verbose=True)
+        if glb.models[verifier_name] is not None:
+            save_built_model(verifier_name, glb.models[verifier_name],
+                                glb.SVD_VRF_DIR, overwrite=False, verbose=True)
 
+    
+    # Saves (built) face detectors (if needed)
+    print('  -> Saving face detectors (if needed):')
+    for detector_name in glb.detector_names:
+        # Quick fix to avoid problems when len(glb.detector_names) == 1. In this
+        # case, FOR loops over each letter in the string instead of considering
+        # the entire string as one thing.
+        if detector_name == '':
+            continue
+
+        # Saving face detectors
+        if glb.models[detector_name] is not None:
+            save_built_model(detector_name, glb.models[detector_name],
+                                glb.SVD_DTC_DIR, overwrite=False, verbose=True)
 
     print('\n -------- Exitting program: goodbye! -------- \n')
 
