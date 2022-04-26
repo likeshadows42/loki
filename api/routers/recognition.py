@@ -385,8 +385,8 @@ async def clear_database():
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/search_database/", response_model=list[RepsInfoOutput])
-async def search_database(search_terms: list[str] = Query(None, description="Name tag to be searched (string)")):
+@fr_router.post("/utility/search_database/", response_model=List[RepsInfoOutput])
+async def search_database(search_terms: List[str] = Query(None, description="Name tag to be searched (string)")):
     """
     API endpoint: search_database()
 
@@ -432,7 +432,7 @@ async def search_database(search_terms: list[str] = Query(None, description="Nam
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/search_database_by_tag/", response_model=list[RepsInfoOutput])
+@fr_router.post("/utility/search_database_by_tag/", response_model=List[RepsInfoOutput])
 async def search_database_by_tag(search_tag : str  = Query(None, description="Name tag to be searched (string)"),
                                  ignore_case: bool = Query(False, description="Toggle between case sensitive and case insensitive search (boolean)")):
     """
@@ -563,6 +563,15 @@ async def get_attribute_from_database(
 
 # ------------------------------------------------------------------------------
 
+@fr_router.post("/utility/get_groups")
+async def get_groups():
+    attributes = glb.rep_db.get_attribute('group_no')
+    attributes = np.unique(attributes)  # only keep unique groups
+    attributes = sorted(attributes, key=lambda x: int(x))   # and sort them
+    return [str(x) for x in attributes]
+
+# ------------------------------------------------------------------------------
+
 @fr_router.post("/utility/update_record/", response_model=RepsInfoOutput)
 async def update_record(
     term          : str = Query(None, description="String Representation of valid unique identifier (including dashes '-') or a valid image name (string)"),
@@ -571,7 +580,7 @@ async def update_record(
     new_image_fp  : str = Query(None, description="Image full path (string)"),
     new_group_no  : int = Query(None, description="Group number (-1 means 'groupless' / no group) (integer)"),
     new_name_tag  : str = Query(None, description="New name tag (string)"),
-    new_region    : list[int] = Query(None, description="Face region in the original image (list of 4 integers)"),
+    new_region    : List[int] = Query(None, description="Face region in the original image (list of 4 integers)"),
     new_embeddings: dict = Body(None, description="Dictionary containing verifier name and embedding pairs (dictionary)")):
     """
     API endpoint: update_record()
@@ -650,12 +659,12 @@ async def update_record(
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/rename_records_by_tag/", response_model=list[RepsInfoOutput])
+@fr_router.post("/utility/rename_records_by_tag/", response_model=List[RepsInfoOutput])
 async def rename_records_by_tag(
     old_tag      : str  = Query(None, description="Old name tag (used in search) (string)"),
     new_tag      : str  = Query(None, description="New name tag (string)"),
     ignore_case  : bool = Query(False, description="Toggle between case sensitive and case insensitive search (boolean)"),
-    blank_strings: list[str] = Query(['""', "''", "--"], description="List of string that will be considered blank / null (list of strings)")):
+    blank_strings: List[str] = Query(['""', "''", "--"], description="List of string that will be considered blank / null (list of strings)")):
     """
     API endpoint: rename_records_by_tag()
 
@@ -1220,7 +1229,7 @@ async def create_database_from_zip(myfile: UploadFile,
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/verify/no_upload", response_model=list[list[VerificationMatch]])
+@fr_router.post("/verify/no_upload", response_model=List[List[VerificationMatch]])
 async def verify_no_upload(files: List[UploadFile],
                           params: VerificationParams = Depends()):
     """
@@ -1299,13 +1308,17 @@ async def verify_no_upload(files: List[UploadFile],
         # Gets all matches based on the similarity object and append the result
         # to the results list
         result = get_matches_from_similarity(similarity_obj, glb.rep_db)
+        #result_df = pd.DataFrame(result)
+        #print(result_df)
+        #verification_results = result_df.to_dict('records')
         verification_results.append(result)
+        # TODO: check for multiple file, not working at the moment!
 
     return verification_results
     
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/verify/with_upload", response_model=list[list[VerificationMatch]])
+@fr_router.post("/verify/with_upload", response_model=List[List[VerificationMatch]])
 async def verify_with_upload(files: List[UploadFile],
     params     : VerificationParams = Depends(),
     img_dir    : str                = Query(glb_img_dir, description="Full path to image directory (string)"),
@@ -1482,7 +1495,7 @@ async def verify_with_upload(files: List[UploadFile],
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/verify/existing_file", response_model=list[list[VerificationMatch]])
+@fr_router.post("/verify/existing_file", response_model=List[List[VerificationMatch]])
 async def verify_existing_file(files: List[str],
             params : VerificationParams = Depends(),
             img_dir: str = Query(glb.IMG_DIR, description="Full path to image directory (string)")):

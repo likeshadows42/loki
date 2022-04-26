@@ -19,7 +19,19 @@ from deepface.detectors.FaceDetector import build_model    as build_detector
 # ------------------------------------------------------------------------------
 
 app = FastAPI(name='Face Recognition API')
-app.include_router(fr_router , prefix="/fr" , tags=["Face Recognition"])
+
+origins = ['http://localhost:8080']
+
+app.add_middleware(
+    CORSMiddleware,
+     allow_origins=origins,
+     allow_credentials=True,
+     allow_methods=["*"],
+     allow_headers=["*"],
+)
+
+app.include_router(fr_router, prefix="/fr", tags=["Face Recognition"])
+
 
 # ______________________________________________________________________________
 #                                   APP METHODS
