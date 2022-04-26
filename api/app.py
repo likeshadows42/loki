@@ -14,6 +14,7 @@ from api.routers.recognition        import fr_router
 
 from deepface.DeepFace              import build_model    as build_verifier
 
+import sqlalchemy as sqla
 # ______________________________________________________________________________
 #                               APP INITIALIZATION
 # ------------------------------------------------------------------------------
@@ -64,6 +65,14 @@ async def initialization():
     glb.rep_db = load_representation_db(os.path.join(glb.RDB_DIR,
                                     'rep_database.pickle'), verbose=True)
     print('')
+    
+    if glb.DEBUG:
+        print('Load SQLite or initialise it')
+    if not os.path.isfile(glb.SQLITE_PATH):
+        glb.db_changed = True
+        if glb.DEBUG:
+            print('SQLite is not existing yet, initialising it')
+    glb.sqla_engine = sqla.create_engine('sqlite://'+glb.SQLITE_PATH)
     
 
     # Loads (or creates) all face verifiers
