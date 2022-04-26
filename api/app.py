@@ -6,6 +6,7 @@ import pickle
 import api.global_variables         as glb
 
 from fastapi                         import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from IFR.api                         import load_representation_db,\
                                         load_built_model, save_built_model
 from IFR.functions                   import create_dir
