@@ -2,14 +2,15 @@
 #                                   API CLASSES
 # ==============================================================================
 
-from re                 import compile, IGNORECASE
-from enum               import Enum
-from uuid               import UUID
-from typing             import List, Tuple, Optional
-from pydantic           import BaseModel
+from re                         import compile, IGNORECASE
+from enum                       import Enum
+from uuid                       import UUID
+from typing                     import List, Tuple, Optional
+from pydantic                   import BaseModel
 
-from sqlalchemy import Table, Column, String, Integer, PickleType, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy                 import Table, Column, String, Integer,\
+                                        PickleType, ForeignKey
+from sqlalchemy.orm             import relationship
 from sqlalchemy.ext.declarative import declarative_base
 
 # IMPLEMENTATION NOTE:
@@ -1205,13 +1206,11 @@ class RepDatabase():
 
         return reps_found
 
-
-# ------------------------------------------------------------------------------
-# SQLAlchemy tables definition
+# ______________________________________________________________________________
+#                         SQLALCHEMY TABLES DEFINITIONS
 # ------------------------------------------------------------------------------
 
 Base = declarative_base()
-
 
 class Person(Base):
     """
@@ -1222,41 +1221,44 @@ class Person(Base):
         name
         note
     """
-
+    # Table name
     __tablename__ = 'person'
 
-    id = Column(Integer, primary_key=True)
+    # Object attributes (as database columns)
+    id   = Column(Integer, primary_key=True)
     name = Column(String)
     note = Column(String)
 
-    reps = relationship("FaceRep",
-                        back_populates="person",
-                        cascade="all, delete, delete-orphan",  # important for deleting children
-                        )
-    # standard repr for the class
+    # Establishes connection to associated Face Representations
+    reps = relationship("FaceRep", back_populates="person",
+                        cascade="all, delete, delete-orphan") # important for deleting children
+    
+    # Standard repr for the class
     def __repr__(self):
-      return "(id=%s) - %s\n%s" % (self.id, self.name, self.note)
-
+        return "(id=%s) - %s\n%s" % (self.id, self.name, self.note)
 
 class FaceRep(Base):
     """
-        Initializes the object with appropriate attributes
+    Initializes the object with appropriate attributes
     """
-
+    # Table name
     __tablename__ = 'representation'
 
-    id = Column(Integer, primary_key=True)
-    person_id       = Column(Integer, ForeignKey('person.id'))
-    image_name_orig = Column(String(100))
-    image_name      = Column(String(100))
-    image_fp_orig   = Column(String(255))
-    image_fp        = Column(String(255))
-    group_no        = Column(Integer)
-    region          = Column(PickleType)
-    embeddings      = Column(PickleType)
+    # Object attributes (as database columns)
+    id              = Column(Integer, primary_key=True)
+    person_id       = Column(Integer, ForeignKey('person.id'), default=None)
+    image_name_orig = Column(String, nullable=False)
+    image_name      = Column(String, default=None) # because we are not using for now
+    image_fp_orig   = Column(String, nullable=False)
+    image_fp        = Column(String, default=None) # because we are not using for now
+    group_no        = Column(Integer, nullable=False)
+    region          = Column(PickleType, nullable=False)
+    embeddings      = Column(PickleType, nullable=False)
 
+    # Establishes connection to associated Person
     person = relationship("Person", back_populates="reps")
 
-    # standard repr for the class
+    # Standard repr for the class
     def __repr__(self):
-        return "(id=%s)\nimage name: %s\nimage path: %s\ngroup: %s" % (self.id, self.image_name, self.image_fp, self.group_no)
+        return "(id=%s)\nimage name: %s\nimage path: %s\ngroup: %s" % (self.id,
+                    self.image_name, self.image_fp, self.group_no)

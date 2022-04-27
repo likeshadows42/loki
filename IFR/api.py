@@ -17,13 +17,17 @@ from tqdm                    import tqdm
 from uuid                    import uuid4, UUID
 from zipfile                 import ZipFile
 from tempfile                import TemporaryDirectory
+from sqlalchemy              import create_engine, inspect
 from IFR.classes             import RepDatabase, Representation,\
                                     VerificationMatch
 from IFR.functions           import get_image_paths, do_face_detection,\
                                     calc_embeddings
+from sqlalchemy.orm          import sessionmaker
 from sklearn.cluster         import DBSCAN
 
-from shutil                  import move             as sh_move
+from shutil                          import move           as sh_move
+from deepface.DeepFace               import build_model    as build_verifier
+from deepface.detectors.FaceDetector import build_model    as build_detector
 
 
 # ______________________________________________________________________________
@@ -271,49 +275,215 @@ def load_built_model(model_name, save_dir, verbose=False):
     return model
 
 # ------------------------------------------------------------------------------
-        
-def load_representation_db(file_path, verbose=False):
+
+def init_load_detectors(detector_names, saved_models_dir, models={}):
     """
-    Loads a database (at 'file_path') containing representations of face images.
-    The database is assumed to be a pickled Python object. The database is
-    expected to be a list of Representation object (see help(Representation)
-    for more information). If verbose is set to True, the loading processing is
-    printed, with any errors being reported to the user.
+    Loads all face detectors with names 'detector_names' which are saved in the
+    'saved_models_dir' directory. This function is used at server start up to
+    avoid the need (if possible) to build models from scatch everytime.
+
+    If a saved face detector does not exist, this function tries to build it
+    from scratch.
+
+    Note: this function ensures that 'detector_names' is a list so it can handle
+    cases where 'detector_names' is just a single string.
 
     Inputs:
-        1. file_path - string with file's full path
-        2. verbose - flag indicating if the function should print information
-            about the loading process and errors ([verbose=False])
+        1. detector_names   - names of saved face detectors [string or list of
+                               strings].
+
+        2. saved_models_dir - full path of the directory containing the saved
+                               face detector models [string].
+
+        3. models           - contains model names (key) and built model objects
+                               (pair). This is mainly used if one dictionary is
+                               used to store different types of models, such as
+                               face detectors and verifiers for example
+                               [dictionary, default={}].
 
     Output:
-        1. database object (list of Representation objects)
-    
+        1. dictionary containing model names (key) and built model objects
+            (pair) [dictionary].
+
     Signature:
-        db = load_representation_db(file_path, verbose=False)
+        models = init_load_detectors(detector_names, saved_models_dir,
+                                     models={})
     """
-    # Prints message
-    if verbose:
-        print('Opening database: ', end='')
+    # Ensures that 'detector_names' is a list
+    if not isinstance(detector_names, list):
+        detector_names = [detector_names]
 
-    # Checks if path provided points to a valid database
-    if os.path.isfile(file_path):
-        # Try to open pickled database (list of objects)
-        try:
-            db = pickle.load(open(file_path, 'rb'))
-            if verbose:
-                print('success!')
-        
-        except (OSError, IOError) as e:
-            if verbose:
-                print(f'failed! Reason: {e}')
-            db = RepDatabase()
+    # Loops through each detector name in 'detector_names'
+    for detector_name in detector_names:
+        # First, try loading (opening) the model
+        model = load_built_model(detector_name + '.pickle', saved_models_dir,
+                                   verbose=True)
 
-    # If path does not point to a file, open an 'empty' database
-    else:
-        print(f'failed! Reason: database does not exist.')
-        db = RepDatabase()
+        # If successful, save the model in a dictionary
+        if model is not None:
+            models[detector_name] = model
 
-    return db
+        # Otherwise, build the model from scratch
+        else:
+            print(f'[build_detector] Building {detector_name}: ', end='')
+            try:
+                models[detector_name] = build_detector(detector_name)
+                print('success!\n')
+
+            except Exception as excpt:
+                print(f'failed! Reason: {excpt}\n')
+
+    return models
+
+# ------------------------------------------------------------------------------
+
+def init_load_verifiers(verifier_names, saved_models_dir, models={}):
+    """
+    Loads all face verifiers with names 'verifier_names' which are saved in the
+    'saved_models_dir' directory. This function is used at server start up to
+    avoid the need (if possible) to build models from scatch everytime.
+
+    If a saved face verifier does not exist, this function tries to build it
+    from scratch.
+
+    Note: this function ensures that 'verifier_names' is a list so it can handle
+    cases where 'verifier_names' is just a single string.
+
+    Inputs:
+        1. verifier_names   - names of saved face verifiers [string or list of
+                               strings].
+
+        2. saved_models_dir - full path of the directory containing the saved
+                               face verifier models [string].
+
+        3. models           - contains model names (key) and built model objects
+                               (pair). This is mainly used if one dictionary is
+                               used to store different types of models, such as
+                               face detectors and verifiers for example
+                               [dictionary, default={}].
+
+    Output:
+        1. dictionary containing model names (key) and built model objects
+            (pair) [dictionary].
+
+    Signature:
+        models = init_load_verifiers(verifier_names, saved_models_dir,
+                                     models={})
+    """
+    # Ensures that 'verifier_names' is a list
+    if not isinstance(verifier_names, list):
+        verifier_names = [verifier_names]
+
+    # Loops through each verifier name in 'verifier_names'
+    for verifier_name in verifier_names:
+        # First, try loading (opening) the model
+        model = load_built_model(verifier_name + '.pickle', saved_models_dir,
+                                   verbose=True)
+
+        # If successful, save the model in a dictionary
+        if model is not None:
+            models[verifier_name] = model
+
+        # Otherwise, build the model from scratch
+        else:
+            print(f'[build_verifier] Building {verifier_name}: ', end='')
+            try:
+                models[verifier_name] = build_verifier(verifier_name)
+                print('success!\n')
+
+            except Exception as excpt:
+                print(f'failed! Reason: {excpt}\n')
+
+    return models
+
+# ------------------------------------------------------------------------------
+
+def save_built_detectors(detector_names, saved_models_dir, overwrite=False,
+                         verbose=False):
+    """
+    Saves built face detectors with names in 'detector_names' at the directory
+    'saved_models_dir'. If a face detector with a given name already exists,
+    this function does not save (skips) it UNLESS overwrite is True, in which
+    case it overwrites it with the new detector.
+
+    Inputs:
+        1. verifier_names   - names of saved face detectors [string or list of
+                               strings].
+
+        2. saved_models_dir - full path of the directory containing the saved
+                               face detector models [string].
+
+        3. overwrite        - toggles between overwriting existing face detector
+                               models [boolean, default=False].
+
+        4. verbose          - toggles if the function should print useful
+                               information to the console [boolean,
+                               default=False].
+
+    Output:
+        1. None
+
+    Signature:
+        save_built_detectors(detector_names, saved_models_dir, overwrite=False,
+                             verbose=False)
+    """
+    # Ensures that 'verifier_names' is a list
+    if not isinstance(detector_names, list):
+        detector_names = [detector_names]
+
+    # Loops through each verifier name in 'verifier_names'
+    for detector_name in detector_names:
+        # Saving face detectors
+        if glb.models[detector_name] is not None:
+            save_built_model(detector_name, glb.models[detector_name],
+                                saved_models_dir, overwrite=overwrite,
+                                verbose=verbose)
+
+# ------------------------------------------------------------------------------
+
+def save_built_verifiers(verifier_names, saved_models_dir, overwrite=False,
+                         verbose=False):
+    """
+    Saves built face verifiers with names in 'verifier_names' at the directory
+    'saved_models_dir'. If a face verifier with a given name already exists,
+    this function does not save (skips) it UNLESS overwrite is True, in which
+    case it overwrites it with the new verifier.
+
+    Inputs:
+        1. verifier_names   - names of saved face verifiers [string or list of
+                               strings].
+
+        2. saved_models_dir - full path of the directory containing the saved
+                               face verifier models [string].
+
+        3. overwrite        - toggles between overwriting existing face verifier
+                               models [boolean, default=False].
+
+        4. verbose          - toggles if the function should print useful
+                               information to the console [boolean,
+                               default=False].
+
+    Output:
+        1. None
+
+    Signature:
+        save_built_verifiers(verifier_names, saved_models_dir, overwrite=False,
+                             verbose=False)
+    """
+    # Ensures that 'verifier_names' is a list
+    if not isinstance(verifier_names, list):
+        verifier_names = [verifier_names]
+
+    # Loops through each verifier name in 'verifier_names'
+    for verifier_name in verifier_names:
+        # Saving face verifiers
+        if glb.models[verifier_name] is not None:
+            save_built_model(verifier_name, glb.models[verifier_name],
+                                saved_models_dir, overwrite=overwrite,
+                                verbose=verbose)
+
+    return None
+
 
 # ______________________________________________________________________________
 #                   REPRESENTATION DATABASE RELATED FUNCTIONS
@@ -741,4 +911,181 @@ def get_matches_from_similarity(similarity_obj, db):
     return matches
 
 # ------------------------------------------------------------------------------
+
+
+
+
+# ______________________________________________________________________________
+#                           DATABASE RELATED FUNCTIONS 
+# ------------------------------------------------------------------------------
+
+def database_exists(db_full_path):
+    """
+    Checks if a database file exists in the path provided 'db_full_path',
+    returning True if so and False otherwise. Remember to include the file's
+    extension in the full path along with its name.
+
+    Input:
+        1. db_full_path - full path to the database file [string].
+
+    Output:
+        1. boolean indicating if the database file exists [boolean].
+        
+    Signature:
+        ret = database_exists(db_full_path)
+    """
+    return True if os.path.isfile(db_full_path) else False
+
+# ------------------------------------------------------------------------------
+
+def database_is_empty(engine):
+    """
+    Checks if the database is empty, returning True if so and False otherwise.
+    This function handles exceptions (e.g. if engine == None), returning False
+    in these cases (as they are not a database).
+
+    Input:
+        1. engine - engine object (see help(load_database) for more information
+                    on what this object is) [engine object].
+
+    Output:
+        1. boolean indicating if the database provided is empty or not
+            [boolean]. 
+
+    Signature:
+        ret = database_is_empty(engine)
+    """
+    try:
+        ret = inspect(engine).get_table_names() == []
+    except:
+        ret = False
+
+    return ret
+
+# ------------------------------------------------------------------------------
+
+def all_tables_exist(engine, check_names):
+    """
+    Checks if the database accessed by the engine object 'engine' contains all
+    table names provided in the list 'check_names', returning True if that is
+    the case and False otherwise.
+
+    Note: this function ensures that 'check_names' is a list so it can handle
+    cases where 'check_names' is just a single string.
+
+    Inputs:
+        1. engine      - engine object (see help(load_database) for more
+                            information on what this object is) [engine object].
+
+        2. check_names - table names [string or list of strings].
+
+    Output:
+        1. boolean indicating if all tables exist in the database provided
+            [boolean].
+        
+    Signature:
+        ret = all_tables_exist(engine, check_names)
+    """
+    # Ensures 'check_names' is a list
+    if not isinstance(check_names, list):
+        check_names = [check_names]
+
+    # Initializes the return value 'ret' as True, then loops over each name in
+    # 'check_names' list
+    ret = True
+    for name in check_names:
+        ret = ret and engine.reflection.Inspector.has_table(name)
+
+    return ret
+
+# ------------------------------------------------------------------------------
+
+def load_database(db_full_path, create_new=True, force_create=False):
+    """
+    Loads a SQLite database specified by its full path 'db_full_path'.
+
+    Inputs:
+        1. db_full_path - full path to the database file [string].
+
+        2. create_new   - toggles if a new database should be created IF one
+                            could not be loaded from the full path provided
+                            [boolean, default=True].
+
+        3. force_create - toggles if a new database should be created REGARDLESS
+                            of a database existing in the full path provided
+                            (this effectively disregards 'db_full_path')
+                            [boolean, default=False].
+
+    Output:
+        1. returns an engine object. This object acts as a central source of
+            connections to the database, providing both a factory as well as a
+            holding space called a connection pool for the database connections
+            [engine object].
+
+    Signature:
+        engine = load_database(db_full_path, create_new=True,
+                                force_create=False)
+    """
+    # Obtains the database's name from its full path
+    db_name = db_full_path.split('/')[-1]
+
+    # If database exists, opens it
+    if   database_exists(db_full_path) and not force_create:
+        # Creates the engine
+        engine = create_engine("sqlite:///" + db_name)
+
+        # Binds the metadata to the engine
+        metadata_obj = glb.Base.metadata.create_all(engine) # or MetaData()?
+        metadata_obj.reflect(bind=engine)
+
+    # If 'create_new' or 'force_create' are True, creates a new database
+    elif create_new or force_create:
+        # Creates the engine
+        engine = create_engine("sqlite:///" + db_name)
+
+        # Is this required?
+        metadata_obj = glb.Base.metadata.create_all(engine)
+
+    # Otherwise, returns a None object with a warning
+    else:
+        print('[load_database] WARNING: Database loading failed',
+              '(and a new was NOT created).')
+        engine = None
+
+    return engine
+
+# ------------------------------------------------------------------------------
+
+def start_session(engine):
+    """
+    Creates a Session object from the database connected by the engine object
+    'engine'.
+    
+    The primary usage interface for persistence operations is the Session
+    object, from now on referred to as simply 'session'. The session establishes
+    all conversations with the database and represents a “holding zone” for all
+    the objects which have been loaded or associated with it during its
+    lifespan.
+    
+    It provides the interface where SELECT and other queries are made that will
+    return and modify ORM-mapped objects. The ORM objects themselves are
+    maintained inside the session, inside a structure called the identity map -
+    a data structure that maintains unique copies of each object, where “unique”
+    means “only one object with a particular primary key”.
+
+    Input:
+        1. engine - engine object (see help(load_database) for more
+                      information on what this object is) [engine object].
+
+    Output:
+        1. the session as a Session object [session object].
+
+    Signature:
+        session = start_session(engine)
+    """
+    Session = sessionmaker(bind=engine)
+    return Session()
+
+# ------------------------------------------------------------------------------
+
 
