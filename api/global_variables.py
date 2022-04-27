@@ -38,6 +38,6 @@ db_changed  = False          # indicates whether database has been modified (and
 
 # SQLAlchemy global variables
 
-SQLITE_DB = 'loki.sqlite'    # SQLite storage name
-SQLITE_PATH = os.path.join(RDB_DIR, SQLITE_DB)
-sqla_engine = None           # SQLAlchemy engine object
+SQLITE_DB    = 'loki.sqlite'                    # SQLite database file name
+SQLITE_DB_FP = os.path.join(RDB_DIR, SQLITE_DB) # full path of SQLite database
+sqla_engine  = None                             # SQLAlchemy engine object
