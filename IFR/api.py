@@ -1026,8 +1026,7 @@ def load_database(db_full_path, create_new=True, force_create=False):
         engine = load_database(db_full_path, create_new=True,
                                 force_create=False)
     """
-    # Obtains the database's name from its full path
-    db_name = db_full_path.split('/')[-1]
+
     print(db_full_path)
     engine = create_engine("sqlite:///" + db_full_path)
     glb.sqla_base = sqla.ext.declarative.declarative_base()
@@ -1042,6 +1041,8 @@ def load_database(db_full_path, create_new=True, force_create=False):
     elif create_new or force_create:
         # create the SQLAlchemy tables' definitions
         glb.sqla_base.metadata.create_all(engine)
+        Session = sessionmaker(bind=engine)
+        glb.sqla_session = Session()
 
     # Otherwise, returns a None object with a warning
     else:
