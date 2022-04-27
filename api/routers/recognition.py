@@ -15,7 +15,7 @@ from pydoc                   import describe
 from pandas                  import describe_option
 from typing                  import List, Optional
 from fastapi                 import APIRouter, UploadFile, Depends, Query, Body
-from IFR.api                 import load_representation_db, load_built_model,\
+from IFR.api                 import load_built_model,\
                             create_reps_from_dir, get_embeddings_as_array,\
                             fix_uid_of_renamed_imgs, process_image_zip_file,\
                             get_matches_from_similarity, show_cluster_results,\
