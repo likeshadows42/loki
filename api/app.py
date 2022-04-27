@@ -8,7 +8,8 @@ import api.global_variables   as glb
 from fastapi                  import FastAPI
 from IFR.api                  import load_database, save_built_model,\
                                     init_load_detectors, init_load_verifiers,\
-                                    save_built_detectors, save_built_verifiers
+                                    save_built_detectors, save_built_verifiers,\
+                                    start_session
 from IFR.functions            import ensure_dirs_exist
 from api.routers.recognition  import fr_router
 from fastapi.middleware.cors  import CORSMiddleware
@@ -47,8 +48,13 @@ async def initialization():
     print('')
 
     # Tries to load a database if it exists. If not, create a new one.
-    print('  -> Loading / creating database:')
+    print('  -> Loading / creating database (engine):')
     glb.sqla_engine = load_database(glb.SQLITE_DB_FP)
+    print('')
+
+    # Tries to load a session if it exists. If not, create a new one.
+    print('  -> Loading / creating session:')
+    glb.sqla_session = start_session(glb.sqla_engine)
     print('')
     
     # Loads (or creates) all face verifiers
