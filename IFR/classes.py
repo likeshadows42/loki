@@ -2,14 +2,15 @@
 #                                   API CLASSES
 # ==============================================================================
 
-from re                 import compile, IGNORECASE
-from enum               import Enum
-from uuid               import UUID
-from typing             import List, Tuple, Optional
-from pydantic           import BaseModel
+from re                         import compile, IGNORECASE
+from enum                       import Enum
+from uuid                       import UUID
+from typing                     import List, Tuple, Optional
+from pydantic                   import BaseModel
 
-from sqlalchemy import Table, Column, String, Integer, PickleType, ForeignKey
-from sqlalchemy.orm import relationship
+from sqlalchemy                 import Table, Column, String, Integer,\
+                                        PickleType, ForeignKey
+from sqlalchemy.orm             import relationship
 from sqlalchemy.ext.declarative import declarative_base
 
 # IMPLEMENTATION NOTE:
@@ -1245,9 +1246,9 @@ class FaceRep(Base):
 
     # Object attributes (as database columns)
     id              = Column(Integer, primary_key=True)
-    person_id       = Column(Integer, ForeignKey('person.id'))
-    image_name_orig = Column(String(100))
-    image_name      = Column(String(100))
+    person_id       = Column(Integer, ForeignKey('person.id'), default=None)
+    image_name_orig = Column(String(255))
+    image_name      = Column(String(255))
     image_fp_orig   = Column(String(255))
     image_fp        = Column(String(255))
     group_no        = Column(Integer)
