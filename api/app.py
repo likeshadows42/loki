@@ -13,7 +13,8 @@ from IFR.api                  import load_database, save_built_model,\
 from IFR.functions            import ensure_dirs_exist
 from api.routers.recognition  import fr_router
 
-import sqlalchemy as sqla
+from sqlalchemy.orm           import sessionmaker
+from IFR.classes              import FaceRep     #temporary for testing
 # ______________________________________________________________________________
 #                               APP INITIALIZATION
 # ------------------------------------------------------------------------------
@@ -49,10 +50,21 @@ async def initialization():
 
     # Tries to load a database if it exists. If not, create a new one.
     print('  -> Loading / creating database:')
-    if not load_database(glb.SQLITE_DB_FP):
-        raise RuntimeError("Error creation SQlite, stop!")
+    glb.sqla_engine = load_database(glb.SQLITE_DB_FP)
     print('')
-    
+
+    Session = sessionmaker(bind=glb.sqla_engine)
+    glb.sqla_session = Session()
+
+    ### TEST SECTION for creating SQLite table definition and data
+    ### TO BE REMOVED
+
+    FaceRepTest1 = FaceRep(image_name_orig='original_name', image_fp_orig='original_path',  group_no='-1', region=[[0,1,2,3],[4,5,6,7],[8,9,10,11],[12,13,14,15]], embeddings=[1,2,3])
+    glb.sqla_session.add(FaceRepTest1)
+    glb.sqla_session.commit()
+
+    ### TEST SECTION END
+
     # Loads (or creates) all face verifiers
     print('  -> Loading / creating face verifiers:')
     glb.models = init_load_verifiers(glb.verifier_names, glb.SVD_VRF_DIR)

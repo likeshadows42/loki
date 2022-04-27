@@ -19,10 +19,9 @@ from zipfile                 import ZipFile
 from tempfile                import TemporaryDirectory
 from sqlalchemy              import create_engine, inspect, MetaData
 from IFR.classes             import RepDatabase, Representation,\
-                                    VerificationMatch
+                                    VerificationMatch, Base
 from IFR.functions           import get_image_paths, do_face_detection,\
                                     calc_embeddings
-from sqlalchemy.orm          import sessionmaker
 from sklearn.cluster         import DBSCAN
 
 from shutil                          import move           as sh_move
@@ -1000,7 +999,7 @@ def all_tables_exist(engine, check_names):
 
 # ------------------------------------------------------------------------------
 
-def load_database(db_full_path, create_new=True, force_create=False):
+def load_database(relative_path, create_new=True, force_create=False):
     """
     Loads a SQLite database specified by its full path 'db_full_path'.
 
@@ -1026,30 +1025,24 @@ def load_database(db_full_path, create_new=True, force_create=False):
         engine = load_database(db_full_path, create_new=True,
                                 force_create=False)
     """
-
-    print(db_full_path)
-    glb.sqla_engine = create_engine("sqlite:///" + db_full_path)
-    glb.sqla_base = sqla.ext.declarative.declarative_base()
+    db_full_path = os.path.join(glb.API_DIR, relative_path)
+    engine = create_engine("sqlite:///" + relative_path)
 
     # If database exists, opens it
     if   database_exists(db_full_path) and not force_create:
         # Binds the metadata to the engine
         metadata_obj = MetaData()
-        metadata_obj.reflect(bind=glb.sqla_engine)
+        metadata_obj.reflect(bind=engine)
         return True
 
     # If 'create_new' or 'force_create' are True, creates a new database
     elif create_new or force_create:
         # create the SQLAlchemy tables' definitions
-        glb.sqla_base.metadata.create_all(glb.sqla_engine)
-        Session = sessionmaker(bind=glb.sqla_engine)
-        glb.sqla_session = Session()
-        return True
+        Base.metadata.create_all(engine)
+    
+    # TODO: add TRY - EXPECT for dealing with error
 
-    # Otherwise, returns a None object with a warning
-    print('[load_database] WARNING: Database loading failed',
-            '(and a new was NOT created).')
-    return False
+    return engine
 
 # ------------------------------------------------------------------------------
 
