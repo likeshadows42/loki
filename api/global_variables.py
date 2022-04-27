@@ -23,12 +23,12 @@ directory_list_names = ['api root', 'data dir', 'img dir', 'rep. database',
 
 # Tuple with all face detector and verifier names
 # detector_names = ('opencv', 'ssd', 'mtcnn', 'retinaface')
-detector_names = ('retinaface', '') # to avoid long startups during developing
+detector_names = ('retinaface') # to avoid long startups during developing
                                     # (dont forget to include '' to avoid a bug)
 
 # verifier_names = ('VGG-Face', 'Facenet', 'Facenet512', 'OpenFace',
 #                   'DeepFace', 'DeepID' , 'ArcFace')
-verifier_names = ('ArcFace', '') # to avoid long startups during developing
+verifier_names = ('ArcFace') # to avoid long startups during developing
                                  # (dont forget to include '' to avoid a bug)
 
 # Other variables
@@ -39,6 +39,7 @@ db_changed  = False          # indicates whether database has been modified (and
 # SQLAlchemy global variables
 
 SQLITE_DB    = 'loki.sqlite'                    # SQLite database file name
-SQLITE_DB_FP = os.path.join(RDB_DIR, SQLITE_DB) # full path of SQLite database
+SQLITE_DB_FP = os.path.join('api/data/database', SQLITE_DB) # full path of SQLite database
 sqla_engine  = None                             # SQLAlchemy engine object
-sqla_session = None                             # SQLAlchemy session object
+sqla_base    = None                             # Base class for SQLAlchemy tables
+sqla_session = None                             # SQLAlchemy global session object

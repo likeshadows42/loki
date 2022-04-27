@@ -11,13 +11,13 @@ import numpy                 as np
 import matplotlib.image      as mpimg
 import matplotlib.pyplot     as plt
 import api.global_variables  as glb
-
+import sqlalchemy            as sqla
 from io                      import BytesIO
 from tqdm                    import tqdm
 from uuid                    import uuid4, UUID
 from zipfile                 import ZipFile
 from tempfile                import TemporaryDirectory
-from sqlalchemy              import create_engine, inspect
+from sqlalchemy              import create_engine, inspect, MetaData
 from IFR.classes             import RepDatabase, Representation,\
                                     VerificationMatch
 from IFR.functions           import get_image_paths, do_face_detection,\
@@ -1026,33 +1026,30 @@ def load_database(db_full_path, create_new=True, force_create=False):
         engine = load_database(db_full_path, create_new=True,
                                 force_create=False)
     """
-    # Obtains the database's name from its full path
-    db_name = db_full_path.split('/')[-1]
+
+    print(db_full_path)
+    glb.sqla_engine = create_engine("sqlite:///" + db_full_path)
+    glb.sqla_base = sqla.ext.declarative.declarative_base()
 
     # If database exists, opens it
     if   database_exists(db_full_path) and not force_create:
-        # Creates the engine
-        engine = create_engine("sqlite:///" + db_name)
-
         # Binds the metadata to the engine
-        metadata_obj = glb.Base.metadata.create_all(engine) # or MetaData()?
-        metadata_obj.reflect(bind=engine)
+        metadata_obj = MetaData()
+        metadata_obj.reflect(bind=glb.sqla_engine)
+        return True
 
     # If 'create_new' or 'force_create' are True, creates a new database
     elif create_new or force_create:
-        # Creates the engine
-        engine = create_engine("sqlite:///" + db_name)
-
-        # Is this required?
-        metadata_obj = glb.Base.metadata.create_all(engine)
+        # create the SQLAlchemy tables' definitions
+        glb.sqla_base.metadata.create_all(glb.sqla_engine)
+        Session = sessionmaker(bind=glb.sqla_engine)
+        glb.sqla_session = Session()
+        return True
 
     # Otherwise, returns a None object with a warning
-    else:
-        print('[load_database] WARNING: Database loading failed',
-              '(and a new was NOT created).')
-        engine = None
-
-    return engine
+    print('[load_database] WARNING: Database loading failed',
+            '(and a new was NOT created).')
+    return False
 
 # ------------------------------------------------------------------------------
 
