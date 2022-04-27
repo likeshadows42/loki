@@ -1247,13 +1247,13 @@ class FaceRep(Base):
     # Object attributes (as database columns)
     id              = Column(Integer, primary_key=True)
     person_id       = Column(Integer, ForeignKey('person.id'), default=None)
-    image_name_orig = Column(String(255))
-    image_name      = Column(String(255))
-    image_fp_orig   = Column(String(255))
-    image_fp        = Column(String(255))
-    group_no        = Column(Integer)
-    region          = Column(PickleType)
-    embeddings      = Column(PickleType)
+    image_name_orig = Column(String, nullable=False)
+    image_name      = Column(String, default=None) # because we are not using for now
+    image_fp_orig   = Column(String, nullable=False)
+    image_fp        = Column(String, default=None) # because we are not using for now
+    group_no        = Column(Integer, nullable=False)
+    region          = Column(PickleType, nullable=False)
+    embeddings      = Column(PickleType, nullable=False)
 
     # Establishes connection to associated Person
     person = relationship("Person", back_populates="reps")
