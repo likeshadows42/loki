@@ -96,15 +96,19 @@ async def inspect_globals(print2console: bool = Query(True, description="Toggles
     # Prints all other global variables
     if print2console:
         print("  > Other variables:")
-        print("Models".ljust(17)           + ':', glb.models)
-        print("Rep. database".ljust(17)    + ':', glb.rep_db)
-        print("Database changed".ljust(17) + ':', glb.db_changed)
+        print("Models".ljust(21)                + ':', glb.models)
+        print("Rep. database".ljust(21)         + ':', glb.rep_db)
+        print("Database changed".ljust(21)      + ':', glb.db_changed)
+        print("SQLite database:".ljust(21)      + ':', glb.SQLITE_DB)
+        print("SQLite database path:".ljust(21) + ':', glb.SQLITE_DB_FP)
+        print("SQL alchemy engine:".ljust(21)   + ':', glb.sqla_engine)
 
     return {'dirs':directories, 'dir_names':dir_names,
             'detector_names':glb.detector_names,
             'verifier_names':glb.verifier_names,
-            'model_names':list(glb.models.keys()),
-            'rep_db':glb.rep_db, 'db_changed':glb.db_changed}
+            'model_names':list(glb.models.keys()), 'rep_db':glb.rep_db,
+            'db_changed':glb.db_changed, 'sqlite_db_name':glb.SQLITE_DB,
+            'sqlite_db_fp':glb.SQLITE_DB_FP, 'sqla_engine':glb.sqla_engine}
 
 # ------------------------------------------------------------------------------
 
