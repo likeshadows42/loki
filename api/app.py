@@ -49,7 +49,8 @@ async def initialization():
 
     # Tries to load a database if it exists. If not, create a new one.
     print('  -> Loading / creating database:')
-    glb.sqla_engine = load_database(glb.SQLITE_DB_FP)
+    if not load_database(glb.SQLITE_DB_FP):
+        raise RuntimeError("Error creation SQlite, stop!")
     print('')
     
     # Loads (or creates) all face verifiers
