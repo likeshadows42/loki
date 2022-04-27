@@ -89,6 +89,40 @@ def create_dir(dir_path):
 
 # ------------------------------------------------------------------------------
 
+def ensure_dirs_exist(directory_list, verbose=False):
+    """
+    Ensures that all directories in 'directory_list' exist. Note that
+    'directory_list' should contain the full paths of each directory. This
+    function tries to create each directory that does not exist.
+
+    Inputs:
+        1. directory_list - directory full paths [string or list of strings].
+
+        2. verbose        - toggles if the function should output useful
+                            information to the console [boolean, default=False].
+
+    Output:
+        1. None
+
+    Signature:
+        ensure_dirs_exist(directory_list, verbose=False)
+    """
+    # Loops through each directory's full path in 'directory_list'
+    for dir_fp in directory_list:
+        if verbose:
+            print(f'[ensure_dirs_exist] Creating {dir_fp} directory: ', end='')
+    
+        if create_dir(dir_fp):
+            if verbose:
+                print('directory exists. Continuing...')
+        else:
+            if verbose:
+                print('success.')
+
+    return None
+
+# ------------------------------------------------------------------------------
+
 def string_is_valid_uuid4(uuid_string):
     """
     Checks if the string provided 'uuid_string' is a valid uuid4 or not.
