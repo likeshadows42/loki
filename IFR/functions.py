@@ -313,17 +313,17 @@ def do_face_detection(img_path, detector_models={}, detector_name='retinaface',
         face_detector = detector_models[detector_name]
 
         if verbose:
-            print('success!')
+            print(f'success! (img: {img_path})')
     
     except Exception as excpt:
         if verbose:
-            print(f'failed! (reason: {excpt})')
+            print(f'failed! (reason: {excpt}) (img: {img_path})')
             print('[do_face_detection] Building face detector: ', end='')
 
         face_detector = build_detector(detector_name)
 
         if verbose:
-            print('success!')
+            print(f'success! (img: {img_path})')
 
     # Tries to detect faces in the image provided and align (if required):
     try:
@@ -335,15 +335,16 @@ def do_face_detection(img_path, detector_models={}, detector_name='retinaface',
                                 face_detector=face_detector)
     except Exception as excpt:
         if verbose:
-            print(f'failed! (reason: {excpt})')
+            print(f'failed! (reason: {excpt}) (img: {img_path})')
 
     # Checks if the face detector was able to find any face if verbose is True
     if verbose:
         if len(output['faces']) == 0:
             print(f'failed! (reason: No face found.',
-                   'Ensure the image provided has at least 1 face.)')
+                   'Ensure the image provided has at least 1 face.)',
+                  f'(img: {img_path})')
         else:
-            print('success!')
+            print(f'success! (img: {img_path})')
 
     return output
 
