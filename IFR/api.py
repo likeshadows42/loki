@@ -20,16 +20,16 @@ from zipfile                 import ZipFile
 from tempfile                import TemporaryDirectory
 from sqlalchemy              import create_engine, inspect, MetaData
 from IFR.classes             import RepDatabase, Representation,\
-                                    VerificationMatch
+                                    VerificationMatch, Base
 from IFR.functions           import get_image_paths, do_face_detection,\
                                     calc_embeddings
-from sqlalchemy.orm          import sessionmaker
 from sklearn.cluster         import DBSCAN
 
 from shutil                          import move           as sh_move
 from deepface.DeepFace               import build_model    as build_verifier
 from deepface.detectors.FaceDetector import build_model    as build_detector
-
+from sqlalchemy.orm           import sessionmaker
+from IFR.classes              import FaceRep     #temporary for testing
 
 # ______________________________________________________________________________
 #                       UTILITY & GENERAL USE FUNCTIONS
@@ -747,6 +747,7 @@ def create_reps_from_dir(img_dir, detector_models, verifier_models,
         rep_list.append(create_new_rep(img_path, img_path, region, embeddings,
                                         tag=tag, uid=uid))
 
+
     # Clusters Representations together using the DBSCAN algorithm
     if auto_grouping:
         # Clusters embeddings using DBSCAN algorithm
@@ -761,6 +762,12 @@ def create_reps_from_dir(img_dir, detector_models, verifier_models,
                 continue
             else:
                 rep_list[i].group_no = lbl
+
+    for rep in rep_list:
+        FaceRepNew = FaceRep(image_name_orig=rep.orig_name, image_fp_orig=rep.orig_fp,  group_no=int(rep.group_no), region=rep.region, embeddings=rep.embeddings)
+        glb.sqla_session.add(FaceRepNew)
+
+    glb.sqla_session.commit()
 
     # Return representation database
     return RepDatabase(*rep_list)
@@ -1001,6 +1008,58 @@ def all_tables_exist(engine, check_names):
 
 # ------------------------------------------------------------------------------
 
+def load_database(relative_path, create_new=True, force_create=False):
+    """
+    Loads a SQLite database specified by its full path 'db_full_path'.
+
+    Inputs:
+        1. relative_path - full path to the database file [string].
+
+        2. create_new    - toggles if a new database should be created IF one
+                             could not be loaded from the full path provided
+                             [boolean, default=True].
+
+        3. force_create  - toggles if a new database should be created REGARDLESS
+                             of a database existing in the full path provided
+                             (this effectively disregards 'db_full_path')
+                             [boolean, default=False].
+
+    Output:
+        1. returns a engine object (if successful) or a None object
+            [engine object].
+
+        2. returns a base object (if successful) or a None object [base object].
+
+    Signature:
+        engine, base = load_database(db_full_path, create_new=True,
+                                     force_create=False)
+    """
+    db_full_path = os.path.join(glb.API_DIR   , relative_path)
+    engine       = create_engine("sqlite:///" + relative_path)
+
+    # If database exists, opens it
+    if   database_exists(db_full_path) and not force_create:
+        # Binds the metadata to the engine
+        metadata_obj = MetaData()
+        metadata_obj.reflect(bind=engine)
+
+    # If 'create_new' or 'force_create' are True, creates a new database
+    elif create_new or force_create:
+        # create the SQLAlchemy tables' definitions
+        Base.metadata.create_all(engine)
+
+    else:
+        # Otherwise, returns a None object with a warning
+        print('[load_database] WARNING: Database loading failed',
+              '(and a new was NOT created).')
+        engine = None
+    
+    # TODO: add TRY - EXPECT for dealing with error
+
+    return engine
+
+# ------------------------------------------------------------------------------
+
 def start_session(engine):
     """
     Creates a Session object from the database connected by the engine object
@@ -1036,62 +1095,6 @@ def start_session(engine):
         session = None
 
     return session
-
-# ------------------------------------------------------------------------------
-
-def load_database(db_full_path, create_new=True, force_create=False):
-    """
-    Loads a SQLite database specified by its full path 'db_full_path'.
-
-    Inputs:
-        1. db_full_path - full path to the database file [string].
-
-        2. create_new   - toggles if a new database should be created IF one
-                            could not be loaded from the full path provided
-                            [boolean, default=True].
-
-        3. force_create - toggles if a new database should be created REGARDLESS
-                            of a database existing in the full path provided
-                            (this effectively disregards 'db_full_path')
-                            [boolean, default=False].
-
-    Output:
-        1. returns a engine object (if successful) or a None object
-            [engine object].
-
-        2. returns a base object (if successful) or a None object [base object].
-
-    Signature:
-        engine, base = load_database(db_full_path, create_new=True,
-                                     force_create=False)
-    """
-    # Creates engine and base
-    sqla_engine = create_engine("sqlite:///" + db_full_path)
-    sqla_base   = sqla.ext.declarative.declarative_base()
-
-    # If database exists, opens it
-    if   database_exists(db_full_path) and not force_create:
-        # Binds the metadata to the engine
-        metadata_obj = MetaData()
-        metadata_obj.reflect(bind=sqla_engine)
-
-        return (sqla_engine, sqla_base)
-
-    # If 'create_new' or 'force_create' are True, creates a new database
-    elif create_new or force_create:
-        # create the SQLAlchemy tables' definitions
-        sqla_base.metadata.create_all(sqla_engine)
-
-        return (sqla_engine, sqla_base)
-
-    else:
-        # Otherwise, returns a None object with a warning
-        print('[load_database] WARNING: Database loading failed',
-              '(and a new was NOT created).')
-        sqla_engine = None
-        sqla_base   = None
-
-    return (sqla_engine, sqla_base)
 
 # ------------------------------------------------------------------------------
 

@@ -14,7 +14,7 @@ from IFR.api                  import load_database, save_built_model,\
 from IFR.functions            import ensure_dirs_exist
 from api.routers.recognition  import fr_router
 
-import sqlalchemy as sqla
+from sqlalchemy.orm           import sessionmaker
 # ______________________________________________________________________________
 #                               APP INITIALIZATION
 # ------------------------------------------------------------------------------
@@ -50,15 +50,12 @@ async def initialization():
 
     # Tries to load a database if it exists. If not, create a new one.
     print('  -> Loading / creating database:')
-    glb.sqla_engine, glb.sqla_base = load_database(glb.SQLITE_DB_FP)
-    if glb.sqla_engine is None or glb.sqla_base is None:
-        raise AssertionError('Failed to load or create database!')
+    glb.sqla_engine = load_database(glb.SQLITE_DB_FP)
     print('')
 
-    # Tries to load a session if it exists. If not, create a new one.
-    print('  -> Loading / creating session:')
-    glb.sqla_session = start_session(glb.sqla_engine)
-    print('')
+    Session = sessionmaker(bind=glb.sqla_engine)
+    glb.sqla_session = Session()
+    glb.sqla_session.commit()       # Create table definitions
     
     # Loads (or creates) all face verifiers
     print('  -> Loading / creating face verifiers:')
