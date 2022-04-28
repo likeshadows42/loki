@@ -763,7 +763,7 @@ def create_reps_from_dir(img_dir, detector_models, verifier_models,
                 rep_list[i].group_no = lbl
 
     for rep in rep_list:
-        FaceRepNew = FaceRep(image_name_orig=rep.orig_name, image_fp_orig=rep.orig_fp,  group_no=rep.group_no, region=rep.region, embeddings=rep.embeddings)
+        FaceRepNew = FaceRep(image_name_orig=rep.orig_name, image_fp_orig=rep.orig_fp,  group_no=int(rep.group_no), region=rep.region, embeddings=rep.embeddings)
         glb.sqla_session.add(FaceRepNew)
 
     glb.sqla_session.commit()
