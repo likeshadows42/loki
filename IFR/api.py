@@ -12,6 +12,7 @@ import matplotlib.image      as mpimg
 import matplotlib.pyplot     as plt
 import api.global_variables  as glb
 import sqlalchemy            as sqla
+
 from io                      import BytesIO
 from tqdm                    import tqdm
 from uuid                    import uuid4, UUID
@@ -1000,59 +1001,6 @@ def all_tables_exist(engine, check_names):
 
 # ------------------------------------------------------------------------------
 
-def load_database(db_full_path, create_new=True, force_create=False):
-    """
-    Loads a SQLite database specified by its full path 'db_full_path'.
-
-    Inputs:
-        1. db_full_path - full path to the database file [string].
-
-        2. create_new   - toggles if a new database should be created IF one
-                            could not be loaded from the full path provided
-                            [boolean, default=True].
-
-        3. force_create - toggles if a new database should be created REGARDLESS
-                            of a database existing in the full path provided
-                            (this effectively disregards 'db_full_path')
-                            [boolean, default=False].
-
-    Output:
-        1. returns an engine object. This object acts as a central source of
-            connections to the database, providing both a factory as well as a
-            holding space called a connection pool for the database connections
-            [engine object].
-
-    Signature:
-        engine = load_database(db_full_path, create_new=True,
-                                force_create=False)
-    """
-
-    print(db_full_path)
-    glb.sqla_engine = create_engine("sqlite:///" + db_full_path)
-    glb.sqla_base = sqla.ext.declarative.declarative_base()
-
-    # If database exists, opens it
-    if   database_exists(db_full_path) and not force_create:
-        # Binds the metadata to the engine
-        metadata_obj = MetaData()
-        metadata_obj.reflect(bind=glb.sqla_engine)
-        return True
-
-    # If 'create_new' or 'force_create' are True, creates a new database
-    elif create_new or force_create:
-        # create the SQLAlchemy tables' definitions
-        glb.sqla_base.metadata.create_all(glb.sqla_engine)
-        Session = sessionmaker(bind=glb.sqla_engine)
-        glb.sqla_session = Session()
-        return True
-
-    # Otherwise, returns a None object with a warning
-    print('[load_database] WARNING: Database loading failed',
-            '(and a new was NOT created).')
-    return False
-
-# ------------------------------------------------------------------------------
-
 def start_session(engine):
     """
     Creates a Session object from the database connected by the engine object
@@ -1075,14 +1023,82 @@ def start_session(engine):
                       information on what this object is) [engine object].
 
     Output:
-        1. the session as a Session object [session object].
+        1. the session as a Session object (if successful) or None object
+            (on failure) [session object or None].
 
     Signature:
         session = start_session(engine)
     """
-    Session = sessionmaker(bind=engine)
-    return Session()
+    try:
+        Session = sessionmaker(bind=engine)
+        session = Session()
+    except:
+        session = None
+
+    return session
+
+# ------------------------------------------------------------------------------
+
+def load_database(db_full_path, create_new=True, force_create=False):
+    """
+    Loads a SQLite database specified by its full path 'db_full_path'.
+
+    Inputs:
+        1. db_full_path - full path to the database file [string].
+
+        2. create_new   - toggles if a new database should be created IF one
+                            could not be loaded from the full path provided
+                            [boolean, default=True].
+
+        3. force_create - toggles if a new database should be created REGARDLESS
+                            of a database existing in the full path provided
+                            (this effectively disregards 'db_full_path')
+                            [boolean, default=False].
+
+    Output:
+        1. returns a engine object (if successful) or a None object
+            [engine object].
+
+        2. returns a base object (if successful) or a None object [base object].
+
+    Signature:
+        engine, base = load_database(db_full_path, create_new=True,
+                                     force_create=False)
+    """
+    # Creates engine and base
+    sqla_engine = create_engine("sqlite:///" + db_full_path)
+    sqla_base   = sqla.ext.declarative.declarative_base()
+
+    # If database exists, opens it
+    if   database_exists(db_full_path) and not force_create:
+        # Binds the metadata to the engine
+        metadata_obj = MetaData()
+        metadata_obj.reflect(bind=sqla_engine)
+
+        return (sqla_engine, sqla_base)
+
+    # If 'create_new' or 'force_create' are True, creates a new database
+    elif create_new or force_create:
+        # create the SQLAlchemy tables' definitions
+        sqla_base.metadata.create_all(sqla_engine)
+
+        return (sqla_engine, sqla_base)
+
+    else:
+        # Otherwise, returns a None object with a warning
+        print('[load_database] WARNING: Database loading failed',
+              '(and a new was NOT created).')
+        sqla_engine = None
+        sqla_base   = None
+
+    return (sqla_engine, sqla_base)
 
 # ------------------------------------------------------------------------------
 
 
+
+# ------------------------------------------------------------------------------
+
+
+
+# ------------------------------------------------------------------------------
