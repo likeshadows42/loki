@@ -49,14 +49,10 @@ async def initialization():
     print('')
 
     # Tries to load a database if it exists. If not, create a new one.
-<<<<<<< HEAD
-    print('  -> Loading / creating database (engine):')
-    glb.sqla_engine = load_database(glb.SQLITE_DB_FP)
-=======
     print('  -> Loading / creating database:')
-    if not load_database(glb.SQLITE_DB_FP):
-        raise RuntimeError("Error creation SQlite, stop!")
->>>>>>> sqlite
+    glb.sqla_engine, glb.sqla_base = load_database(glb.SQLITE_DB_FP)
+    if glb.sqla_engine is None or glb.sqla_base is None:
+        raise AssertionError('Failed to load or create database!')
     print('')
 
     # Tries to load a session if it exists. If not, create a new one.
