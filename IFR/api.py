@@ -27,7 +27,7 @@ from sklearn.cluster         import DBSCAN
 from shutil                          import move           as sh_move
 from deepface.DeepFace               import build_model    as build_verifier
 from deepface.detectors.FaceDetector import build_model    as build_detector
-
+from sqlalchemy.orm           import sessionmaker
 
 # ______________________________________________________________________________
 #                       UTILITY & GENERAL USE FUNCTIONS
