@@ -28,6 +28,7 @@ from shutil                          import move           as sh_move
 from deepface.DeepFace               import build_model    as build_verifier
 from deepface.detectors.FaceDetector import build_model    as build_detector
 from sqlalchemy.orm           import sessionmaker
+from IFR.classes              import FaceRep     #temporary for testing
 
 # ______________________________________________________________________________
 #                       UTILITY & GENERAL USE FUNCTIONS
@@ -745,6 +746,7 @@ def create_reps_from_dir(img_dir, detector_models, verifier_models,
         rep_list.append(create_new_rep(img_path, img_path, region, embeddings,
                                         tag=tag, uid=uid))
 
+
     # Clusters Representations together using the DBSCAN algorithm
     if auto_grouping:
         # Clusters embeddings using DBSCAN algorithm
@@ -759,6 +761,12 @@ def create_reps_from_dir(img_dir, detector_models, verifier_models,
                 continue
             else:
                 rep_list[i].group_no = lbl
+
+    for rep in rep_list:
+        FaceRepNew = FaceRep(image_name_orig=rep.orig_name, image_fp_orig=rep.orig_fp,  group_no=rep.group_no, region=rep.region, embeddings=rep.embeddings)
+        glb.sqla_session.add(FaceRepNew)
+
+    glb.sqla_session.commit()
 
     # Return representation database
     return RepDatabase(*rep_list)
