@@ -55,16 +55,17 @@ async def initialization():
 
     Session = sessionmaker(bind=glb.sqla_engine)
     glb.sqla_session = Session()
+    glb.sqla_session.commit()       # Create table definitions
 
-    ### TEST SECTION for creating SQLite table definition and data
+    ### TEST SECTION for creating SQLite table data
     ### TO BE REMOVED
 
-    FaceRepTest1 = FaceRep(image_name_orig='original_name', image_fp_orig='original_path',  group_no='-1', region=[[0,1,2,3],[4,5,6,7],[8,9,10,11],[12,13,14,15]], embeddings=[1,2,3])
-    glb.sqla_session.add(FaceRepTest1)
-    glb.sqla_session.commit()
+    # FaceRepTest1 = FaceRep(image_name_orig='original_name', image_fp_orig='original_path',  group_no='-1', region=[[0,1,2,3],[4,5,6,7],[8,9,10,11],[12,13,14,15]], embeddings=[1,2,3])
+    # glb.sqla_session.add(FaceRepTest1)
+    # glb.sqla_session.commit()
 
     ### TEST SECTION END
-
+    
     # Loads (or creates) all face verifiers
     print('  -> Loading / creating face verifiers:')
     glb.models = init_load_verifiers(glb.verifier_names, glb.SVD_VRF_DIR)
