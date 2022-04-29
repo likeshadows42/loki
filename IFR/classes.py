@@ -8,7 +8,7 @@ from uuid                       import UUID
 from typing                     import List, Tuple, Optional
 from pydantic                   import BaseModel
 
-from sqlalchemy                 import Table, Column, String, Integer,\
+from sqlalchemy                 import Column, String, Integer,\
                                         PickleType, ForeignKey
 from sqlalchemy.orm             import relationship
 from sqlalchemy.ext.declarative import declarative_base
@@ -128,7 +128,7 @@ default_uids              = []
 default_auto_grouping     = True
 default_eps               = 0.5
 default_min_samples       = 2
-
+default_check_models      = True
 default_verbose           = False
 default_msg_detail        = MessageDetailOptions.SUMMARY
 default_msg_output        = MessageOutputOptions.STRUCTURE
@@ -180,12 +180,11 @@ class CreateDatabaseParams(BaseModel):
     verifier_names: List[FaceVerifierOptions] = [default_verifier]
     align         : bool                      = default_align
     normalization : NormalizationTypes        = default_normalization
-    tags          : Optional[List[str]]       = default_tags
-    uids          : Optional[List[str]]       = default_uids
     auto_grouping : Optional[bool]            = default_auto_grouping
     eps           : Optional[float]           = default_eps
     min_samples   : Optional[int]             = default_min_samples
     metric        : Optional[DistanceMetrics] = default_metric
+    check_models  : Optional[bool]            = default_check_models
     verbose       : bool                      = default_verbose
 
     class Config:
