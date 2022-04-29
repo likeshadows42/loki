@@ -11,18 +11,16 @@ import numpy                 as np
 import api.global_variables  as glb
 
 from uuid                    import UUID, uuid4
-from pydoc                   import describe
-from pandas                  import describe_option
 from typing                  import List, Optional
 from fastapi                 import APIRouter, UploadFile, Depends, Query, Body
-from IFR.api                 import load_built_model,\
-                            create_reps_from_dir, get_embeddings_as_array,\
-                            fix_uid_of_renamed_imgs, process_image_zip_file,\
-                            get_matches_from_similarity, show_cluster_results,\
-                            create_new_rep, do_face_detection
+from IFR.api                 import load_built_model, get_embeddings_as_array,\
+                            process_image_zip_file, show_cluster_results,\
+                            get_matches_from_similarity, create_new_rep,\
+                            database_is_empty, all_tables_exist,\
+                            process_faces_from_dir
 from IFR.classes             import *
 from IFR.functions           import create_dir, string_is_valid_uuid4,\
-                               calc_embeddings, calc_similarity
+                               calc_embeddings, calc_similarity, do_face_detection
 from fastapi.responses       import Response
 
 from matplotlib                      import image          as mpimg
@@ -115,6 +113,8 @@ async def inspect_globals(print2console: bool = Query(True, description="Toggles
 @fr_router.post("/debug/reset_server")
 async def reset_server(no_database: bool = Query(False, description="Toggles if database should be empty or loaded [boolean]")):
     """
+    TODO: FIX THIS ENDPOINT!
+
     API endpoint: reset_server()
 
     Allows the user to restart the server without manually requiring to shut it
@@ -196,8 +196,8 @@ async def reset_server(no_database: bool = Query(False, description="Toggles if 
     else:
         if not os.path.isfile(os.path.join(glb.RDB_DIR, 'rep_database.pickle')):
             glb.db_changed = True
-        glb.rep_db = load_representation_db(os.path.join(glb.RDB_DIR,
-                                        'rep_database.pickle'), verbose=True)
+        #glb.rep_db = load_representation_db(os.path.join(glb.RDB_DIR,
+        #                                'rep_database.pickle'), verbose=True)
     
     print('')
     
@@ -770,6 +770,8 @@ async def reload_database(
     rdb_dir: str  = Query(glb.RDB_DIR, description="Full path to Representation database directory (string)"),
     verbose: bool = Query(False, description="Controls the amount of text that is printed to the server's console (boolean)")):
     """
+    TODO: FIX THIS ENDPOINT!
+
     API endpoint: reload_database()
 
     Allows the user to reload the database. Sets the global 'database has been
@@ -790,8 +792,8 @@ async def reload_database(
     # 
     try:
         # Attempts to load the database
-        glb.rep_db = load_representation_db(os.path.join(rdb_dir,
-                                        'rep_database.pickle'), verbose=verbose)
+        #glb.rep_db = load_representation_db(os.path.join(rdb_dir,
+        #                                'rep_database.pickle'), verbose=verbose)
 
         # Sets the 'database has been modified' flag to True, creates output
         # message and sets the status as 0
@@ -967,10 +969,11 @@ async def edit_tag_by_group_no(target_group_no: int = Query(None, description="T
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/create_database/from_directory")
-async def create_database_from_directory(cdb_params: CreateDatabaseParams,
-    image_dir   : Optional[str]  = Query(glb_img_dir, description="Full path to directory containing images (string)"),
-    force_create: Optional[bool] = Query(False      , description="Flag to force database creation even if one already exists, overwritting the old one (boolean)")):
+async def create_database_from_directory(params: CreateDatabaseParams,
+    image_dir   : Optional[str]  = Query(glb_img_dir, description="Full path to directory containing images (string)")):
     """
+    TODO: UPDATE DESCRIPTION!
+
     API endpoint: create_database_from_directory()
 
     Creates a database (RepDatabase object) from a directory. The directory is
@@ -1034,8 +1037,9 @@ async def create_database_from_directory(cdb_params: CreateDatabaseParams,
             
             2. message: informative message string
     """
-    # Initialize output message
+    # Initialize output message and records
     output_msg = ''
+    records    = []
 
     # If image directory provided is None or is not a directory, use default
     # directory
@@ -1045,44 +1049,41 @@ async def create_database_from_directory(cdb_params: CreateDatabaseParams,
                    +  'directory. Using default directory instead.\n'
         image_dir  = glb_img_dir
 
-    # Database exists (and has at least one element) and force create is False
-    if glb.rep_db.size > 0 and not force_create:
+    # Database does not exist
+    if  database_is_empty(glb.sqla_engine):
         # Do nothing, but set message
-        output_msg += 'Database exists (and force create is False). '\
-                   +  'Skipping database creation.\n'
+        output_msg += 'Database does not exist! '\
+                   +  'Please create one before using this endpoint.\n'
 
-    elif glb.rep_db.size == 0 or force_create:
-        output_msg += 'Creating database: '
-        glb.rep_db  = create_reps_from_dir(image_dir, glb.models, glb.models,
-                                detector_name=cdb_params.detector_name,
-                                align=cdb_params.align, show_prog_bar=True,
-                                verifier_names=cdb_params.verifier_names,
-                                normalization=cdb_params.normalization,
-                                tags=cdb_params.tags, uids=cdb_params.uids,
-                                auto_grouping=cdb_params.auto_grouping,
-                                min_samples=cdb_params.min_samples,
-                                eps=cdb_params.eps, metric=cdb_params.metric,
-                                verbose=cdb_params.verbose)
-        output_msg += 'success!\n'
+    # Face Representation table does not exist
+    elif not all_tables_exist(glb.sqla_engine, ['representation']):
+        # Do nothing, but set message
+        output_msg += "Face representation table ('representation') "\
+                   +  'does not exist! Please ensure that this table exists '\
+                   +  'before using this endpoint.\n'
 
+    # Otherwise (database is not empty and table exists), 
     else:
-        raise AssertionError('[create_database] Database should have a ' +  
-                             'length of 0 or more - this should not happen!')
-
-    # Modifies the database change flag (and sorts the database if there is at
-    # least 1 element)
-    if glb.rep_db.size == 1:
-        glb.db_changed = True
-
-    elif glb.rep_db.size > 1:
-        # Sorts database and sets changed flag to True
-        glb.rep_db.sort_database('image_name')
-        glb.db_changed = True
-
-    else:
-        glb.db_changed = False
-
-    return {'n_records':glb.rep_db.size, 'message':output_msg}
+        # Processes face images from the image directory provided. Note that
+        # this function adds the changes to the global session but does not
+        # commit them.
+        records = process_faces_from_dir(image_dir, glb.models, glb.models,
+                            detector_name  = params.detector_name,
+                            verifier_names = params.verifier_names,
+                            normalization  = params.normalization,
+                            align          = params.align,
+                            auto_grouping  = params.auto_grouping,
+                            eps            = params.eps,
+                            min_samples    = params.min_samples,
+                            metric         = params.metric,
+                            check_models   = params.check_models,
+                            verbose        = params.verbose)
+        
+        # Commits the records and updates the message
+        glb.sqla_session.commit()
+        output_msg += ' success!'
+    
+    return {'n_records':len(records), 'message':output_msg}
 
 # ------------------------------------------------------------------------------
 
@@ -1090,9 +1091,10 @@ async def create_database_from_directory(cdb_params: CreateDatabaseParams,
 async def create_database_from_zip(myfile: UploadFile,
     params      : CreateDatabaseParams = Depends(),
     image_dir   : Optional[str]  = Query(glb.IMG_DIR, description="Full path to directory containing images (string)"),
-    auto_rename : Optional[bool] = Query(True       , description="Flag to force auto renaming of images in the zip file with names that match images already in the image directory (boolean)"),
-    force_create: Optional[bool] = Query(False      , description="Flag to force database creation even if one already exists, overwritting the old one (boolean)")):
+    auto_rename : Optional[bool] = Query(True       , description="Flag to force auto renaming of images in the zip file with names that match images already in the image directory (boolean)")):
     """
+    TODO: UPDATE DESCRIPTION!
+
     API endpoint: create_database_from_zip()
 
     Creates a database from a zip file. The zip file is expected to contain
@@ -1165,70 +1167,61 @@ async def create_database_from_zip(myfile: UploadFile,
                    +  'directory. Using default directory instead.\n'
         image_dir = img_dir
 
-    # Database exists (and has at least one element) and force create is False
-    if glb.rep_db.size > 0 and not force_create:
+    # Database does not exist
+    if  database_is_empty(glb.sqla_engine):
         # Do nothing, but set message
-        output_msg += 'Database exists (and force create is False). '\
-                   +  'Skipping database creation.\n'
+        output_msg += 'Database does not exist! '\
+                   +  'Please create one before using this endpoint.\n'
 
-    elif glb.rep_db.size == 0 or force_create:
+    # Face Representation table does not exist
+    elif not all_tables_exist(glb.sqla_engine, ['representation']):
+        # Do nothing, but set message
+        output_msg += "Face representation table ('representation') "\
+                   +  'does not exist! Please ensure that this table exists '\
+                   +  'before using this endpoint.\n'
+
+    # Otherwise (database is not empty and table exists), 
+    else:
         # Initialize dont_skip flag as True
-        dont_skip = True
+        dont_skip   = True
 
         # Extract zip files
         output_msg += 'Extracting images in zip:'
 
         try:
             # Process the zip file containing the image files
-            new_names = process_image_zip_file(myfile, image_dir,
-                                               auto_rename=auto_rename)
+            skipped_files = process_image_zip_file(myfile, image_dir,
+                                                    auto_rename=auto_rename)
             output_msg += ' success! '
 
         except Exception as excpt:
             dont_skip   = False
             output_msg += f' failed (reason: {excpt}).'
 
-        # Create database
+        # Processes face images from the image directory provided if 'dont_skip'
+        # is True
         if dont_skip:
             output_msg += 'Creating database: '
-            glb.rep_db  = create_reps_from_dir(image_dir, glb.models,
-                                glb.models, detector_name=params.detector_name,
-                                align=params.align, show_prog_bar=True,
-                                verifier_names=params.verifier_names,
-                                normalization=params.normalization,
-                                tags=params.tags, uids=params.uids,
-                                auto_grouping=params.auto_grouping,
-                                min_samples=params.min_samples,
-                                eps=params.eps, metric=params.metric,
-                                verbose=params.verbose)
-
-            # Fixes unique ids of renamed images (ensuring that the unique id in
-            # the image name matches the Representation's unique id and
-            # vice-versa)
-            fix_uid_of_renamed_imgs(new_names)
-
-            output_msg += 'success!\n'
+            records = process_faces_from_dir(image_dir, glb.models, glb.models,
+                            detector_name  = params.detector_name,
+                            verifier_names = params.verifier_names,
+                            normalization  = params.normalization,
+                            align          = params.align,
+                            auto_grouping  = params.auto_grouping,
+                            eps            = params.eps,
+                            min_samples    = params.min_samples,
+                            metric         = params.metric,
+                            check_models   = params.check_models,
+                            verbose        = params.verbose)
+        
+            # Commits the records and updates the message
+            glb.sqla_session.commit()
+            output_msg += ' success!'
         else:
-            output_msg += 'Skipping database creation.\n'
+            records = []
 
-    else:
-        raise AssertionError('[create_database] Database should have a ' +  
-                             'length of 0 or more - this should not happen!')
-
-    # Modifies the database change flag (and sorts the database if there is at
-    # least 1 element)
-    if glb.rep_db.size == 1:
-        glb.db_changed = True
-
-    elif glb.rep_db.size > 1:
-        # Sorts database and sets changed flag to True
-        glb.rep_db.sort_database('image_name')
-        glb.db_changed = True
-
-    else:
-        glb.db_changed = False
-
-    return {'length':glb.rep_db.size, 'message':output_msg}
+    return {'n_records':len(records), 'n_skipped':len(skipped_files),
+            'skipped_files':skipped_files, 'message':output_msg}
 
 # ------------------------------------------------------------------------------
 
