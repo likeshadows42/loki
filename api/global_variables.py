@@ -24,12 +24,10 @@ directory_list_names = ['api root', 'data dir', 'img dir', 'rep. database',
 # Tuple with all face detector and verifier names
 # detector_names = ('opencv', 'ssd', 'mtcnn', 'retinaface')
 detector_names = ('retinaface') # to avoid long startups during developing
-                                    # (dont forget to include '' to avoid a bug)
 
 # verifier_names = ('VGG-Face', 'Facenet', 'Facenet512', 'OpenFace',
 #                   'DeepFace', 'DeepID' , 'ArcFace')
 verifier_names = ('ArcFace') # to avoid long startups during developing
-                                 # (dont forget to include '' to avoid a bug)
 
 # Other variables
 models      = {}             # stores all face verifier & detector models
