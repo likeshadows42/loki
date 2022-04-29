@@ -262,19 +262,10 @@ def detect_faces(img_path, use_detector='retinaface', align=True,
 def do_face_detection(img_path, detector_models={}, detector_name='retinaface',
                         align=True, verbose=False):
     """
-    Performs the face detection step:
-
-        1. The function tries to load the chosen face detector 'detector_name'
-            from the 'detector_models' dictionary. If this fails, the function
-            builds the face detector from scratch.
-
-        2. The functions tries to detect faces in the image provided. If the
-            face detection fails or finds no faces, then a None output is
-            returned.
-
-    The result (success / failure) of each stage is printed to the console if
-    verbose is True. In case of failures, the reason for the failure is also
-    printed.
+    Performs the face detection step. The function loads the chosen face
+    detector 'detector_name' from the 'detector_models' dictionary. Then, the
+    function tries to detect faces in the image provided. If the face detection
+    fails or finds no faces, then a None output is returned.
 
     Inputs:
         1. img_path        - image path, base64 image or numpy array image
@@ -304,26 +295,8 @@ def do_face_detection(img_path, detector_models={}, detector_name='retinaface',
     # Initializes output object
     output = None
 
-    # Tries to load the chosen face detector. On failure, builds the face
-    # detector from scratch
-    if verbose:
-            print('[do_face_detection] Loading face detector: ', end='')
-    
-    try:
-        face_detector = detector_models[detector_name]
-
-        if verbose:
-            print(f'success! (img: {img_path})')
-    
-    except Exception as excpt:
-        if verbose:
-            print(f'failed! (reason: {excpt}) (img: {img_path})')
-            print('[do_face_detection] Building face detector: ', end='')
-
-        face_detector = build_detector(detector_name)
-
-        if verbose:
-            print(f'success! (img: {img_path})')
+    # Loads the chosen face detector
+    face_detector = detector_models[detector_name]
 
     # Tries to detect faces in the image provided and align (if required):
     try:
@@ -594,6 +567,150 @@ def batch_build_verifiers(verifier_names, show_prog_bar=True, verbose=False):
                      f'(reason: {excpt})')
         
     return verifiers
+
+# ------------------------------------------------------------------------------
+
+def ensure_detectors_exists(models={}, detector_names=['retinaface'],
+                                verbose=False):
+    """
+    Ensures that each face detector with a name in 'detector_names' exists in
+    the 'models' dictionary. For each face detector, if it does not exist, this
+    function tries to build it from scratch. If the building process fails, the
+    detector is simply skipped and the return value will be False. If all
+    detectors exist and/or are successfully built, then True is returned. The
+    updated model dictionary is always returned as a second output.
+
+    Inputs:
+        1. models         - face detectors' name (key) and object (value)
+                            [dictionary, default={}].
+
+        2. detector_names - face detectors' name [string or list of strings,
+                            default=['retinaface']].
+
+        3. verbose        - toggles if the function should print useful
+                            information to the console [boolean, default=False].
+
+    Output:
+        1. flag indicating if all face detectors exist and/or were successfully
+            built (True) or not (False) [boolean].
+
+        2. updated model dictionary [dictionary].
+
+    Signature:
+        ret, models = ensure_detectors_exists(models={}, verbose=False,
+                                             detector_names=['retinaface'])
+    """
+    # Initializes no error flag
+    no_errors = True
+
+    # Ensures model names is a list
+    if not isinstance(detector_names, list):
+        detector_names = [detector_names]
+
+    # Prints information if verbose is True
+    if verbose:
+        print('[ensure_detectors_exists] Checking existence of face detectors:')
+
+    # Loops through each name in the detector names list
+    for name in detector_names:
+        if verbose:
+            print(f'  > Checking {name}: ', end='')
+        
+        # First, checks if the current face detector exists in the 'models'
+        # dictionary provided. This only checks for the key, not the integrity
+        # of the respective detector object.
+        try:
+            test = models[name]
+            if verbose:
+                print('success!')
+        except:
+            if verbose:
+                print('failed! (building detector:', end='')
+
+            # On failure, tries to build the detector from scratch, skipping it
+            # if the building process fails
+            try:
+                models[name] = build_detector(name)
+                if verbose:
+                    print('success!')
+            except Exception as excpt:
+                no_errors = False
+                if verbose:
+                    print(f'failed > reason: {excpt})')
+
+    return (no_errors, models)
+
+# ------------------------------------------------------------------------------
+
+def ensure_verifiers_exists(models={}, verifier_names=['ArcFace'],
+                                verbose=False):
+    """
+    Ensures that each face verifier with a name in 'verifier_names' exists in
+    the 'models' dictionary. For each face verifier, if it does not exist, this
+    function tries to build it from scratch. If the building process fails, the
+    verifier is simply skipped and the return value will be False. If all
+    verifiers exist and/or are successfully built, then True is returned. The
+    updated model dictionary is always returned as a second output.
+
+    Inputs:
+        1. models         - face verifiers' name (key) and object (value)
+                            [dictionary, default={}].
+
+        2. verifier_names - face verifiers' name [string or list of strings,
+                            default=['ArcFace']].
+
+        3. verbose        - toggles if the function should print useful
+                            information to the console [boolean, default=False].
+
+    Output:
+        1. flag indicating if all face verifiers exist and/or were successfully
+            built (True) or not (False) [boolean].
+
+        2. updated model dictionary [dictionary].
+
+    Signature:
+        ret, models = ensure_verifier_exists(models={}, verbose=False,
+                                             verifier_names=['retinaface'])
+    """
+    # Initializes no error flag
+    no_errors = True
+
+    # Ensures model names is a list
+    if not isinstance(verifier_names, list):
+        verifier_names = [verifier_names]
+
+    # Prints information if verbose is True
+    if verbose:
+        print('[ensure_verifiers_exists] Checking existence of face verifiers:')
+
+    # Loops through each name in the verifier names list
+    for name in verifier_names:
+        if verbose:
+            print(f'  > Checking {name}: ', end='')
+        
+        # First, checks if the current face verifier exists in the 'models'
+        # dictionary provided. This only checks for the key, not the integrity
+        # of the respective verifier object.
+        try:
+            test = models[name]
+            if verbose:
+                print('success!')
+        except:
+            if verbose:
+                print('failed! (building verifier:', end='')
+
+            # On failure, tries to build the verifier from scratch, skipping it
+            # if the building process fails
+            try:
+                models[name] = build_verifier(name)
+                if verbose:
+                    print('success!')
+            except Exception as excpt:
+                no_errors = False
+                if verbose:
+                    print(f'failed > reason: {excpt})')
+
+    return (no_errors, models)
 
 # ______________________________________________________________________________
 #                           SIMILARITY & DISTANCE RELATED
