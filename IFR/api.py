@@ -17,7 +17,7 @@ from tqdm                    import tqdm
 from uuid                    import uuid4
 from zipfile                 import ZipFile
 from tempfile                import TemporaryDirectory
-from sqlalchemy              import create_engine, inspect, MetaData
+from sqlalchemy              import create_engine, inspect, MetaData, select, insert, update
 from IFR.classes             import RepDatabase, Representation,\
                                     VerificationMatch, Base
 from IFR.functions           import get_image_paths, do_face_detection,\
@@ -29,7 +29,7 @@ from shutil                          import move           as sh_move
 from deepface.DeepFace               import build_model    as build_verifier
 from deepface.detectors.FaceDetector import build_model    as build_detector
 from sqlalchemy.orm           import sessionmaker
-from IFR.classes              import FaceRep     #temporary for testing
+from IFR.classes              import FaceRep, Person
 
 # ______________________________________________________________________________
 #                       UTILITY & GENERAL USE FUNCTIONS
@@ -762,12 +762,6 @@ def create_reps_from_dir(img_dir, detector_models, verifier_models,
             else:
                 rep_list[i].group_no = lbl
 
-    for rep in rep_list:
-        FaceRepNew = FaceRep(image_name_orig=rep.orig_name, image_fp_orig=rep.orig_fp,  group_no=int(rep.group_no), region=rep.region, embeddings=rep.embeddings)
-        glb.sqla_session.add(FaceRepNew)
-
-    glb.sqla_session.commit()
-
     # Return representation database
     return RepDatabase(*rep_list)
 
@@ -977,11 +971,33 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
             if lbl == -1:
                 continue
             else:
-                records[i].group_no = lbl
+                records[i].group_no = int(lbl)
 
     # Loops through each record and add them to the global session
+    if glb.DEBUG:
+        print('add representation to FaceRep table')
     for record in records:
         glb.sqla_session.add(record)
+        glb.sqla_session.commit()
+
+    # Add how many person to Person table as the detected clusters
+    if glb.DEBUG:
+        print('add person to Person table')
+    subquery = select(FaceRep.group_no).where(FaceRep.group_no != -1).group_by(FaceRep.group_no).order_by(FaceRep.group_no)
+    query = insert(Person).from_select(["group_no"], subquery)
+    glb.sqla_session.execute(query)
+    glb.sqla_session.commit()
+
+    # Populate the person_id field in FaceRep with the corresponding ID in Person table
+    if glb.DEBUG:
+        print('Create joins between Person and FaceRep tables')
+    subquery = select(Person.id).where(FaceRep.group_no == Person.group_no).where(FaceRep.group_no > -1)
+    query = update(FaceRep).values(person_id = subquery.scalar_subquery())
+
+    if glb.DEBUG:
+        print(query)
+    glb.sqla_session.execute(query)
+    glb.sqla_session.commit()
     
     # Return representation database
     return records
