@@ -7,14 +7,12 @@ import api.global_variables   as glb
 
 from fastapi                  import FastAPI
 from fastapi.middleware.cors  import CORSMiddleware
-from IFR.api                  import load_database, save_built_model,\
-                                    init_load_detectors, init_load_verifiers,\
-                                    save_built_detectors, save_built_verifiers,\
-                                    start_session
+from IFR.api                  import load_database, init_load_detectors,\
+                                    init_load_verifiers, save_built_detectors,\
+                                    save_built_verifiers, start_session
 from IFR.functions            import ensure_dirs_exist
 from api.routers.recognition  import fr_router
 
-from sqlalchemy.orm           import sessionmaker
 # ______________________________________________________________________________
 #                               APP INITIALIZATION
 # ------------------------------------------------------------------------------
@@ -53,9 +51,11 @@ async def initialization():
     glb.sqla_engine = load_database(glb.SQLITE_DB_FP)
     print('')
 
-    Session = sessionmaker(bind=glb.sqla_engine)
-    glb.sqla_session = Session()
-    glb.sqla_session.commit()       # Create table definitions
+    # Loads (or creates) the session. Also commits once to create table
+    # definitions if required.
+    print('  -> Loading / creating session:')
+    glb.sqla_session = start_session(glb.sqla_engine)
+    glb.sqla_session.commit()                   # create table definitions
     
     # Loads (or creates) all face verifiers
     print('  -> Loading / creating face verifiers:')
@@ -73,19 +73,6 @@ async def initialization():
 @app.on_event("shutdown")
 async def finish_processes():
     print('\n ======== Performing finishing processes ======== \n')
-
-    # Saves the modified database if flag is True
-    if glb.db_changed:
-        print('  -> Database has changed: saving database.\n')
-        db_fp = os.path.join(glb.RDB_DIR, 'rep_database.pickle')
-
-        with open(db_fp, 'wb') as handle:
-            pickle.dump(glb.rep_db, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-        # Updates the database changed flag
-        glb.db_changed = False
-    else:
-        print('  -> Database is unchanged: skipping save.\n')
 
     # Saves (built) face detectors (if needed)
     print('  -> Saving face detectors (if needed):')
