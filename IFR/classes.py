@@ -1226,8 +1226,9 @@ class Person(Base):
 
     # Object attributes (as database columns)
     id   = Column(Integer, primary_key=True)
-    name = Column(String)
-    note = Column(String)
+    name = Column(String, default=None)
+    group_no = Column(Integer, default=None)
+    note = Column(String, default=None)
 
     # Establishes connection to associated Face Representations
     reps = relationship("FaceRep", back_populates="person",
