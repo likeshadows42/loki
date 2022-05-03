@@ -1004,6 +1004,8 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
     query = update(FaceRep).values(group_no = -2).where(FaceRep.group_no > -1)
     if glb.DEBUG:
         print(query)
+    glb.sqla_session.execute(query)
+    glb.sqla_session.commit()
 
     # Return representation database
     return records
