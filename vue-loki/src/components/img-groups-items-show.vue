@@ -12,7 +12,8 @@ export default {
     return {
       group_obj: null,
       group_num: 0,
-      person_new_name: this.person_name
+      person_new_name: this.person_name,
+      name_title: this.person_name
     }
   },
 
@@ -37,9 +38,9 @@ export default {
       }
     },
 
-    async getGroupMembers(group) {
+    async getGroupMembers(person_id) {
       const params = {}
-      this.group_obj = await this.axiosPost(`http://127.0.0.1:8000/fr/people/get_faces?person_id=${group}`, params)
+      this.group_obj = await this.axiosPost(`http://127.0.0.1:8000/fr/people/get_faces?person_id=${person_id}`, params)
       this.group_num = Object.keys(this.group_obj).length
       //console.log(this.group_obj)
     },
@@ -59,6 +60,7 @@ export default {
     async changeName(person_id) {
       const params = {}
       await this.axiosPost(`http://127.0.0.1:8000/fr/people/set_name?person_id=${person_id}&person_name=${this.person_new_name}`, params)
+      this.name_title = this.person_new_name
       this.getGroupMembers(this.person_id)
       // alert(this.person_new_name+", "+person_id)
 
@@ -96,7 +98,7 @@ export default {
 
   <div class="group_div">
     <div class="header_div">
-      <h3>#{{ person_id }} {{person_name}}</h3>
+      <h3>#{{ person_id }} {{this.name_title}}</h3>
       <div><input v-model="person_new_name"> <button @click="changeName(person_id)">CHANGE</button></div>
       <div>Num pics: {{group_num }}</div>
     </div>
