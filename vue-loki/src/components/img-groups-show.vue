@@ -51,7 +51,7 @@ export default {
 
 
 <template>
-<h2>List groups</h2>
+<h2>List people</h2>
 
 <span v-for="person in people" :key="person.id">
       <compGroupItems :person_id="person.id" :person_name="person.name"></compGroupItems>

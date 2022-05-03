@@ -98,7 +98,8 @@ export default {
 
   <div class="group_div">
     <div class="header_div">
-      <h3>#{{ person_id }} {{this.name_title}}</h3>
+      <h3 v-if="this.name_title">#{{ person_id }} {{this.name_title}}</h3>
+      <h3 v-else>#{{ person_id }} (unamed)</h3>
       <div><input v-model="person_new_name"> <button @click="changeName(person_id)">CHANGE</button></div>
       <div>Num pics: {{group_num }}</div>
     </div>
