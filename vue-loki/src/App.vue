@@ -9,7 +9,7 @@
 
       <h3>Face recognition</h3>    
       <p><a href="#" @click.prevent="imgUngroupedShow">OK Show ungrouped images</a></p>
-      <p><a href="#" @click.prevent="imgGroupsShow">OK Show groups</a></p> 
+      <p><a href="#" @click.prevent="imgGroupsShow">OK Show people</a></p> 
       <!-- <p><a href="#" @click.prevent="imgUploaderAdvToggle">Upload multiple images</a></p> -->
       
       <p><a>Upload multiple images</a></p>

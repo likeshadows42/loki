@@ -8,18 +8,18 @@ export default {
 
   data() {
     return {
-      groups: null,
+      people: null,
       all_grouped: false
     }
   },
 
   methods: {
-    async ListGroups() {
+    async ListPeople() {
       const requestOptions = {
         method: "POST",
       };
-      const res = await fetch(`http://127.0.0.1:8000/fr/utility/get_groups`,requestOptions)
-      this.groups = await res.json()
+      const res = await fetch(`http://127.0.0.1:8000/fr/people/list`,requestOptions)
+      this.people = await res.json()
       // console.log(this.groups)
       //console.log(this.imgs)
       
@@ -44,7 +44,7 @@ export default {
   },  
 
   mounted() {
-    this.ListGroups()
+    this.ListPeople()
   },
 }
 </script>
@@ -53,10 +53,10 @@ export default {
 <template>
 <h2>List groups</h2>
 
-<span v-for="group in groups" :key="parseInt(group)">
-  <div v-if="group != -1">
-      <compGroupItems :group_name="parseInt(group)"></compGroupItems>
-  </div>
+<span v-for="person in people" :key="person.id">
+      <compGroupItems :person_id="person.id" :person_name="person.name"></compGroupItems>
+      <!-- {{group.id}}, -->
+
 </span>
 
 </template>

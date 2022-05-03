@@ -27,6 +27,8 @@ from matplotlib                      import image          as mpimg
 from deepface.DeepFace               import build_model    as build_verifier
 from deepface.detectors.FaceDetector import build_model    as build_detector
 
+from sqlalchemy import select, update
+
 glb_data_dir = glb.DATA_DIR
 glb_img_dir  = glb.IMG_DIR
 glb_rdb_dir  = glb.RDB_DIR
@@ -566,12 +568,16 @@ async def get_attribute_from_database(
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/get_groups")
-async def get_groups():
-    attributes = glb.rep_db.get_attribute('group_no')
-    attributes = np.unique(attributes)  # only keep unique groups
-    attributes = sorted(attributes, key=lambda x: int(x))   # and sort them
-    return [str(x) for x in attributes]
+@fr_router.post("/people/list")
+async def people_list():
+    # attributes = glb.rep_db.get_attribute('group_no')
+    # attributes = np.unique(attributes)  # only keep unique groups
+    # attributes = sorted(attributes, key=lambda x: int(x))   # and sort them
+    query = select(Person.id, Person.name, Person.note)
+    if glb.DEBUG:
+        print(query)
+    result = glb.sqla_session.execute(query)
+    return result.fetchall()
 
 # ------------------------------------------------------------------------------
 
@@ -810,69 +816,40 @@ async def reload_database(
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/view_by_group_no")
-async def view_by_group_no(target_group_no: int = Query(None, description="Target group number (>= -1) [integer]"),
-    return_type  : str = Query('records', description="Desired return type. Options: 'records' or 'image' [str]"),
-    ncols        : int = Query(4, description="Number of columns in the output image [integer]"),
-    figsize      : Tuple[int, int] = Query((15, 15), description="Figure size in inches [tuple of 2 integers]"),
-    color        : str = Query('black', description="Text color [str]"),
-    add_separator: bool = Query(False, description="Adds a caption acting as a separator [boolean]")):
+@fr_router.post("/people/get_faces")
+async def people_get_faces(person_id: int = Query(None, description="'person_id key' in Person table [integer]")):
     """
     API endpoint: view_by_group_no()
 
     Views all information of all Representations belonging to a group number 
-    specified by 'target_group_no'. Raises a Value Error if the 'return_type'
+    specified by 'person_id'. Raises a Value Error if the 'return_type'
     provided is neither 'records' nor 'image'.
 
     Parameters:
-    - target_group_no : desired group / cluster number [integer].
-
-    - return_type : determines if the output of this endpoint will be
-         JSON-encoded structures of the Representations ('reps') OR an image
-         ('image') (default='records') [string].
-
-    - ncols : number of columns in the plot image. Ignored if return_type='reps'
-         (default=4) [integer].
-    
-    - figsize : output figure size in inches. Ignored if return_type='reps'
-         (default=(15, 15)) [tuple of 2 integers].
-
-    - color : text color (default='black') [string].
-
-    - add_separator : toggles between adding a caption acting as a separator or
-         not (default=False) [boolean].
+    - person_id : desired group / cluster number [integer].
 
     Output:\n
-        - If return_type='records':
-            JSON-encoded structure containing all attributes of each
-            Representation in the database belonging to the desired group.
-
-        - If return_type='image':
-            Plot of all images in the database belonging to the desired group.
+            JSON-encoded FaceRep result for a specific person_id
     """
-    # Obtain all records belonging to the specified group number
-    recs_found = glb.rep_db.view_by_group_no(target_group_no, print_info=False)
-
-    # Returns the output as either an image or as Representations
-    if return_type == 'image':
-        # Obtains the subplot figure, seeks to the beginning (just to be safe)
-        # and returns the response as a png image
-        img_file = show_cluster_results(target_group_no, glb.rep_db,
-                                    ncols=ncols, figsize=figsize, color=color,
-                                    add_separator=add_separator)
-        img_file.seek(0)
-
-        output_obj = Response(content=img_file.read(), media_type="image/png")
+    query = select(FaceRep.id, FaceRep.image_name_orig, FaceRep.image_fp_orig).where(FaceRep.person_id == person_id)
+    if glb.DEBUG:
+        print(query)
+    result = glb.sqla_session.execute(query)
     
-    elif return_type == 'records':
-        # Alternatively, converts the records (Representations) to the
-        # appropriate response model
-        output_obj = glb.rep_db.__records2resp_model__(recs_found)
+    return result.fetchall()
 
-    else:
-        raise ValueError("Return type should be either 'image' or 'records'!")
+# ------------------------------------------------------------------------------
 
-    return output_obj
+@fr_router.post("/people/set_name")
+async def people_set_name(person_id: int = Query(None, description="'person_id key' in Person table [integer]"),
+                          person_name: str = Query(None, description="new person name [string]")):
+
+    query = update(Person).values(name = person_name).where(Person.id == person_id)
+    if glb.DEBUG:
+        print(query)
+    glb.sqla_session.execute(query)
+    glb.sqla_session.commit()
+
 
 # ------------------------------------------------------------------------------
 

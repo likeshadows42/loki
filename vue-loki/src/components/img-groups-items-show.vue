@@ -4,14 +4,15 @@ import axios from "axios"
 export default {
 
   props: {
-    group_name: Number
+    person_id: Number,
+    person_name: String
   },
 
   data() {
     return {
       group_obj: null,
       group_num: 0,
-      person_name: '',
+      person_new_name: this.person_name
     }
   },
 
@@ -38,7 +39,7 @@ export default {
 
     async getGroupMembers(group) {
       const params = {}
-      this.group_obj = await this.axiosPost(`http://127.0.0.1:8000/fr/utility/view_by_group_no?target_group_no=${group}`, params)
+      this.group_obj = await this.axiosPost(`http://127.0.0.1:8000/fr/people/get_faces?person_id=${group}`, params)
       this.group_num = Object.keys(this.group_obj).length
       //console.log(this.group_obj)
     },
@@ -47,18 +48,20 @@ export default {
             console.log(item.unique_id)
     },
 
-    async removeImgFromGroup(group_name, uuid) {
+    async removeImgFromGroup(person_id, uuid) {
       const uuid_list = new Array(uuid)
       // const params = {uuid_list}
       await this.axiosPost(`http://127.0.0.1:8000/fr/utility/remove_from_group`, uuid_list)
       await this.axiosPost(`http://127.0.0.1:8000/fr/utility/update_record/?term=${uuid}&new_name_tag=`)
-      this.getGroupMembers(group_name)
+      this.getGroupMembers(person_id)
     },
 
-    async changeTag(group_name) {
+    async changeName(person_id) {
       const params = {}
-      await this.axiosPost(`http://127.0.0.1:8000/fr/utility/edit_tag_by_group_no?target_group_no=${group_name}&new_name_tag=${this.person_name}`, params)
-      this.getGroupMembers(this.group_name)
+      await this.axiosPost(`http://127.0.0.1:8000/fr/people/set_name?person_id=${person_id}&person_name=${this.person_new_name}`, params)
+      this.getGroupMembers(this.person_id)
+      // alert(this.person_new_name+", "+person_id)
+
     },
 
     say() {
@@ -83,7 +86,7 @@ export default {
     // }, 
   },
   mounted() {
-    this.getGroupMembers(this.group_name)
+    this.getGroupMembers(this.person_id)
   },
 }
 </script>
@@ -93,16 +96,17 @@ export default {
 
   <div class="group_div">
     <div class="header_div">
-      <h3>Group #{{ group_name }}</h3>
-      <div>Name this person: <input v-model="person_name"> <button @click="changeTag(group_name)">CHANGE</button></div>
+      <h3>#{{ person_id }} {{person_name}}</h3>
+      <div><input v-model="person_new_name"> <button @click="changeName(person_id)">CHANGE</button></div>
       <div>Num pics: {{group_num }}</div>
     </div>
     <div class="imgs_container">
-      <div v-for="item in group_obj" :key="item.unique_id" class="img_group">
+      <div v-for="item in group_obj" :key="item.id" class="img_group">
         <div class="img_div">
-          <img @click="removeImgFromGroup(group_name, item.unique_id)" :src="'/data/'+item.image_name" class="img_thumb"/>
+          <!-- <img @click="removeImgFromGroup(person_id, item.id)" :src="'/data/'+item.image_name" class="img_thumb"/> -->
+          <img :src="'/data/'+item.image_name_orig" class="img_thumb"/>
         </div>
-        <div v-if="item.name_tag">{{item.name_tag}}</div><div v-else>no tag</div>
+        <!-- <div v-if="item.name_tag">{{item.name_tag}}</div><div v-else>no tag</div> -->
       </div>
     </div>
   </div>
