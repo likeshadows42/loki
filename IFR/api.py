@@ -978,12 +978,12 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
         print('add representation to FaceRep table')
     for record in records:
         glb.sqla_session.add(record)
-        glb.sqla_session.commit()
+    glb.sqla_session.commit()
 
     # Add how many person to Person table as the detected clusters
     if glb.DEBUG:
         print('add person to Person table')
-    subquery = select(FaceRep.group_no).where(FaceRep.group_no != -1).group_by(FaceRep.group_no).order_by(FaceRep.group_no)
+    subquery = select(FaceRep.group_no).where(FaceRep.group_no > -1).group_by(FaceRep.group_no).order_by(FaceRep.group_no)
     query = insert(Person).from_select(["group_no"], subquery)
     glb.sqla_session.execute(query)
     glb.sqla_session.commit()
@@ -998,6 +998,13 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
     glb.sqla_session.execute(query)
     glb.sqla_session.commit()
     
+    # Set group_no to -2 for the reppresentation that have been linked with person
+    if glb.DEBUG:
+        print('Set group_no to -2 for reppresentations that have been linked with person')
+    query = update(FaceRep).values(group_no = -2).where(FaceRep.group_no > -1)
+    if glb.DEBUG:
+        print(query)
+
     # Return representation database
     return records
 
