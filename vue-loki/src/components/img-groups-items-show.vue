@@ -12,8 +12,8 @@ export default {
     return {
       group_obj: null,
       group_num: 0,
-      person_new_name: this.person_name,
-      name_title: this.person_name
+      person_new_name: this.person_name != null ? this.person_name : '',
+      person_name_placeholder: this.person_name != null ? this.person_name : 'unamed'
     }
   },
 
@@ -98,7 +98,8 @@ export default {
 
   <div class="group_div">
     <div class="header_div">
-      <div>#{{ person_id }} <input v-model="person_new_name" class="person_name_box" :size="person_new_name.length"> <button @click="changeName(person_id)">CHANGE</button></div>
+      <!-- <div>#{{ person_id }} <input v-model="person_new_name" class="person_name_box" :size="person_new_name.length"> <button @click="changeName(person_id)">CHANGE</button></div> -->
+      <div>#{{ person_id }} <input v-model="person_new_name" :placeholder="person_name_placeholder" class="person_name_box" :size="person_new_name.length != 0 ? person_new_name.length: 5"> <button @click="changeName(person_id)">CHANGE</button></div>
       <div>Num pics: {{group_num }}</div>
     </div>
     <div class="imgs_container">

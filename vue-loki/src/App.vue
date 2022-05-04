@@ -5,15 +5,15 @@
       
       <h3>Load images</h3>
       <p><a href="#" @click.prevent="dbLoadFromDir">OK Load images from directory</a></p>
-      <p><a href="#" @click.prevent="zipUploaderToggle">OK Load images from zip</a></p>
+      <p><a href="#" @click.prevent="zipUploaderToggle">Load images from zip</a></p>
 
       <h3>Face recognition</h3>    
-      <p><a href="#" @click.prevent="imgUngroupedShow">OK Show ungrouped images</a></p>
+      <p><a href="#" @click.prevent="imgUngroupedShow">Show ungrouped images</a></p>
       <p><a href="#" @click.prevent="imgGroupsShow">OK Show people</a></p> 
       <!-- <p><a href="#" @click.prevent="imgUploaderAdvToggle">Upload multiple images</a></p> -->
       
       <p><a>Upload multiple images</a></p>
-      <p><a href="#" @click.prevent="imgVerWithoutUpToggle">OK Verify image (without upload)</a></p>
+      <p><a href="#" @click.prevent="imgVerWithoutUpToggle">Verify image (without upload)</a></p>
       <!-- <p><a href="#" @click.prevent="imgVerWithUpToggle">Verify image (with upload)</a></p> -->
       
       <p><a>Verify image (with upload)</a></p>
@@ -27,11 +27,11 @@
       <p><a href="#" @click.prevent="">Save database</a></p>
       
       <p><a href="#" @click.prevent="dbClear">OK Clear database</a></p>
-      <p><a href="#" @click.prevent="dbReload">OK Reload database</a></p>
+      <p><a href="#" @click.prevent="dbReload">Reload database</a></p>
 
       <h3>Utility</h3>
-      <p><a href="#" @click.prevent="getGlobaldata">OK Get global parameters</a></p>
-      <p><a href="#" @click.prevent="serverReset">OK Server reset&restart</a></p>
+      <p><a href="#" @click.prevent="getGlobaldata">Get global parameters</a></p>
+      <p><a href="#" @click.prevent="serverReset">Server reset&restart</a></p>
     </aside>
     <article class="main">
        <!-- <ImagesUploader @changed="handleImages" @response="(msg) => MainContent = msg"/> -->
@@ -146,7 +146,7 @@ export default {
 
     async dbClear() {
       console.log("Clearing database")
-      this.MainContent = await this.axiosPost('http://localhost:8000/fr/utility/clear_database')
+      this.MainContent = await this.axiosPost('http://localhost:8000/fr/database/clear')
     },
 
     async dbReload() {
