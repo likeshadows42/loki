@@ -98,9 +98,7 @@ export default {
 
   <div class="group_div">
     <div class="header_div">
-      <h3 v-if="this.name_title">#{{ person_id }} {{this.name_title}}</h3>
-      <h3 v-else>#{{ person_id }} (unamed)</h3>
-      <div><input v-model="person_new_name"> <button @click="changeName(person_id)">CHANGE</button></div>
+      <div>#{{ person_id }} <input v-model="person_new_name" class="person_name_box" :size="person_new_name.length"> <button @click="changeName(person_id)">CHANGE</button></div>
       <div>Num pics: {{group_num }}</div>
     </div>
     <div class="imgs_container">
@@ -122,6 +120,7 @@ export default {
 
 <style scoped>
 .group_div {
+  padding-bottom: 50px;
 }
 
 .header_div {
@@ -135,6 +134,12 @@ export default {
 
 .img_group {
   
+}
+
+.person_name_box {
+  border: none;
+  font-size: 1.17em;
+  font-weight: bold;
 }
 
 .img_div {
