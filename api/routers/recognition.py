@@ -14,10 +14,10 @@ from uuid                    import UUID, uuid4
 from typing                  import List, Optional
 from fastapi                 import APIRouter, UploadFile, Depends, Query, Body
 from IFR.api                 import load_built_model, get_embeddings_as_array,\
-                            process_image_zip_file, show_cluster_results,\
+                            process_image_zip_file,\
                             get_matches_from_similarity, create_new_rep,\
                             database_is_empty, all_tables_exist,\
-                            process_faces_from_dir
+                            process_faces_from_dir, load_database, start_session
 from IFR.classes             import *
 from IFR.functions           import create_dir, string_is_valid_uuid4,\
                                calc_embeddings, calc_similarity, do_face_detection
@@ -368,8 +368,8 @@ async def view_database(amt_detail : MessageDetailOptions = Query(default_msg_de
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/clear_database")
-async def clear_database():
+@fr_router.post("/database/clear")
+async def database_clear_api():
     """
     API endpoint: clear_database()
 
@@ -383,8 +383,11 @@ async def clear_database():
         JSON-encoded dictionary with the following attributes:
             1. message: message stating the database has been cleard [string]
     """
-    # Clears the database
-    glb.rep_db.clear()
+    # Remove SQlite file and recreate again
+    os.remove(glb.SQLITE_DB_FP)
+    glb.sqla_engine = load_database(glb.SQLITE_DB_FP)
+    glb.sqla_session = start_session(glb.sqla_engine)
+    glb.sqla_session.commit()
 
     return {"message": "Database has been cleared."}
 
