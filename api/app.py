@@ -37,36 +37,44 @@ app.include_router(fr_router, prefix="/fr", tags=["Face Recognition"])
 
 @app.on_event("startup")
 async def initialization():
-    print('\n ======== Starting initialization process ======== \n')
+    if glb.DEBUG:
+        print('\n ======== Starting initialization process ======== \n')
 
     # Directories & paths initialization
-    print('  -> Directory creation:')
+    if glb.DEBUG:
+        print('  -> Directory creation:')
     directory_list = [glb.API_DIR, glb.DATA_DIR, glb.IMG_DIR, glb.RDB_DIR,
                       glb.SVD_MDL_DIR, glb.SVD_VRF_DIR, glb.SVD_DTC_DIR]
     ensure_dirs_exist(directory_list, verbose=True)
-    print('')
+    if glb.DEBUG:
+        print('')
 
     # Tries to load a database if it exists. If not, create a new one.
-    print('  -> Loading / creating database:')
+    if glb.DEBUG:
+        print('  -> Loading / creating database:')
     glb.sqla_engine = load_database(glb.SQLITE_DB_FP)
-    print('')
+    if glb.DEBUG:
+        print('')
 
     # Loads (or creates) the session. Also commits once to create table
     # definitions if required.
-    print('  -> Loading / creating session:')
+    if glb.DEBUG:
+        print('  -> Loading / creating session:')
     glb.sqla_session = start_session(glb.sqla_engine)
     glb.sqla_session.commit()                   # create table definitions
     
     # Loads (or creates) all face verifiers
-    print('  -> Loading / creating face verifiers:')
+    if glb.DEBUG:
+        print('  -> Loading / creating face verifiers:')
     glb.models = init_load_verifiers(glb.verifier_names, glb.SVD_VRF_DIR)
 
     # Loads (or creates) all face detectors
-    print('  -> Loading / creating face detectors:')
+    if glb.DEBUG:
+        print('  -> Loading / creating face detectors:')
     glb.models = init_load_detectors(glb.detector_names, glb.SVD_VRF_DIR,
                                      models=glb.models)
-
-    print('\n -------- End of initialization process -------- \n')
+    if glb.DEBUG:
+        print('\n -------- End of initialization process -------- \n')
 
 # ------------------------------------------------------------------------------
 
