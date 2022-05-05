@@ -834,12 +834,16 @@ async def people_get_faces(person_id: int = Query(None, description="'person_id 
     Output:\n
             JSON-encoded FaceRep result for a specific person_id
     """
-    query = select(FaceRep.id, FaceRep.image_name_orig, FaceRep.image_fp_orig).where(FaceRep.person_id == person_id)
+    query = select(FaceRep.id, FaceRep.image_name_orig, FaceRep.image_fp_orig, FaceRep.region).where(FaceRep.person_id == person_id)
     if glb.DEBUG:
         print(query)
     result = glb.sqla_session.execute(query)
-    
-    return result.fetchall()
+
+    return_value = []
+    for item in result:
+        return_value.append({'id': item.id, 'image_name_orig': item.image_name_orig, 'image_fp_orig': item.image_fp_orig, 'region': [int(item) for item in item.region] })
+    print(return_value)
+    return return_value
 
 # ------------------------------------------------------------------------------
 
