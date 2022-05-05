@@ -1,7 +1,11 @@
 <script>
 import axios from "axios"
+import compGroupItemsCanvas from './img-groups-item-canvas.vue'
 
 export default {
+  components: {
+      compGroupItemsCanvas
+  },
 
   props: {
     person_id: Number,
@@ -42,11 +46,8 @@ export default {
       const params = {}
       this.group_obj = await this.axiosPost(`http://127.0.0.1:8000/fr/people/get_faces?person_id=${person_id}`, params)
       this.group_num = Object.keys(this.group_obj).length
+      // return this.group_obj
       //console.log(this.group_obj)
-    },
-
-    clickImg(item) {
-            console.log(item.unique_id)
     },
 
     async removeImgFromGroup(person_id, uuid) {
@@ -66,29 +67,18 @@ export default {
 
     },
 
-    say() {
-      alert(this.person_name)
-    },
-
-    // async fetchImg(img) {
-    //     console.log(img)
+    // removeImg(img) {
+    //   this.imgs = this.imgs.filter((t) => t !== img)
     // },
 
-    // checkGroup(num) {
-    //   if(num == -1) {
-    //     return true
-    //   } else {
-    //     this.all_grouped = true
-    //     return false
-    //   }
-    // }
-
-        // removeImg(img) {
-    //   this.imgs = this.imgs.filter((t) => t !== img)
-    // }, 
   },
-  mounted() {
+
+  created() {
     this.getGroupMembers(this.person_id)
+  },
+
+  mounted() {
+    // this.getGroupMembers(this.person_id)
   },
 }
 </script>
@@ -105,16 +95,12 @@ export default {
     <div class="imgs_container">
       <div v-for="item in group_obj" :key="item.id" class="img_group">
         <div class="img_div">
-          <!-- <img @click="removeImgFromGroup(person_id, item.id)" :src="'/data/'+item.image_name" class="img_thumb"/> -->
-          <img :src="'/data/'+item.image_name_orig" class="img_thumb"/>
+          <compGroupItemsCanvas :item="item"></compGroupItemsCanvas>
         </div>
-        <!-- <div v-if="item.name_tag">{{item.name_tag}}</div><div v-else>no tag</div> -->
       </div>
     </div>
   </div>
-
-
-  <p v-if="group_num == 0">No ungrouped images</p>
+  <p v-if="group_num == 0">No images</p>
 
 </template>
 
