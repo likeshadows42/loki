@@ -834,14 +834,14 @@ async def people_get_faces(person_id: int = Query(None, description="'person_id 
     Output:\n
             JSON-encoded FaceRep result for a specific person_id
     """
-    query = select(FaceRep.id, FaceRep.image_name_orig, FaceRep.image_fp_orig, FaceRep.region).where(FaceRep.person_id == person_id)
+    query = select(FaceRep.id, FaceRep.person_id, FaceRep.image_name_orig, FaceRep.image_fp_orig, FaceRep.region).where(FaceRep.person_id == person_id)
     if glb.DEBUG:
         print(query)
     result = glb.sqla_session.execute(query)
 
     return_value = []
     for item in result:
-        return_value.append({'id': item.id, 'image_name_orig': item.image_name_orig, 'image_fp_orig': item.image_fp_orig, 'region': [int(item) for item in item.region] })
+        return_value.append({'id': item.id, 'person_id': item.person_id, 'image_name_orig': item.image_name_orig, 'image_fp_orig': item.image_fp_orig, 'region': [int(item) for item in item.region] })
     print(return_value)
     return return_value
 
@@ -860,62 +860,27 @@ async def people_set_name(person_id: int = Query(None, description="'person_id k
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/remove_from_group")
-async def remove_from_group(files  : List[str],
-                            img_dir: str = Query(glb.IMG_DIR, description="Full path to image directory (string)")):
+@fr_router.post("/facerep/unjoin")
+async def facerep_unjoin(face_id  : int = Query(None, description="ID of FaceRep record")):
     """
-    API endpoint: remove_from_group()
+    API endpoint: unjoin a FaceRep record from a Person, setting its person_id to None and group_no to -1 
 
-    Allows the user to remove files from a particular group. Effectively, this
-    endpoint sets the group of all files (provided they are valid files) to -1
-    (i.e. group-less).
-
-    Images can be specified by either their unique identifier or their name. If
-    an image file can not be found (because the unique identifier or image name
-    does not match any present in the database) it will be skipped.
-
-    Note: one can mix and match image names and unique identifiers in the same
-    list.
+    This API unlinked a FaceRep record from its Person and set its person_id to None and group_no to -1 
 
     Parameters:
-    - files: list of image names and/or unique identifiers [list of strings].
+    - ID:  the FaceRep ID of the record to unjoin [integer]
 
     Output:\n
         JSON-encoded dictionary containing the following key/value pairs:
             1. removed : number of files removed
             2. skipped : number of files skipped
     """
-    # Initializes removed and skipped file / Representation counters
-    removed_count = 0
-    skipped_count = 0
-
     # Loops through each file
-    for f in files:
-        # Tries to load (or find) the file and obtain its embedding
-        if string_is_valid_uuid4(f): # string is valid uuid
-            for i in range(0, glb.rep_db.size):
-                # If the unique identifier of the current Representation
-                # matches the target identifier, remove its group
-                if glb.rep_db.reps[i].unique_id == UUID(f):
-                    glb.rep_db.reps[i].group_no = -1
-                    removed_count += 1 # increments removed counter
-                else:
-                    pass # do nothing
+    query = update(FaceRep).values(group_no = -2, person_id=None).where(FaceRep.id == face_id)
+    glb.sqla_session.execute(query)
+    glb.sqla_session.commit()
 
-        elif os.path.isfile(os.path.join(img_dir, f)): # string is a valid file
-            for i in range(0, glb.rep_db.size):
-                # If this Representation's full path matches the target
-                # file's full path, remove its group
-                if glb.rep_db.reps[i].image_name == f:
-                    glb.rep_db.reps[i].group_no = -1
-                    removed_count += 1 # increments removed counter
-                else:
-                    pass # do nothing
-
-        else: # string is not a valid uuid nor file
-            skipped_count += 1
-
-    return {'removed':removed_count, 'skipped':skipped_count}
+    return 'OK'
 
 # ------------------------------------------------------------------------------
 
