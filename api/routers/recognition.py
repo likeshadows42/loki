@@ -1205,7 +1205,7 @@ async def create_database_from_zip(myfile: UploadFile,
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/verify/no_upload", response_model=List[List[VerificationMatch]])
+@fr_router.post("/verify/no_upload", response_model=List[List[List[VerificationMatch]]])
 async def verify_no_upload(files: List[UploadFile],
                           params: VerificationParams = Depends()):
     """
@@ -1300,14 +1300,14 @@ async def verify_no_upload(files: List[UploadFile],
     
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/verify/with_upload", response_model=List[List[VerificationMatch]])
+@fr_router.post("/verify/with_upload", response_model=List[List[List[VerificationMatch]]])
 async def verify_with_upload(files: List[UploadFile],
     params     : VerificationParams = Depends(),
     img_dir    : str                = Query(glb_img_dir, description="Full path to image directory (string)"),
     save_as    : ImageSaveTypes     = Query(default_image_save_type, description="File type which uploaded images should be saved as (string)"),
     overwrite  : bool               = Query(False, description="Flag to indicate if an uploaded image with the same name as an existing one in the server should be saved and replace it (boolean)"),
     auto_rename: bool               = Query(True, description="Flag to force auto renaming of images in the zip file with (boolean)"),
-    #auto_tag   : bool               = Query(True, description="Flag to automatically generate name tags based on verification results (boolean)"),
+  # auto_tag   : bool               = Query(True, description="Flag to automatically generate name tags based on verification results (boolean)"),
     auto_group : bool               = Query(True, description="Flag to automatically group image based on verification results (boolean)")):
     """
     API endpoint: verify_with_upload()
@@ -1429,8 +1429,8 @@ async def verify_with_upload(files: List[UploadFile],
         for region, cur_embd in zip(filtered_regions, embeddings):
             # Calculates the similarity between the current embedding and all
             # embeddings from the database
-            similarity_obj = calc_similarity(cur_embd, dtb_embs,
-                                             metric=params.metric,
+            similarity_obj = calc_similarity(cur_embd[params.verifier_name],
+                                             dtb_embs, metric=params.metric,
                                              face_verifier=params.verifier_name,
                                              threshold=params.threshold)
 
@@ -1468,7 +1468,7 @@ async def verify_with_upload(files: List[UploadFile],
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/verify/existing_file", response_model=List[List[VerificationMatch]])
+@fr_router.post("/verify/existing_file", response_model=List[List[List[VerificationMatch]]])
 async def verify_existing_file(files: List[str],
             params : VerificationParams = Depends(),
             img_dir: str = Query(glb.IMG_DIR, description="Full path to image directory (string)")):
@@ -1537,12 +1537,18 @@ async def verify_existing_file(files: List[str],
     all_uids = [id[0] for id in query.all()]
 
     # Loops through each file
-    for f in files:
+    for i, f in enumerate(files):
+        # Tries to convert file string into a unique identifier
+        try:
+            is_valid_uid = int(f) in all_uids
+        except:
+            is_valid_uid = False
+
         # Tries to load (or find) the file and obtain its embedding
-        if int(f) in all_uids: # string is valid uuid
+        if is_valid_uid: # string is valid uuid
             # Obtain the embeddings
             query      = glb.sqla_session.query(FaceRep.embeddings).where(FaceRep.id == int(f))
-            embeddings = query.all()[0][0][params.verifier_name]
+            embeddings = list(query.all()[0])
 
         elif os.path.isfile(os.path.join(img_dir, f)): # string is a valid file
             # Opens the image file
@@ -1562,32 +1568,32 @@ async def verify_existing_file(files: List[str],
             # Calculates the deep neural embeddings for each face image in
             # outputs
             embeddings = calc_embeddings(filtered_faces, glb.models,
-                                        verifier_names=params.verifier_name,
-                                        normalization=params.normalization)
-
-            # Initialize current image's result container
-            cur_img_results = []
-
-            # Loops through each face region and embedding and creates a FaceRep for
-            # each face
-            for cur_embd in embeddings:
-                # Calculates the similarity between the current embedding and all
-                # embeddings from the database
-                similarity_obj = calc_similarity(cur_embd, dtb_embs,
-                                             metric=params.metric,
-                                             face_verifier=params.verifier_name,
-                                             threshold=params.threshold)
-
-                # Gets all matches based on the similarity object and appends the
-                # result to the current image results list
-                result = get_matches_from_similarity(similarity_obj)
-                cur_img_results.append(result)
-
-            # 
-            verification_results.append(cur_img_results)
+                                            verifier_names=params.verifier_name,
+                                            normalization=params.normalization)
 
         else: # string is not a valid unique identifier nor file
             continue
+
+        # Initialize current image's result container
+        cur_img_results = []
+
+        # Loops through each face region and embedding and creates a FaceRep for
+        # each face
+        for cur_embd in embeddings:
+            # Calculates the similarity between the current embedding and all
+            # embeddings from the database
+            similarity_obj = calc_similarity(cur_embd[params.verifier_name],
+                                             dtb_embs, metric=params.metric,
+                                             face_verifier=params.verifier_name,
+                                             threshold=params.threshold)
+
+            # Gets all matches based on the similarity object and appends the
+            # result to the current image results list
+            result = get_matches_from_similarity(similarity_obj)
+            cur_img_results.append(result)
+
+        # 
+        verification_results.append(cur_img_results)
 
     return verification_results
     
