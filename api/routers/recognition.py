@@ -20,7 +20,8 @@ from IFR.api                 import load_built_model, get_embeddings_as_array,\
                             process_faces_from_dir
 from IFR.classes             import *
 from IFR.functions           import create_dir, string_is_valid_uuid4,\
-                               calc_embeddings, calc_similarity, do_face_detection
+                               calc_embeddings, calc_similarity,\
+                               do_face_detection, discard_small_regions
 from fastapi.responses       import Response
 
 from matplotlib                      import image          as mpimg
@@ -1053,6 +1054,7 @@ async def create_database_from_directory(params: CreateDatabaseParams,
                             eps            = params.eps,
                             min_samples    = params.min_samples,
                             metric         = params.metric,
+                            pct            = params.pct,
                             check_models   = params.check_models,
                             verbose        = params.verbose)
         
@@ -1188,6 +1190,7 @@ async def create_database_from_zip(myfile: UploadFile,
                             eps            = params.eps,
                             min_samples    = params.min_samples,
                             metric         = params.metric,
+                            pct            = params.pct,
                             check_models   = params.check_models,
                             verbose        = params.verbose)
         
@@ -1244,7 +1247,7 @@ async def verify_no_upload(files: List[UploadFile],
     # Initializes results list and obtains the relevant embeddings from the 
     # representation database
     verification_results = []
-    dtb_embs = get_embeddings_as_array(glb.rep_db, params.verifier_name)
+    dtb_embs = get_embeddings_as_array(params.verifier_name)
 
     # Loops through each file
     for f in files:
@@ -1256,36 +1259,42 @@ async def verify_no_upload(files: List[UploadFile],
         # Detects faces
         output = do_face_detection(image, detector_models=glb.models,
                                     detector_name=params.detector_name,
-                                    align=params.align, verbose=False)
+                                    align=params.align, verbose=params.verbose)
 
-        # Assumes only 1 face is detected (even if multiple are present). If no
-        # face are detected, skips this image file
-        if output is not None:
-            face   = [output['faces'][0]]
-        else:
-            continue
+        # Filter regions & faces which are too small
+        filtered_regions, idxs = discard_small_regions(output['regions'],
+                                                    image.shape, pct=params.pct)
+        filtered_faces         = [output['faces'][i] for i in idxs]
 
-        # Calculate the face image embedding
-        embeddings = calc_embeddings(face, glb.models,
+        # Calculates the deep neural embeddings for each face image in outputs
+        embeddings = calc_embeddings(filtered_faces, glb.models,
                                      verifier_names=params.verifier_name,
                                      normalization=params.normalization)
-        cur_emb    = embeddings[0][params.verifier_name]
+        # cur_emb    = embeddings[0][params.verifier_name]
 
-        # Calculates the similarity between the current embedding and all
-        # embeddings from the database
-        similarity_obj = calc_similarity(cur_emb, dtb_embs,
-                                         metric=params.metric,
-                                         face_verifier=params.verifier_name,
-                                         threshold=params.threshold)
+        # Initialize current image's result container
+        cur_img_results = []
 
-        # Gets all matches based on the similarity object and append the result
-        # to the results list
-        result = get_matches_from_similarity(similarity_obj, glb.rep_db)
-        #result_df = pd.DataFrame(result)
-        #print(result_df)
-        #verification_results = result_df.to_dict('records')
-        verification_results.append(result)
-        # TODO: check for multiple file, not working at the moment!
+        # 
+        for cur_embd in embeddings:
+            # Calculates the similarity between the current embedding and all
+            # embeddings from the database
+            similarity_obj = calc_similarity(cur_embd[params.verifier_name],
+                                             dtb_embs,
+                                             metric=params.metric,
+                                             face_verifier=params.verifier_name,
+                                             threshold=params.threshold)
+
+            # Gets all matches based on the similarity object and append the
+            # result to the results list
+            result = get_matches_from_similarity(similarity_obj)
+
+            # Stores the result for each face on the current image
+            cur_img_results.append(result)
+
+        # Then, stores the set of results (of the current image) to the
+        # verification results list
+        verification_results.append(cur_img_results)
 
     return verification_results
     
@@ -1298,7 +1307,7 @@ async def verify_with_upload(files: List[UploadFile],
     save_as    : ImageSaveTypes     = Query(default_image_save_type, description="File type which uploaded images should be saved as (string)"),
     overwrite  : bool               = Query(False, description="Flag to indicate if an uploaded image with the same name as an existing one in the server should be saved and replace it (boolean)"),
     auto_rename: bool               = Query(True, description="Flag to force auto renaming of images in the zip file with (boolean)"),
-    auto_tag   : bool               = Query(True, description="Flag to automatically generate name tags based on verification results (boolean)"),
+    #auto_tag   : bool               = Query(True, description="Flag to automatically generate name tags based on verification results (boolean)"),
     auto_group : bool               = Query(True, description="Flag to automatically group image based on verification results (boolean)")):
     """
     API endpoint: verify_with_upload()
@@ -1357,17 +1366,14 @@ async def verify_with_upload(files: List[UploadFile],
         Note that the final output for multiple files, each with multiple
         matches, will be a list of list of JSON-encoded structures.
     """
-    # Initializes results list, gets all files in the image directory and
-    # obtains the relevant embeddings from the representation database
+    # Initializes FaceReps & results list, gets all files in the image directory
+    # and obtains the relevant embeddings from the representation database
     verification_results = []
     all_files            = [name.split('.')[0] for name in os.listdir(img_dir)]
-    dtb_embs   = get_embeddings_as_array(glb.rep_db, params.verifier_name)
+    dtb_embs             = get_embeddings_as_array(params.verifier_name)
 
     # Loops through each file
     for f in files:
-        # Initializes empty unique id
-        uid = ''
-
         # Obtains contents of the file & transforms it into an image
         data  = np.fromfile(f.file, dtype=np.uint8)
         img   = cv2.imdecode(data, cv2.IMREAD_UNCHANGED)
@@ -1390,8 +1396,7 @@ async def verify_with_upload(files: List[UploadFile],
             # Creates a new unique object identifier using uuid4, converts it
             # into a string, sets it as the file name, creates the file's full
             # path and saves it
-            uid      = uuid4().hex 
-            img_name = uid
+            img_name = str(uuid4())
             img_fp   = os.path.join(img_dir, img_name + '.' + save_as)
 
             if save_as == ImageSaveTypes.NPY:
@@ -1404,65 +1409,60 @@ async def verify_with_upload(files: List[UploadFile],
         # Detects faces
         output = do_face_detection(img, detector_models=glb.models,
                                     detector_name=params.detector_name,
-                                    align=params.align, verbose=False)
+                                    align=params.align, verbose=params.verbose)
 
-        # Assumes only 1 face is detected (even if multiple are present). If no
-        # face are detected, skips this image file
-        if output is not None:
-            face   = [output['faces'][0]]
-            region = output['regions'][0]
-        else:
-            continue
+        # Filter regions & faces which are too small
+        filtered_regions, idxs = discard_small_regions(output['regions'],
+                                                    img.shape, pct=params.pct)
+        filtered_faces         = [output['faces'][i] for i in idxs]
 
-        # Calculate the face image embedding
-        embeddings = calc_embeddings(face, glb.models,
+        # Calculates the deep neural embeddings for each face image in outputs
+        embeddings = calc_embeddings(filtered_faces, glb.models,
                                      verifier_names=params.verifier_name,
                                      normalization=params.normalization)
-        cur_emb    = embeddings[0][params.verifier_name]
 
-        # Calculates the similarity between the current embedding and all
-        # embeddings from the database
-        similarity_obj = calc_similarity(cur_emb, dtb_embs,
-                                         metric=params.metric,
-                                         face_verifier=params.verifier_name,
-                                         threshold=params.threshold)
+        # Initialize current image's result container
+        cur_img_results = []
 
-        # Gets all matches based on the similarity object and append the result
-        # to the results list
-        result = get_matches_from_similarity(similarity_obj, glb.rep_db)
+        # Loops through each face region and embedding and creates a FaceRep for
+        # each face
+        for region, cur_embd in zip(filtered_regions, embeddings):
+            # Calculates the similarity between the current embedding and all
+            # embeddings from the database
+            similarity_obj = calc_similarity(cur_embd, dtb_embs,
+                                             metric=params.metric,
+                                             face_verifier=params.verifier_name,
+                                             threshold=params.threshold)
 
-        # Chooses a tag automatically from the best match if it has a distance / 
-        # similarity of <=0.75*threshold and if 'auto_tag' is True
-        if auto_tag and len(result) > 0:
-            if similarity_obj['distances'][0]\
-                <= 0.75 * similarity_obj['threshold']:
-                tag = result[0].name_tag
-            else:
-                tag = ''
-        else:
-            tag = ''
+            # Gets all matches based on the similarity object and appends the
+            # result to the current image results list
+            result = get_matches_from_similarity(similarity_obj)
+            cur_img_results.append(result)
 
-        # Automatically determines the image's group based on the best match if
-        # it has a distance / similarity of <=0.75*threshold and if 'auto_group'
-        # is True
-        if auto_group and len(result) > 0:
-            if similarity_obj['distances'][0]\
-                <= 0.75 * similarity_obj['threshold']:
-                group_no = result[0].group_no
+            # Automatically determines the image's group based on the best match
+            # if it has a distance / similarity of <=0.75*threshold and if
+            # 'auto_group' is True
+            if auto_group and len(result) > 0:
+                if similarity_obj['distances'][0]\
+                    <= 0.75 * similarity_obj['threshold']:
+                    group_no = result[0].group_no
+                else:
+                    group_no = -1
             else:
                 group_no = -1
-        else:
-            group_no = -1
 
-        # Creates a representation object for this image and adds it to the
-        # database
-        new_rep = create_new_rep(img_fp, img_fp, region, embeddings,
-                                 group_no=group_no, tag=tag, uid=uid)
-        glb.rep_db.reps.append(new_rep)
-        glb.db_changed = True
+            # Creates a FaceRep for each detected face
+            rep = FaceRep(image_name_orig=img_name, image_name='',
+                             image_fp_orig=img_fp, image_fp='',
+                             group_no=group_no, region=region,
+                             embeddings=cur_embd)
 
-        # Stores the verification result
-        verification_results.append(result)
+            # Adds each FaceRep to the global session
+            glb.sqla_session.add(rep)
+
+        # Stores the verification result and commits the FaceReps
+        verification_results.append(cur_img_results)
+        glb.sqla_session.commit()
 
     return verification_results
 
@@ -1530,36 +1530,19 @@ async def verify_existing_file(files: List[str],
     # Initializes results list and obtains the relevant embeddings from the 
     # Representation database
     verification_results = []
-    dtb_embs = get_embeddings_as_array(glb.rep_db, params.verifier_name)
+    dtb_embs             = get_embeddings_as_array(params.verifier_name)
 
-    # Gets the unique ids in the database depending on the database's size
-    if glb.rep_db.size == 0:   # no representations
-        all_uids = []
-
-    elif glb.rep_db.size > 1:  # one or many representations
-        # Loops through each Representation in the database and gets the unique
-        # id tag
-        all_uids = []
-        for rep in glb.rep_db.reps:
-            all_uids.append(rep.unique_id)
-    
-    else: # this should never happen (negative size for a database? preposterous!)
-        raise AssertionError('Representation database can '
-                            +'not have a negative size!')
+    # Gets the unique ids in the database
+    query    = glb.sqla_session.query(FaceRep.id)
+    all_uids = [id[0] for id in query.all()]
 
     # Loops through each file
     for f in files:
         # Tries to load (or find) the file and obtain its embedding
-        if string_is_valid_uuid4(f): # string is valid uuid
-            # Finds the Representation from the unique identifier. If this
-            # fails, skips the file and continue
-            try:
-                index = all_uids.index(UUID(f))
-            except:
-                continue
-
+        if int(f) in all_uids: # string is valid uuid
             # Obtain the embeddings
-            cur_emb = glb.rep_db.reps[index].embeddings[params.verifier_name]
+            query      = glb.sqla_session.query(FaceRep.embeddings).where(FaceRep.id == int(f))
+            embeddings = query.all()[0][0][params.verifier_name]
 
         elif os.path.isfile(os.path.join(img_dir, f)): # string is a valid file
             # Opens the image file
@@ -1567,38 +1550,44 @@ async def verify_existing_file(files: List[str],
             image = image[:, :, ::-1]
 
             # Detects faces
-            output = do_face_detection(image, detector_models=glb.models,
-                                        detector_name=params.detector_name,
-                                        align=params.align, verbose=False)
+            output = do_face_detection(f, detector_models=glb.models,
+                                    detector_name=params.detector_name,
+                                    align=params.align, verbose=params.verbose)
 
-            # Assumes only 1 face is detected (even if multiple are present). If no
-            # face are detected, skips this image file
-            if output is not None:
-                face   = [output['faces'][0]]
-                region = output['regions'][0]
-            else:
-                continue
+            # Filter regions & faces which are too small
+            filtered_regions, idxs = discard_small_regions(output['regions'],
+                                        mpimg.imread(f).shape, pct=params.pct)
+            filtered_faces         = [output['faces'][i] for i in idxs]
 
-            # Calculate the face image embedding
-            embeddings = calc_embeddings(face, glb.models,
-                                         verifier_names=params.verifier_name,
-                                         normalization=params.normalization)
-            cur_emb    = embeddings[0][params.verifier_name]
+            # Calculates the deep neural embeddings for each face image in
+            # outputs
+            embeddings = calc_embeddings(filtered_faces, glb.models,
+                                        verifier_names=params.verifier_name,
+                                        normalization=params.normalization)
 
-        else: # string is not a valid uuid nor file
+            # Initialize current image's result container
+            cur_img_results = []
+
+            # Loops through each face region and embedding and creates a FaceRep for
+            # each face
+            for cur_embd in embeddings:
+                # Calculates the similarity between the current embedding and all
+                # embeddings from the database
+                similarity_obj = calc_similarity(cur_embd, dtb_embs,
+                                             metric=params.metric,
+                                             face_verifier=params.verifier_name,
+                                             threshold=params.threshold)
+
+                # Gets all matches based on the similarity object and appends the
+                # result to the current image results list
+                result = get_matches_from_similarity(similarity_obj)
+                cur_img_results.append(result)
+
+            # 
+            verification_results.append(cur_img_results)
+
+        else: # string is not a valid unique identifier nor file
             continue
-
-        # Calculates the similarity between the current embedding and all
-        # embeddings from the database
-        similarity_obj = calc_similarity(cur_emb, dtb_embs,
-                                        metric=params.metric,
-                                        face_verifier=params.verifier_name,
-                                        threshold=params.threshold)
-
-        # Gets all matches based on the similarity object and append the result
-        # to the results list
-        result = get_matches_from_similarity(similarity_obj, glb.rep_db)
-        verification_results.append(result)
 
     return verification_results
     
