@@ -5,6 +5,8 @@
             item: Object,
         },
 
+        emits: ['remove-facerep'],
+
         data() {
             return {
 
@@ -46,10 +48,24 @@
 <template>
     <!-- <img :src="'/data/'+item.image_name_orig" class="img_thumb"/>
     <div>{{ item.region }}</div> -->
-    <canvas :id="'picCanvas'+item.id"></canvas>
+    <div class="canvas-container">
+        <canvas :id="'picCanvas'+item.id"></canvas>
+        <button class='buttCanvas' @click="$emit('remove-facerep', item.id, item.person_id)">X</button>
+    </div>
+
 </template>
 
 
 <style scoped>
+
+.canvas-container {
+    position: relative;
+}
+
+.buttCanvas {
+    position: absolute;
+    left: 5px;
+    top: 5px;
+}
 
 </style>

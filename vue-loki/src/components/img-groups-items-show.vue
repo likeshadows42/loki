@@ -50,11 +50,9 @@ export default {
       //console.log(this.group_obj)
     },
 
-    async removeImgFromGroup(person_id, uuid) {
-      const uuid_list = new Array(uuid)
-      // const params = {uuid_list}
-      await this.axiosPost(`http://127.0.0.1:8000/fr/utility/remove_from_group`, uuid_list)
-      await this.axiosPost(`http://127.0.0.1:8000/fr/utility/update_record/?term=${uuid}&new_name_tag=`)
+    async removeImg(item_id, person_id) {
+      const params = {}
+      await this.axiosPost(`http://127.0.0.1:8000/fr/facerep/unjoin?face_id=${item_id}`, params)
       this.getGroupMembers(person_id)
     },
 
@@ -66,10 +64,6 @@ export default {
       // alert(this.person_new_name+", "+person_id)
 
     },
-
-    // removeImg(img) {
-    //   this.imgs = this.imgs.filter((t) => t !== img)
-    // },
 
   },
 
@@ -95,7 +89,7 @@ export default {
     <div class="imgs_container">
       <div v-for="item in group_obj" :key="item.id" class="img_group">
         <div class="img_div">
-          <compGroupItemsCanvas :item="item"></compGroupItemsCanvas>
+          <compGroupItemsCanvas :item="item" @remove-facerep="removeImg"></compGroupItemsCanvas>
         </div>
       </div>
     </div>
