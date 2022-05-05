@@ -1000,11 +1000,11 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
     
     # Set group_no to -2 for the reppresentation that have been linked with person
     if glb.DEBUG:
-        print('Set group_no to -2 for reppresentations that have been linked with person')
+        print('Set group_no to -2 for FaceRep and Person that have been already linked together')
     query = update(FaceRep).values(group_no = -2).where(FaceRep.group_no > -1)
-    if glb.DEBUG:
-        print(query)
     glb.sqla_session.execute(query)
+    query = update(Person).values(group_no = -2).where(Person.group_no > -1)
+    glb.sqla_session.execute(query)    
     glb.sqla_session.commit()
 
     # Return representation database
