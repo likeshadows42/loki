@@ -22,7 +22,7 @@ from IFR.classes             import RepDatabase, Representation,\
                                     VerificationMatch, Base
 from IFR.functions           import get_image_paths, do_face_detection,\
                                     calc_embeddings, ensure_detectors_exists,\
-                                    ensure_verifiers_exists
+                                    ensure_verifiers_exists, discard_small_regions
 from sklearn.cluster         import DBSCAN
 
 from shutil                          import move           as sh_move
@@ -553,26 +553,32 @@ def create_new_rep(original_fp, img_fp, region, embeddings, uid='',
 
 # ------------------------------------------------------------------------------
 
-def get_embeddings_as_array(db, verifier_name):
+def get_embeddings_as_array(verifier_name):
     """
-    Gets all of the embeddings for a given 'verifier_name' from the database
-    'db' and returns it as a N x M numpy array where N is the number of
-    embeddings and M is the number of elements of each embeddings.
+    Gets all of the embeddings for a given 'verifier_name' from the session
+    object stored in the global variable 'sqla_session' in
+    'global_variables.py', and returns it as a N x M numpy array where N is the
+    number of embeddings and M is the number of elements of each embeddings.
 
     Inputs:
-        1. db            - Representation database [RepDatabase object].
-        2. verifier_name - name of verifier [string].
+        1. verifier_name - name of verifier [string].
 
     Output:
         1. N x M numpy array where each row corresponds to a face image's
-            embedding
+            embedding [numpy array].
 
     Signature:
-        embeddings = get_embeddings_as_array(db, verifier_name)
+        embeddings = get_embeddings_as_array(verifier_name)
     """
+    # Get all face embeddings
+    query = glb.sqla_session.query(FaceRep.embeddings)
+
+    # Loops through each query result, appending the appropriate embedding to
+    # the list
     embeddings = [] # initializes empty list
-    for rep in db.reps:
-        embeddings.append(rep.embeddings[verifier_name])
+    for row in query.all():
+        # print(f'Iter {i}:', type(row[0]), row[0][verifier_name], sep=' | ')
+        embeddings.append(row[0][verifier_name])
 
     return np.array(embeddings)
 
@@ -770,7 +776,7 @@ def create_reps_from_dir(img_dir, detector_models, verifier_models,
 def process_faces_from_dir(img_dir, detector_models, verifier_models,
                         detector_name='retinaface', verifier_names=['ArcFace'],
                         normalization='base', align=True, auto_grouping=True, 
-                        eps=0.5, min_samples=2, metric='cosine',
+                        eps=0.5, min_samples=2, metric='cosine', pct=0.02,
                         check_models=True, verbose=False):
     """
     Processes face images contained in the directory 'img_dir'. If there are no
@@ -779,14 +785,20 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
         1. Faces are detected in the image using the 'detector_name' face
             detector.
 
-        2. For each face detected, the deep neural embeddings (which is just a
+        2. If a detected face (region) is too small, it is discarded. This
+            filtering is determined by 'pct'. If a region's area is smaller than
+            the original image's area multiplied by this percentage factor
+            'pct', then it is discarded. This helps with detection of tiny faces
+            which are not useful for recognition.
+
+        3. For each filtered face, the deep neural embeddings (which is just a
             vector representation of the face) is calculated.
 
-        3. A face representation object (see help(FaceRep) for more details) is
+        4. A face representation object (see help(FaceRep) for more details) is
             created for each face and added (but not committed!) to the current
             session.
 
-    An optional 'fourth' step is performed if 'auto_grouping' is True. The
+    An optional 'fifth' step is performed if 'auto_grouping' is True. The
     function tries to group similar face representations using the DBSCAN
     algorithm on the embeddings, such that each group corresponds to faces of
     (ideally) the same person. If multiple face verifiers were passed to this
@@ -865,6 +877,10 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
                                 sklearn.metrics.pairwise_distances
                                 [string, default='cosine'].
 
+        12. pct             - percentage of image area as a decimal. This will
+                                be used to filter out 'small' detections [float,
+                                default=0.02].
+
         12. check_models    - toggles if the function should ensure the face 
                                 detectors and verifiers are contained in the
                                 respective dictionaries [boolean, default=True].
@@ -928,14 +944,20 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
                                     detector_name=detector_name, align=align,
                                     verbose=verbose)
 
+        # Filter regions & faces which are too small
+        image_size             = mpimg.imread(img_path).shape
+        filtered_regions, idxs = discard_small_regions(output['regions'],
+                                                        image_size, pct=pct)
+        filtered_faces         = [output['faces'][i] for i in idxs]
+
         # Calculates the deep neural embeddings for each face image in outputs
-        embeddings = calc_embeddings(output['faces'], verifier_models,
+        embeddings = calc_embeddings(filtered_faces, verifier_models,
                                      verifier_names=verifier_names,
                                      normalization=normalization)
 
         # Loops through each (region, embedding) pair and create a record
         # (FaceRep object)
-        for region, cur_embds in zip(output['regions'], embeddings):
+        for region, cur_embds in zip(filtered_regions, embeddings):
             # id        - handled by sqlalchemy
             # person_id - dont now exactly how to handle this (sqlalchemy?)
             # image_name_orig = img_path.split('/')[-1]
@@ -998,7 +1020,7 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
     glb.sqla_session.execute(query)
     glb.sqla_session.commit()
     
-    # Set group_no to -2 for the reppresentation that have been linked with person
+    # Set group_no to -2 for the representation that have been linked with person
     if glb.DEBUG:
         print('Set group_no to -2 for reppresentations that have been linked with person')
     query = update(FaceRep).values(group_no = -2).where(FaceRep.group_no > -1)
@@ -1083,9 +1105,10 @@ def process_image_zip_file(myfile, image_dir, auto_rename=True):
 #                               OTHER FUNCTIONS
 # ------------------------------------------------------------------------------
 
-def get_matches_from_similarity(similarity_obj, db):
+def get_matches_from_similarity(similarity_obj):
     """
-    Gets all matches from the database 'db' based on the current similairty
+    Gets all matches from the session object stored in the global variable
+    'sqla_session' from global_variable.py based on the current similairty
     object 'similairty_obj'. This object is obtained from 'calc_similarity()'
     function (see help(calc_similarity) for more information).
 
@@ -1093,28 +1116,31 @@ def get_matches_from_similarity(similarity_obj, db):
         1. similarity_obj - dictionary containing the indexes of matches (key:
             idxs), the threshold value used (key: threshold) and the distances
             of the matches (key: distances) [dictionary].
-        
-        2. db             - representation database [RepDatabase object].
 
     Output:
-        1. List containing each matched Representation. Note that the length of
-            this list is equal to the number of matches.
+        1. list containing each matched as a VerificationMatch object. Note
+            that the length of this list is equal to the number of matches (so
+            an empty list means no matches).
 
     Signature:
-        match_obj = get_matches_from_similarity(similarity_obj, db)
+        matches = get_matches_from_similarity(similarity_obj)
     """
-
     # Initializes the matches list
     matches = []
+
+    # Get all face embeddings
+    query = glb.sqla_session.query(FaceRep)
 
     # Loops through each index in the similarity object and stores the
     # corresponding Representation
     for i, dst in zip(similarity_obj['idxs'], similarity_obj['distances']):
-        rep = db.reps[i]
-        matches.append(VerificationMatch(unique_id=rep.unique_id,
-                            image_name=rep.image_name, group_no=rep.group_no,
-                            name_tag=rep.name_tag, image_fp=rep.image_fp,
-                            region=rep.region, distance=dst,
+        rep = query.all()[i]
+        matches.append(VerificationMatch(unique_id=rep.id,
+                            image_name=rep.image_name_orig,
+                            group_no=rep.group_no,
+                            image_fp=rep.image_fp_orig,
+                            region=rep.region,
+                            distance=dst,
                             embeddings=[name for name in rep.embeddings.keys()],
                             threshold=similarity_obj['threshold']))
     
