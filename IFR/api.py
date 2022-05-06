@@ -29,6 +29,7 @@ from shutil                          import move           as sh_move
 from deepface.DeepFace               import build_model    as build_verifier
 from deepface.detectors.FaceDetector import build_model    as build_detector
 from sqlalchemy.orm           import sessionmaker
+from sqlalchemy               import text, update
 from IFR.classes              import FaceRep, Person
 
 # ______________________________________________________________________________
@@ -1320,3 +1321,26 @@ def start_session(engine):
     return session
 
 # ------------------------------------------------------------------------------
+
+def facerep_set_groupno_done(session, face_id):
+    # Loops through each file
+    query = update(FaceRep).values(group_no = -1, person_id=None).where(FaceRep.id == face_id)
+    if session:
+        session.execute(query)
+        session.commit()
+
+
+def people_clean_without_repps(session):
+    """
+    Remove records from Person table that don't have any corresponding records in
+    FaceRep table.
+    """
+
+    textual_sql = text("DELETE FROM person WHERE person.id IN (SELECT person.id \
+                        FROM person LEFT JOIN representation \
+                        ON person.id == representation.person_id \
+                        GROUP BY person.id \
+                        HAVING COUNT(representation.id) == 0)")
+    if(session):
+        session.execute(textual_sql)
+        session.commit()

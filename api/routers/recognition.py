@@ -17,7 +17,8 @@ from IFR.api                 import load_built_model, get_embeddings_as_array,\
                             process_image_zip_file,\
                             get_matches_from_similarity, create_new_rep,\
                             database_is_empty, all_tables_exist,\
-                            process_faces_from_dir, load_database, start_session
+                            process_faces_from_dir, load_database, start_session,\
+                            facerep_set_groupno_done, people_clean_without_repps    
 from IFR.classes             import *
 from IFR.functions           import create_dir, string_is_valid_uuid4,\
                                calc_embeddings, calc_similarity,\
@@ -28,7 +29,7 @@ from matplotlib                      import image          as mpimg
 from deepface.DeepFace               import build_model    as build_verifier
 from deepface.detectors.FaceDetector import build_model    as build_detector
 
-from sqlalchemy import select, update
+from sqlalchemy import select, update, text
 
 glb_data_dir = glb.DATA_DIR
 glb_img_dir  = glb.IMG_DIR
@@ -578,8 +579,6 @@ async def people_list():
     # attributes = np.unique(attributes)  # only keep unique groups
     # attributes = sorted(attributes, key=lambda x: int(x))   # and sort them
     query = select(Person.id, Person.name, Person.note)
-    if glb.DEBUG:
-        print(query)
     result = glb.sqla_session.execute(query)
     return result.fetchall()
 
@@ -836,14 +835,12 @@ async def people_get_faces(person_id: int = Query(None, description="'person_id 
             JSON-encoded FaceRep result for a specific person_id
     """
     query = select(FaceRep.id, FaceRep.person_id, FaceRep.image_name_orig, FaceRep.image_fp_orig, FaceRep.region).where(FaceRep.person_id == person_id)
-    if glb.DEBUG:
-        print(query)
     result = glb.sqla_session.execute(query)
 
     return_value = []
     for item in result:
-        return_value.append({'id': item.id, 'person_id': item.person_id, 'image_name_orig': item.image_name_orig, 'image_fp_orig': item.image_fp_orig, 'region': [int(item) for item in item.region] })
-    print(return_value)
+        return_value.append({'id': item.id, 'person_id': item.person_id, 'image_name_orig': item.image_name_orig, 'image_fp_orig': item.image_fp_orig, 'region': [int(x) for x in item.region] })
+
     return return_value
 
 # ------------------------------------------------------------------------------
@@ -853,8 +850,6 @@ async def people_set_name(person_id: int = Query(None, description="'person_id k
                           person_name: str = Query(None, description="new person name [string]")):
 
     query = update(Person).values(name = person_name).where(Person.id == person_id)
-    if glb.DEBUG:
-        print(query)
     glb.sqla_session.execute(query)
     glb.sqla_session.commit()
 
@@ -876,12 +871,38 @@ async def facerep_unjoin(face_id  : int = Query(None, description="ID of FaceRep
             1. removed : number of files removed
             2. skipped : number of files skipped
     """
-    # Loops through each file
-    query = update(FaceRep).values(group_no = -2, person_id=None).where(FaceRep.id == face_id)
-    glb.sqla_session.execute(query)
-    glb.sqla_session.commit()
+
+    # Set group_no to -2 and person_id=None for a specific FaceRep record
+    facerep_set_groupno_done(glb.sqla_session, face_id)
+
+    # check and remove eventually record from People table that doesn't have any
+    #corresponding record in FaceRep table
+    people_clean_without_repps(glb.sqla_session)
 
     return 'OK'
+
+
+@fr_router.post("/facerep/get_ungrouped")
+async def facerep_get_ungrouped():
+    """
+    API endpoint: get all records from FaceRep that are not linked wioth a Person
+                  I.E. the ones that has group_no field set to -1
+
+    Parameters:
+        - None
+
+    Output:\n
+        JSON-encoded list of FaceRep.id(s) that match the above condition
+    """
+
+    query = select(FaceRep.id, FaceRep.person_id, FaceRep.image_name_orig, FaceRep.region).where(FaceRep.group_no == -1)
+    result = glb.sqla_session.execute(query)
+    return_value = []
+    for item in result:
+        print([int(x) for x in item.region])
+        return_value.append({'id': item.id, 'person_id': item.person_id, 'image_name_orig': item.image_name_orig, 'region': [int(x) for x in item.region] })
+
+    return return_value
 
 # ------------------------------------------------------------------------------
 
