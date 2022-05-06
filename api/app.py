@@ -62,13 +62,15 @@ async def initialization():
         print('  -> Loading / creating session:', end='')
     glb.sqla_session = start_session(glb.sqla_engine)
     glb.sqla_session.commit()                   # create table definitions
-    print('success!\n')
+    if glb.DEBUG:
+        print('success!\n')
     
     # Loads (or creates) all face verifiers
     if glb.DEBUG:
         print('  -> Loading / creating face verifiers:')
     glb.models = init_load_verifiers(glb.verifier_names, glb.SVD_VRF_DIR)
-    print('')
+    if glb.DEBUG:
+        print('')
 
     # Loads (or creates) all face detectors
     if glb.DEBUG:
@@ -82,18 +84,21 @@ async def initialization():
 
 @app.on_event("shutdown")
 async def finish_processes():
-    print('\n ======== Performing finishing processes ======== \n')
+    if glb.DEBUG:
+        print('\n ======== Performing finishing processes ======== \n')
 
     # Saves (built) face detectors (if needed)
-    print('  -> Saving face detectors (if needed):')
+    if glb.DEBUG:
+        print('  -> Saving face detectors (if needed):')
     save_built_detectors(glb.detector_names, glb.SVD_DTC_DIR, overwrite=False,
                          verbose=True)
 
     # Saves (built) face verifiers (if needed)
-    print('  -> Saving face verifiers (if needed):')
+    if glb.DEBUG:
+        print('  -> Saving face verifiers (if needed):')
     save_built_verifiers(glb.verifier_names, glb.SVD_VRF_DIR, overwrite=False,
                          verbose=False)
-
-    print('\n -------- Exitting program: goodbye! -------- \n')
+    if glb.DEBUG:
+        print('\n -------- Exitting program: goodbye! -------- \n')
 
 # ------------------------------------------------------------------------------
