@@ -414,6 +414,56 @@ def process_face(img_path, target_size=(224, 224), normalization='base',
     
     return face
 
+# ------------------------------------------------------------------------------
+
+def discard_small_regions(regions, image_size, pct=0.02):
+    """
+    Discards small detection regions in 'regions'. A region is considered
+    'small' if its area is smaller than the area of the original image, given by
+    'image_size', multiplied by a percentage factor 'pct' and rounded up to the
+    nearest pixel (integer). The function then returns the filtered regions and
+    an index list with the index of each valid region.
+
+    Inputs:
+        1. regions    - list of regions, where each region is a list of 4
+                          integers corresponding to the coordinates of the top
+                          left corner, width and height [list of list of 4
+                          integers].
+
+        2. image_size - width and height (or height and width) of the image
+                          [tuple or list with 2 elements].
+
+        3. pct        - percentage of image area as a decimal [float,
+                          default=0.02].
+
+    Output:
+        1. filtered list of regions
+        2. valid region index list
+
+    Signature:
+        filt_rgns, idxs = discard_small_regions(regions, image_size, pct=0.02)
+    """
+    # Initializes filtered regions and idxs list
+    filt_regions = []
+    idxs         = []
+
+    # Calculates the area threshold, which is obtained from the area of the
+    # original image (image_size[0] * image_size[1]) multipled by a percentage
+    # 'pct'. This result is rounded up to the nearest pixel (i.e. integer) and
+    # ensured to be greater than or equal to 1
+    threshold = np.maximum(np.ceil(pct * image_size[0] * image_size[1]), 0)
+
+    # Loops through each region in the 'regions' list
+    for i, region in enumerate(regions):
+        # Stores the current region if it is greater than or equal to the
+        # threshold.
+        if region[2] * region[3] >= threshold:
+            filt_regions.append(region)
+            idxs.append(i)
+
+    # Returns the filtered regions and idxs list
+    return filt_regions, idxs
+
 # ______________________________________________________________________________
 #                DETECTORS & VERIFIERS BUILDING, SAVING & LOADING
 # ------------------------------------------------------------------------------

@@ -128,6 +128,7 @@ default_uids              = []
 default_auto_grouping     = True
 default_eps               = 0.5
 default_min_samples       = 2
+default_pct               = 0.02
 default_check_models      = True
 default_verbose           = False
 default_msg_detail        = MessageDetailOptions.SUMMARY
@@ -184,6 +185,7 @@ class CreateDatabaseParams(BaseModel):
     eps           : Optional[float]           = default_eps
     min_samples   : Optional[int]             = default_min_samples
     metric        : Optional[DistanceMetrics] = default_metric
+    pct           : Optional[float]           = default_pct
     check_models  : Optional[bool]            = default_check_models
     verbose       : bool                      = default_verbose
 
@@ -202,6 +204,7 @@ class VerificationParams(BaseModel):
     normalization: NormalizationTypes  = default_normalization
     metric       : DistanceMetrics     = default_metric
     threshold    : float               = default_threshold
+    pct          : float               = default_pct
     verbose      : bool                = default_verbose
 
     class Config:
@@ -223,10 +226,10 @@ class VerificationMatch(BaseModel):
     """
     Response model class: defines the output for face verification match.
     """
-    unique_id : UUID
+    unique_id : int
     image_name: str
     group_no  : int
-    name_tag  : str
+    #name_tag  : str
     image_fp  : str
     region    : List[int]
     embeddings: List[str]

@@ -51,22 +51,24 @@ async def initialization():
 
     # Tries to load a database if it exists. If not, create a new one.
     if glb.DEBUG:
-        print('  -> Loading / creating database:')
+        print('  -> Loading / creating database:', end='')
     glb.sqla_engine = load_database(glb.SQLITE_DB_FP)
     if glb.DEBUG:
-        print('')
+        print('success!\n')
 
     # Loads (or creates) the session. Also commits once to create table
     # definitions if required.
     if glb.DEBUG:
-        print('  -> Loading / creating session:')
+        print('  -> Loading / creating session:', end='')
     glb.sqla_session = start_session(glb.sqla_engine)
     glb.sqla_session.commit()                   # create table definitions
+    print('success!\n')
     
     # Loads (or creates) all face verifiers
     if glb.DEBUG:
         print('  -> Loading / creating face verifiers:')
     glb.models = init_load_verifiers(glb.verifier_names, glb.SVD_VRF_DIR)
+    print('')
 
     # Loads (or creates) all face detectors
     if glb.DEBUG:
