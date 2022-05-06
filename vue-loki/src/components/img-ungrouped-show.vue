@@ -1,6 +1,10 @@
 <script>
+import compGroupItemsCanvas from './img-groups-item-canvas.vue'
 export default {
-  
+  components: {
+      compGroupItemsCanvas
+  },
+
   data() {
     return {
       imgs: null,
@@ -13,15 +17,12 @@ export default {
       const requestOptions = {
         method: "POST",
       };
-      const res = await fetch(`http://127.0.0.1:8000/fr/utility/view_database?amt_detail=complete&output_type=structure`,requestOptions)
+      const res = await fetch(`http://127.0.0.1:8000/fr/facerep/get_ungrouped`,requestOptions)
       this.imgs = await res.json()
-      // console.log(`Fecthed news data successfully`)
-      //console.log(this.imgs)
-      
     },
 
-    async fetchImg(img) {
-        console.log(img)
+    async fetchImg(item_id, person_id) {
+        console.log(item_id+", "+person_id)
     },
 
     checkGroup(num) {
@@ -32,10 +33,6 @@ export default {
         return false
       }
     }
-
-        // removeImg(img) {
-    //   this.imgs = this.imgs.filter((t) => t !== img)
-    // },
   },  
 
   mounted() {
@@ -48,13 +45,8 @@ export default {
 <template>
 <h2>List all untagged images</h2>
 
-<!-- <p><button @click="getList()">get list elements</button></p> -->
-
-<span v-for="img in imgs" :key="img.unique_id">
-  <span v-if="checkGroup(img.group_no)">
-    <img @click="fetchImg(img.image_name)" :src="`/data/${img.image_name}`" class="thumb">
-    <!-- <button @click="removeImg(img)">X</button> -->
-  </span>
+<span v-for="img in imgs" :key="img.id">
+    <compGroupItemsCanvas :item="img" @parent-handler="fetchImg"></compGroupItemsCanvas>
 </span>
 <p v-if="imgs == true">No ungrouped images</p>
 

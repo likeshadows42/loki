@@ -3,9 +3,10 @@
 
         props: {
             item: Object,
+            show_button: Boolean,
         },
 
-        emits: ['remove-facerep'],
+        emits: ['parent-handler'],
 
         data() {
             return {
@@ -46,13 +47,12 @@
 
 
 <template>
-    <!-- <img :src="'/data/'+item.image_name_orig" class="img_thumb"/>
-    <div>{{ item.region }}</div> -->
     <div class="canvas-container">
-        <canvas :id="'picCanvas'+item.id"></canvas>
-        <button class='buttCanvas' @click="$emit('remove-facerep', item.id, item.person_id)">X</button>
-    </div>
+        <canvas v-if="show_button" :id="'picCanvas'+item.id"></canvas>
+        <canvas v-else :id="'picCanvas'+item.id" @click="$emit('parent-handler', item.id, item.person_id)"></canvas>
 
+        <button v-if="show_button" class='buttCanvas' @click="$emit('parent-handler', item.id, item.person_id)">X</button>
+    </div>
 </template>
 
 
