@@ -89,6 +89,40 @@ def create_dir(dir_path):
 
 # ------------------------------------------------------------------------------
 
+def ensure_dirs_exist(directory_list, verbose=False):
+    """
+    Ensures that all directories in 'directory_list' exist. Note that
+    'directory_list' should contain the full paths of each directory. This
+    function tries to create each directory that does not exist.
+
+    Inputs:
+        1. directory_list - directory full paths [string or list of strings].
+
+        2. verbose        - toggles if the function should output useful
+                            information to the console [boolean, default=False].
+
+    Output:
+        1. None
+
+    Signature:
+        ensure_dirs_exist(directory_list, verbose=False)
+    """
+    # Loops through each directory's full path in 'directory_list'
+    for dir_fp in directory_list:
+        if verbose:
+            print(f'[ensure_dirs_exist] Creating {dir_fp} directory: ', end='')
+    
+        if create_dir(dir_fp):
+            if verbose:
+                print('directory exists. Continuing...')
+        else:
+            if verbose:
+                print('success.')
+
+    return None
+
+# ------------------------------------------------------------------------------
+
 def string_is_valid_uuid4(uuid_string):
     """
     Checks if the string provided 'uuid_string' is a valid uuid4 or not.
@@ -228,19 +262,10 @@ def detect_faces(img_path, use_detector='retinaface', align=True,
 def do_face_detection(img_path, detector_models={}, detector_name='retinaface',
                         align=True, verbose=False):
     """
-    Performs the face detection step:
-
-        1. The function tries to load the chosen face detector 'detector_name'
-            from the 'detector_models' dictionary. If this fails, the function
-            builds the face detector from scratch.
-
-        2. The functions tries to detect faces in the image provided. If the
-            face detection fails or finds no faces, then a None output is
-            returned.
-
-    The result (success / failure) of each stage is printed to the console if
-    verbose is True. In case of failures, the reason for the failure is also
-    printed.
+    Performs the face detection step. The function loads the chosen face
+    detector 'detector_name' from the 'detector_models' dictionary. Then, the
+    function tries to detect faces in the image provided. If the face detection
+    fails or finds no faces, then a None output is returned.
 
     Inputs:
         1. img_path        - image path, base64 image or numpy array image
@@ -270,26 +295,8 @@ def do_face_detection(img_path, detector_models={}, detector_name='retinaface',
     # Initializes output object
     output = None
 
-    # Tries to load the chosen face detector. On failure, builds the face
-    # detector from scratch
-    if verbose:
-            print('[do_face_detection] Loading face detector: ', end='')
-    
-    try:
-        face_detector = detector_models[detector_name]
-
-        if verbose:
-            print('success!')
-    
-    except Exception as excpt:
-        if verbose:
-            print(f'failed! (reason: {excpt})')
-            print('[do_face_detection] Building face detector: ', end='')
-
-        face_detector = build_detector(detector_name)
-
-        if verbose:
-            print('success!')
+    # Loads the chosen face detector
+    face_detector = detector_models[detector_name]
 
     # Tries to detect faces in the image provided and align (if required):
     try:
@@ -301,15 +308,16 @@ def do_face_detection(img_path, detector_models={}, detector_name='retinaface',
                                 face_detector=face_detector)
     except Exception as excpt:
         if verbose:
-            print(f'failed! (reason: {excpt})')
+            print(f'failed! (reason: {excpt}) (img: {img_path})')
 
     # Checks if the face detector was able to find any face if verbose is True
     if verbose:
         if len(output['faces']) == 0:
             print(f'failed! (reason: No face found.',
-                   'Ensure the image provided has at least 1 face.)')
+                   'Ensure the image provided has at least 1 face.)',
+                  f'(img: {img_path})')
         else:
-            print('success!')
+            print(f'success! (img: {img_path})')
 
     return output
 
@@ -405,6 +413,56 @@ def process_face(img_path, target_size=(224, 224), normalization='base',
         face = functions.normalize_input(face, normalization=normalization)
     
     return face
+
+# ------------------------------------------------------------------------------
+
+def discard_small_regions(regions, image_size, pct=0.02):
+    """
+    Discards small detection regions in 'regions'. A region is considered
+    'small' if its area is smaller than the area of the original image, given by
+    'image_size', multiplied by a percentage factor 'pct' and rounded up to the
+    nearest pixel (integer). The function then returns the filtered regions and
+    an index list with the index of each valid region.
+
+    Inputs:
+        1. regions    - list of regions, where each region is a list of 4
+                          integers corresponding to the coordinates of the top
+                          left corner, width and height [list of list of 4
+                          integers].
+
+        2. image_size - width and height (or height and width) of the image
+                          [tuple or list with 2 elements].
+
+        3. pct        - percentage of image area as a decimal [float,
+                          default=0.02].
+
+    Output:
+        1. filtered list of regions
+        2. valid region index list
+
+    Signature:
+        filt_rgns, idxs = discard_small_regions(regions, image_size, pct=0.02)
+    """
+    # Initializes filtered regions and idxs list
+    filt_regions = []
+    idxs         = []
+
+    # Calculates the area threshold, which is obtained from the area of the
+    # original image (image_size[0] * image_size[1]) multipled by a percentage
+    # 'pct'. This result is rounded up to the nearest pixel (i.e. integer) and
+    # ensured to be greater than or equal to 1
+    threshold = np.maximum(np.ceil(pct * image_size[0] * image_size[1]), 0)
+
+    # Loops through each region in the 'regions' list
+    for i, region in enumerate(regions):
+        # Stores the current region if it is greater than or equal to the
+        # threshold.
+        if region[2] * region[3] >= threshold:
+            filt_regions.append(region)
+            idxs.append(i)
+
+    # Returns the filtered regions and idxs list
+    return filt_regions, idxs
 
 # ______________________________________________________________________________
 #                DETECTORS & VERIFIERS BUILDING, SAVING & LOADING
@@ -559,6 +617,150 @@ def batch_build_verifiers(verifier_names, show_prog_bar=True, verbose=False):
                      f'(reason: {excpt})')
         
     return verifiers
+
+# ------------------------------------------------------------------------------
+
+def ensure_detectors_exists(models={}, detector_names=['retinaface'],
+                                verbose=False):
+    """
+    Ensures that each face detector with a name in 'detector_names' exists in
+    the 'models' dictionary. For each face detector, if it does not exist, this
+    function tries to build it from scratch. If the building process fails, the
+    detector is simply skipped and the return value will be False. If all
+    detectors exist and/or are successfully built, then True is returned. The
+    updated model dictionary is always returned as a second output.
+
+    Inputs:
+        1. models         - face detectors' name (key) and object (value)
+                            [dictionary, default={}].
+
+        2. detector_names - face detectors' name [string or list of strings,
+                            default=['retinaface']].
+
+        3. verbose        - toggles if the function should print useful
+                            information to the console [boolean, default=False].
+
+    Output:
+        1. flag indicating if all face detectors exist and/or were successfully
+            built (True) or not (False) [boolean].
+
+        2. updated model dictionary [dictionary].
+
+    Signature:
+        ret, models = ensure_detectors_exists(models={}, verbose=False,
+                                             detector_names=['retinaface'])
+    """
+    # Initializes no error flag
+    no_errors = True
+
+    # Ensures model names is a list
+    if not isinstance(detector_names, list):
+        detector_names = [detector_names]
+
+    # Prints information if verbose is True
+    if verbose:
+        print('[ensure_detectors_exists] Checking existence of face detectors:')
+
+    # Loops through each name in the detector names list
+    for name in detector_names:
+        if verbose:
+            print(f'  > Checking {name}: ', end='')
+        
+        # First, checks if the current face detector exists in the 'models'
+        # dictionary provided. This only checks for the key, not the integrity
+        # of the respective detector object.
+        try:
+            test = models[name]
+            if verbose:
+                print('success!')
+        except:
+            if verbose:
+                print('failed! (building detector:', end='')
+
+            # On failure, tries to build the detector from scratch, skipping it
+            # if the building process fails
+            try:
+                models[name] = build_detector(name)
+                if verbose:
+                    print('success!')
+            except Exception as excpt:
+                no_errors = False
+                if verbose:
+                    print(f'failed > reason: {excpt})')
+
+    return (no_errors, models)
+
+# ------------------------------------------------------------------------------
+
+def ensure_verifiers_exists(models={}, verifier_names=['ArcFace'],
+                                verbose=False):
+    """
+    Ensures that each face verifier with a name in 'verifier_names' exists in
+    the 'models' dictionary. For each face verifier, if it does not exist, this
+    function tries to build it from scratch. If the building process fails, the
+    verifier is simply skipped and the return value will be False. If all
+    verifiers exist and/or are successfully built, then True is returned. The
+    updated model dictionary is always returned as a second output.
+
+    Inputs:
+        1. models         - face verifiers' name (key) and object (value)
+                            [dictionary, default={}].
+
+        2. verifier_names - face verifiers' name [string or list of strings,
+                            default=['ArcFace']].
+
+        3. verbose        - toggles if the function should print useful
+                            information to the console [boolean, default=False].
+
+    Output:
+        1. flag indicating if all face verifiers exist and/or were successfully
+            built (True) or not (False) [boolean].
+
+        2. updated model dictionary [dictionary].
+
+    Signature:
+        ret, models = ensure_verifier_exists(models={}, verbose=False,
+                                             verifier_names=['retinaface'])
+    """
+    # Initializes no error flag
+    no_errors = True
+
+    # Ensures model names is a list
+    if not isinstance(verifier_names, list):
+        verifier_names = [verifier_names]
+
+    # Prints information if verbose is True
+    if verbose:
+        print('[ensure_verifiers_exists] Checking existence of face verifiers:')
+
+    # Loops through each name in the verifier names list
+    for name in verifier_names:
+        if verbose:
+            print(f'  > Checking {name}: ', end='')
+        
+        # First, checks if the current face verifier exists in the 'models'
+        # dictionary provided. This only checks for the key, not the integrity
+        # of the respective verifier object.
+        try:
+            test = models[name]
+            if verbose:
+                print('success!')
+        except:
+            if verbose:
+                print('failed! (building verifier:', end='')
+
+            # On failure, tries to build the verifier from scratch, skipping it
+            # if the building process fails
+            try:
+                models[name] = build_verifier(name)
+                if verbose:
+                    print('success!')
+            except Exception as excpt:
+                no_errors = False
+                if verbose:
+                    print(f'failed > reason: {excpt})')
+
+    return (no_errors, models)
 
 # ______________________________________________________________________________
 #                           SIMILARITY & DISTANCE RELATED

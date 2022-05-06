@@ -1,16 +1,23 @@
 <script>
 import axios from "axios"
+import compGroupItemsCanvas from './img-groups-item-canvas.vue'
 
 export default {
+  components: {
+      compGroupItemsCanvas
+  },
 
   props: {
-    group_name: Number
+    person_id: Number,
+    person_name: String
   },
 
   data() {
     return {
       group_obj: null,
-      // all_grouped: false
+      group_num: 0,
+      person_new_name: this.person_name != null ? this.person_name : '',
+      person_name_placeholder: this.person_name != null ? this.person_name : 'unamed'
     }
   },
 
@@ -29,67 +36,97 @@ export default {
       try {
         const res = await axios.post(url, params)
         // console.log(res.data)
-        return res.data
+        return await res.data
       } catch(error) {
         console.log(error)
       }
     },
 
-    async getGroupMembers(group) {
-      console.log(`Getting global parameters ${group}`)
-      const params = {target_group_no: "0",}
-      this.group_obj = await this.axiosPost(`http://127.0.0.1:8000/fr/utility/view_by_group_no`, params)
-      console.log(this.group_obj)
+    async getGroupMembers(person_id) {
+      const params = {}
+      this.group_obj = await this.axiosPost(`http://127.0.0.1:8000/fr/people/get_faces?person_id=${person_id}`, params)
+      this.group_num = Object.keys(this.group_obj).length
+      // return this.group_obj
+      //console.log(this.group_obj)
     },
 
-    // async fetchImg(img) {
-    //     console.log(img)
-    // },
+    async removeImg(item_id, person_id) {
+      const params = {}
+      await this.axiosPost(`http://127.0.0.1:8000/fr/facerep/unjoin?face_id=${item_id}`, params)
+      this.getGroupMembers(person_id)
+    },
 
-    // checkGroup(num) {
-    //   if(num == -1) {
-    //     return true
-    //   } else {
-    //     this.all_grouped = true
-    //     return false
-    //   }
-    // }
+    async changeName(person_id) {
+      const params = {}
+      await this.axiosPost(`http://127.0.0.1:8000/fr/people/set_name?person_id=${person_id}&person_name=${this.person_new_name}`, params)
+      this.name_title = this.person_new_name
+      this.getGroupMembers(this.person_id)
+      // alert(this.person_new_name+", "+person_id)
 
-        // removeImg(img) {
-    //   this.imgs = this.imgs.filter((t) => t !== img)
-    // }, 
+    },
+
   },
+
+  created() {
+    this.getGroupMembers(this.person_id)
+  },
+
   mounted() {
-    this.getGroupMembers(this.group_name)
-    // console.log(this.group_obj)
+    // this.getGroupMembers(this.person_id)
   },
 }
 </script>
 
 
 <template>
-<div>{{ group_name }}</div>
-
-<!-- <span v-for="item in group_obj" :key="group">
-  <span v-if="group != -1">
-    <div>{{ group }}</div>
-  </span>
-</span> -->
-
-<!-- <p><button @click="getList()">get list elements</button></p> -->
-
-<!-- <span v-for="img in imgs" :key="img.unique_id">
-  <span v-if="checkGroup(img.group_no)">
-    <img @click="fetchImg(img.image_name)" :src="`/data/${img.image_name}`" class="thumb">
-  </span>
-</span>
-<p v-if="all_grouped == true">No ungrouped images</p> -->
-
+  <div v-if="group_num > 0" class="group_div">
+    <div class="header_div">
+      <!-- <div>#{{ person_id }} <input v-model="person_new_name" class="person_name_box" :size="person_new_name.length"> <button @click="changeName(person_id)">CHANGE</button></div> -->
+      <div>#{{ person_id }} <input v-model="person_new_name" :placeholder="person_name_placeholder" class="person_name_box" :size="person_new_name.length != 0 ? person_new_name.length: 5"> <button @click="changeName(person_id)">CHANGE</button></div>
+      <div>Num pics: {{group_num }}</div>
+    </div>
+    <div class="imgs_container">
+      <div v-for="item in group_obj" :key="item.id" class="img_group">
+        <div class="img_div">
+          <compGroupItemsCanvas :item="item" :show_button="true" @parent-handler="removeImg"></compGroupItemsCanvas>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 
 <style scoped>
-.thumb {
+.group_div {
+  padding-bottom: 50px;
+}
+
+.header_div {
+  /* background-color: #f4f6ff; */
+}
+
+.imgs_container {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.img_group {
+  
+}
+
+.person_name_box {
+  border: none;
+  font-size: 1.17em;
+  font-weight: bold;
+}
+
+.img_div {
+  padding-right: 10px;
+  /* min-height: 100%; */
+}
+
+.img_thum {
     max-width: 80px;
+    /* height: 100%; */
 }
 </style>

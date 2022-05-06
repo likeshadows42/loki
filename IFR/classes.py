@@ -2,11 +2,16 @@
 #                                   API CLASSES
 # ==============================================================================
 
-from re                 import compile, IGNORECASE
-from enum               import Enum
-from uuid               import UUID
-from typing             import List, Tuple, Optional
-from pydantic           import BaseModel
+from re                         import compile, IGNORECASE
+from enum                       import Enum
+from uuid                       import UUID
+from typing                     import List, Tuple, Optional
+from pydantic                   import BaseModel
+
+from sqlalchemy                 import Column, String, Integer,\
+                                        PickleType, ForeignKey
+from sqlalchemy.orm             import relationship
+from sqlalchemy.ext.declarative import declarative_base
 
 # IMPLEMENTATION NOTE:
 # Pydantic expects a dictionary by default. You can configure your model to also
@@ -123,7 +128,8 @@ default_uids              = []
 default_auto_grouping     = True
 default_eps               = 0.5
 default_min_samples       = 2
-
+default_pct               = 0.02
+default_check_models      = True
 default_verbose           = False
 default_msg_detail        = MessageDetailOptions.SUMMARY
 default_msg_output        = MessageOutputOptions.STRUCTURE
@@ -175,12 +181,12 @@ class CreateDatabaseParams(BaseModel):
     verifier_names: List[FaceVerifierOptions] = [default_verifier]
     align         : bool                      = default_align
     normalization : NormalizationTypes        = default_normalization
-    tags          : Optional[List[str]]       = default_tags
-    uids          : Optional[List[str]]       = default_uids
     auto_grouping : Optional[bool]            = default_auto_grouping
     eps           : Optional[float]           = default_eps
     min_samples   : Optional[int]             = default_min_samples
     metric        : Optional[DistanceMetrics] = default_metric
+    pct           : Optional[float]           = default_pct
+    check_models  : Optional[bool]            = default_check_models
     verbose       : bool                      = default_verbose
 
     class Config:
@@ -198,6 +204,7 @@ class VerificationParams(BaseModel):
     normalization: NormalizationTypes  = default_normalization
     metric       : DistanceMetrics     = default_metric
     threshold    : float               = default_threshold
+    pct          : float               = default_pct
     verbose      : bool                = default_verbose
 
     class Config:
@@ -219,10 +226,10 @@ class VerificationMatch(BaseModel):
     """
     Response model class: defines the output for face verification match.
     """
-    unique_id : UUID
+    unique_id : int
     image_name: str
     group_no  : int
-    name_tag  : str
+    #name_tag  : str
     image_fp  : str
     region    : List[int]
     embeddings: List[str]
@@ -1201,4 +1208,60 @@ class RepDatabase():
 
         return reps_found
 
+# ______________________________________________________________________________
+#                         SQLALCHEMY TABLES DEFINITIONS
+# ------------------------------------------------------------------------------
 
+Base = declarative_base()
+
+class Person(Base):
+    """
+    Person data structure
+
+    Fields:
+        person_id
+        name
+        note
+    """
+    # Table name
+    __tablename__ = 'person'
+
+    # Object attributes (as database columns)
+    id   = Column(Integer, primary_key=True)
+    name = Column(String, default=None)
+    group_no = Column(Integer, default=None)
+    note = Column(String, default=None)
+
+    # Establishes connection to associated Face Representations
+    reps = relationship("FaceRep", back_populates="person",
+                        cascade="all, delete, delete-orphan") # important for deleting children
+    
+    # Standard repr for the class
+    def __repr__(self):
+        return "(id=%s) - %s\n%s" % (self.id, self.name, self.note)
+
+class FaceRep(Base):
+    """
+    Initializes the object with appropriate attributes
+    """
+    # Table name
+    __tablename__ = 'representation'
+
+    # Object attributes (as database columns)
+    id              = Column(Integer, primary_key=True)
+    person_id       = Column(Integer, ForeignKey('person.id'), default=None)
+    image_name_orig = Column(String, nullable=False)
+    image_name      = Column(String, default=None) # because we are not using for now
+    image_fp_orig   = Column(String, nullable=False)
+    image_fp        = Column(String, default=None) # because we are not using for now
+    group_no        = Column(Integer, nullable=False)
+    region          = Column(PickleType, nullable=False)
+    embeddings      = Column(PickleType, nullable=False)
+
+    # Establishes connection to associated Person
+    person = relationship("Person", back_populates="reps")
+
+    # Standard repr for the class
+    def __repr__(self):
+        return "(id=%s)\nimage name: %s\nimage path: %s\ngroup: %s" % (self.id,
+                    self.image_name, self.image_fp, self.group_no)

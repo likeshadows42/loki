@@ -11,24 +11,25 @@ import numpy                 as np
 import api.global_variables  as glb
 
 from uuid                    import UUID, uuid4
-from pydoc                   import describe
-from pandas                  import describe_option
 from typing                  import List, Optional
 from fastapi                 import APIRouter, UploadFile, Depends, Query, Body
-from IFR.api                 import load_representation_db, load_built_model,\
-                            create_reps_from_dir, get_embeddings_as_array,\
-                            fix_uid_of_renamed_imgs, process_image_zip_file,\
-                            get_matches_from_similarity, show_cluster_results,\
-                            create_new_rep, do_face_detection
+from IFR.api                 import load_built_model, get_embeddings_as_array,\
+                            process_image_zip_file,\
+                            get_matches_from_similarity, create_new_rep,\
+                            database_is_empty, all_tables_exist,\
+                            process_faces_from_dir, load_database, start_session,\
+                            facerep_set_groupno_done, people_clean_without_repps    
 from IFR.classes             import *
 from IFR.functions           import create_dir, string_is_valid_uuid4,\
-                               calc_embeddings, calc_similarity
+                               calc_embeddings, calc_similarity,\
+                               do_face_detection, discard_small_regions
 from fastapi.responses       import Response
 
 from matplotlib                      import image          as mpimg
 from deepface.DeepFace               import build_model    as build_verifier
 from deepface.detectors.FaceDetector import build_model    as build_detector
 
+from sqlalchemy import select, update, text
 
 glb_data_dir = glb.DATA_DIR
 glb_img_dir  = glb.IMG_DIR
@@ -97,21 +98,27 @@ async def inspect_globals(print2console: bool = Query(True, description="Toggles
     # Prints all other global variables
     if print2console:
         print("  > Other variables:")
-        print("Models".ljust(17)           + ':', glb.models)
-        print("Rep. database".ljust(17)    + ':', glb.rep_db)
-        print("Database changed".ljust(17) + ':', glb.db_changed)
+        print("Models".ljust(21)                + ':', glb.models)
+        print("Rep. database".ljust(21)         + ':', glb.rep_db)
+        print("Database changed".ljust(21)      + ':', glb.db_changed)
+        print("SQLite database:".ljust(21)      + ':', glb.SQLITE_DB)
+        print("SQLite database path:".ljust(21) + ':', glb.SQLITE_DB_FP)
+        print("SQL alchemy engine:".ljust(21)   + ':', glb.sqla_engine)
 
     return {'dirs':directories, 'dir_names':dir_names,
             'detector_names':glb.detector_names,
             'verifier_names':glb.verifier_names,
-            'model_names':list(glb.models.keys()),
-            'rep_db':glb.rep_db, 'db_changed':glb.db_changed}
+            'model_names':list(glb.models.keys()), 'rep_db':glb.rep_db,
+            'db_changed':glb.db_changed, 'sqlite_db_name':glb.SQLITE_DB,
+            'sqlite_db_fp':glb.SQLITE_DB_FP, 'sqla_engine':glb.sqla_engine}
 
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/debug/reset_server")
 async def reset_server(no_database: bool = Query(False, description="Toggles if database should be empty or loaded [boolean]")):
     """
+    TODO: FIX THIS ENDPOINT!
+
     API endpoint: reset_server()
 
     Allows the user to restart the server without manually requiring to shut it
@@ -193,8 +200,8 @@ async def reset_server(no_database: bool = Query(False, description="Toggles if 
     else:
         if not os.path.isfile(os.path.join(glb.RDB_DIR, 'rep_database.pickle')):
             glb.db_changed = True
-        glb.rep_db = load_representation_db(os.path.join(glb.RDB_DIR,
-                                        'rep_database.pickle'), verbose=True)
+        #glb.rep_db = load_representation_db(os.path.join(glb.RDB_DIR,
+        #                                'rep_database.pickle'), verbose=True)
     
     print('')
     
@@ -363,8 +370,8 @@ async def view_database(amt_detail : MessageDetailOptions = Query(default_msg_de
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/clear_database")
-async def clear_database():
+@fr_router.post("/database/clear")
+async def database_clear_api():
     """
     API endpoint: clear_database()
 
@@ -378,8 +385,11 @@ async def clear_database():
         JSON-encoded dictionary with the following attributes:
             1. message: message stating the database has been cleard [string]
     """
-    # Clears the database
-    glb.rep_db.clear()
+    # Remove SQlite file and recreate again
+    os.remove(glb.SQLITE_DB_FP)
+    glb.sqla_engine = load_database(glb.SQLITE_DB_FP)
+    glb.sqla_session = start_session(glb.sqla_engine)
+    glb.sqla_session.commit()
 
     return {"message": "Database has been cleared."}
 
@@ -563,12 +573,14 @@ async def get_attribute_from_database(
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/get_groups")
-async def get_groups():
-    attributes = glb.rep_db.get_attribute('group_no')
-    attributes = np.unique(attributes)  # only keep unique groups
-    attributes = sorted(attributes, key=lambda x: int(x))   # and sort them
-    return [str(x) for x in attributes]
+@fr_router.post("/people/list")
+async def people_list():
+    # attributes = glb.rep_db.get_attribute('group_no')
+    # attributes = np.unique(attributes)  # only keep unique groups
+    # attributes = sorted(attributes, key=lambda x: int(x))   # and sort them
+    query = select(Person.id, Person.name, Person.note)
+    result = glb.sqla_session.execute(query)
+    return result.fetchall()
 
 # ------------------------------------------------------------------------------
 
@@ -767,6 +779,8 @@ async def reload_database(
     rdb_dir: str  = Query(glb.RDB_DIR, description="Full path to Representation database directory (string)"),
     verbose: bool = Query(False, description="Controls the amount of text that is printed to the server's console (boolean)")):
     """
+    TODO: FIX THIS ENDPOINT!
+
     API endpoint: reload_database()
 
     Allows the user to reload the database. Sets the global 'database has been
@@ -787,8 +801,8 @@ async def reload_database(
     # 
     try:
         # Attempts to load the database
-        glb.rep_db = load_representation_db(os.path.join(rdb_dir,
-                                        'rep_database.pickle'), verbose=verbose)
+        #glb.rep_db = load_representation_db(os.path.join(rdb_dir,
+        #                                'rep_database.pickle'), verbose=verbose)
 
         # Sets the 'database has been modified' flag to True, creates output
         # message and sets the status as 0
@@ -805,128 +819,90 @@ async def reload_database(
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/view_by_group_no")
-async def view_by_group_no(target_group_no: int = Query(None, description="Target group number (>= -1) [integer]"),
-    return_type  : str = Query('records', description="Desired return type. Options: 'records' or 'image' [str]"),
-    ncols        : int = Query(4, description="Number of columns in the output image [integer]"),
-    figsize      : Tuple[int, int] = Query((15, 15), description="Figure size in inches [tuple of 2 integers]"),
-    color        : str = Query('black', description="Text color [str]"),
-    add_separator: bool = Query(False, description="Adds a caption acting as a separator [boolean]")):
+@fr_router.post("/people/get_faces")
+async def people_get_faces(person_id: int = Query(None, description="'person_id key' in Person table [integer]")):
     """
     API endpoint: view_by_group_no()
 
     Views all information of all Representations belonging to a group number 
-    specified by 'target_group_no'. Raises a Value Error if the 'return_type'
+    specified by 'person_id'. Raises a Value Error if the 'return_type'
     provided is neither 'records' nor 'image'.
 
     Parameters:
-    - target_group_no : desired group / cluster number [integer].
-
-    - return_type : determines if the output of this endpoint will be
-         JSON-encoded structures of the Representations ('reps') OR an image
-         ('image') (default='records') [string].
-
-    - ncols : number of columns in the plot image. Ignored if return_type='reps'
-         (default=4) [integer].
-    
-    - figsize : output figure size in inches. Ignored if return_type='reps'
-         (default=(15, 15)) [tuple of 2 integers].
-
-    - color : text color (default='black') [string].
-
-    - add_separator : toggles between adding a caption acting as a separator or
-         not (default=False) [boolean].
+    - person_id : desired group / cluster number [integer].
 
     Output:\n
-        - If return_type='records':
-            JSON-encoded structure containing all attributes of each
-            Representation in the database belonging to the desired group.
-
-        - If return_type='image':
-            Plot of all images in the database belonging to the desired group.
+            JSON-encoded FaceRep result for a specific person_id
     """
-    # Obtain all records belonging to the specified group number
-    recs_found = glb.rep_db.view_by_group_no(target_group_no, print_info=False)
+    query = select(FaceRep.id, FaceRep.person_id, FaceRep.image_name_orig, FaceRep.image_fp_orig, FaceRep.region).where(FaceRep.person_id == person_id)
+    result = glb.sqla_session.execute(query)
 
-    # Returns the output as either an image or as Representations
-    if return_type == 'image':
-        # Obtains the subplot figure, seeks to the beginning (just to be safe)
-        # and returns the response as a png image
-        img_file = show_cluster_results(target_group_no, glb.rep_db,
-                                    ncols=ncols, figsize=figsize, color=color,
-                                    add_separator=add_separator)
-        img_file.seek(0)
+    return_value = []
+    for item in result:
+        return_value.append({'id': item.id, 'person_id': item.person_id, 'image_name_orig': item.image_name_orig, 'image_fp_orig': item.image_fp_orig, 'region': [int(x) for x in item.region] })
 
-        output_obj = Response(content=img_file.read(), media_type="image/png")
-    
-    elif return_type == 'records':
-        # Alternatively, converts the records (Representations) to the
-        # appropriate response model
-        output_obj = glb.rep_db.__records2resp_model__(recs_found)
-
-    else:
-        raise ValueError("Return type should be either 'image' or 'records'!")
-
-    return output_obj
+    return return_value
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/remove_from_group")
-async def remove_from_group(files  : List[str],
-                            img_dir: str = Query(glb.IMG_DIR, description="Full path to image directory (string)")):
+@fr_router.post("/people/set_name")
+async def people_set_name(person_id: int = Query(None, description="'person_id key' in Person table [integer]"),
+                          person_name: str = Query(None, description="new person name [string]")):
+
+    query = update(Person).values(name = person_name).where(Person.id == person_id)
+    glb.sqla_session.execute(query)
+    glb.sqla_session.commit()
+
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/facerep/unjoin")
+async def facerep_unjoin(face_id  : int = Query(None, description="ID of FaceRep record")):
     """
-    API endpoint: remove_from_group()
+    API endpoint: unjoin a FaceRep record from a Person, setting its person_id to None and group_no to -1 
 
-    Allows the user to remove files from a particular group. Effectively, this
-    endpoint sets the group of all files (provided they are valid files) to -1
-    (i.e. group-less).
-
-    Images can be specified by either their unique identifier or their name. If
-    an image file can not be found (because the unique identifier or image name
-    does not match any present in the database) it will be skipped.
-
-    Note: one can mix and match image names and unique identifiers in the same
-    list.
+    This API unlinked a FaceRep record from its Person and set its person_id to None and group_no to -1 
 
     Parameters:
-    - files: list of image names and/or unique identifiers [list of strings].
+    - ID:  the FaceRep ID of the record to unjoin [integer]
 
     Output:\n
         JSON-encoded dictionary containing the following key/value pairs:
             1. removed : number of files removed
             2. skipped : number of files skipped
     """
-    # Initializes removed and skipped file / Representation counters
-    removed_count = 0
-    skipped_count = 0
 
-    # Loops through each file
-    for f in files:
-        # Tries to load (or find) the file and obtain its embedding
-        if string_is_valid_uuid4(f): # string is valid uuid
-            for i in range(0, glb.rep_db.size):
-                # If the unique identifier of the current Representation
-                # matches the target identifier, remove its group
-                if glb.rep_db.reps[i].unique_id == UUID(f):
-                    glb.rep_db.reps[i].group_no = -1
-                    removed_count += 1 # increments removed counter
-                else:
-                    pass # do nothing
+    # Set group_no to -2 and person_id=None for a specific FaceRep record
+    facerep_set_groupno_done(glb.sqla_session, face_id)
 
-        elif os.path.isfile(os.path.join(img_dir, f)): # string is a valid file
-            for i in range(0, glb.rep_db.size):
-                # If this Representation's full path matches the target
-                # file's full path, remove its group
-                if glb.rep_db.reps[i].image_name == f:
-                    glb.rep_db.reps[i].group_no = -1
-                    removed_count += 1 # increments removed counter
-                else:
-                    pass # do nothing
+    # check and remove eventually record from People table that doesn't have any
+    #corresponding record in FaceRep table
+    people_clean_without_repps(glb.sqla_session)
 
-        else: # string is not a valid uuid nor file
-            skipped_count += 1
+    return 'OK'
 
-    return {'removed':removed_count, 'skipped':skipped_count}
+
+@fr_router.post("/facerep/get_ungrouped")
+async def facerep_get_ungrouped():
+    """
+    API endpoint: get all records from FaceRep that are not linked wioth a Person
+                  I.E. the ones that has group_no field set to -1
+
+    Parameters:
+        - None
+
+    Output:\n
+        JSON-encoded list of FaceRep.id(s) that match the above condition
+    """
+
+    query = select(FaceRep.id, FaceRep.person_id, FaceRep.image_name_orig, FaceRep.region).where(FaceRep.group_no == -1)
+    result = glb.sqla_session.execute(query)
+    return_value = []
+    for item in result:
+        print([int(x) for x in item.region])
+        return_value.append({'id': item.id, 'person_id': item.person_id, 'image_name_orig': item.image_name_orig, 'region': [int(x) for x in item.region] })
+
+    return return_value
 
 # ------------------------------------------------------------------------------
 
@@ -964,10 +940,11 @@ async def edit_tag_by_group_no(target_group_no: int = Query(None, description="T
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/create_database/from_directory")
-async def create_database_from_directory(cdb_params: CreateDatabaseParams,
-    image_dir   : Optional[str]  = Query(glb_img_dir, description="Full path to directory containing images (string)"),
-    force_create: Optional[bool] = Query(False      , description="Flag to force database creation even if one already exists, overwritting the old one (boolean)")):
+async def create_database_from_directory(params: CreateDatabaseParams,
+    image_dir   : Optional[str]  = Query(glb_img_dir, description="Full path to directory containing images (string)")):
     """
+    TODO: UPDATE DESCRIPTION!
+
     API endpoint: create_database_from_directory()
 
     Creates a database (RepDatabase object) from a directory. The directory is
@@ -1031,8 +1008,9 @@ async def create_database_from_directory(cdb_params: CreateDatabaseParams,
             
             2. message: informative message string
     """
-    # Initialize output message
+    # Initialize output message and records
     output_msg = ''
+    records    = []
 
     # If image directory provided is None or is not a directory, use default
     # directory
@@ -1042,44 +1020,42 @@ async def create_database_from_directory(cdb_params: CreateDatabaseParams,
                    +  'directory. Using default directory instead.\n'
         image_dir  = glb_img_dir
 
-    # Database exists (and has at least one element) and force create is False
-    if glb.rep_db.size > 0 and not force_create:
+    # Database does not exist
+    if  database_is_empty(glb.sqla_engine):
         # Do nothing, but set message
-        output_msg += 'Database exists (and force create is False). '\
-                   +  'Skipping database creation.\n'
+        output_msg += 'Database does not exist! '\
+                   +  'Please create one before using this endpoint.\n'
 
-    elif glb.rep_db.size == 0 or force_create:
-        output_msg += 'Creating database: '
-        glb.rep_db  = create_reps_from_dir(image_dir, glb.models, glb.models,
-                                detector_name=cdb_params.detector_name,
-                                align=cdb_params.align, show_prog_bar=True,
-                                verifier_names=cdb_params.verifier_names,
-                                normalization=cdb_params.normalization,
-                                tags=cdb_params.tags, uids=cdb_params.uids,
-                                auto_grouping=cdb_params.auto_grouping,
-                                min_samples=cdb_params.min_samples,
-                                eps=cdb_params.eps, metric=cdb_params.metric,
-                                verbose=cdb_params.verbose)
-        output_msg += 'success!\n'
+    # Face Representation table does not exist
+    elif not all_tables_exist(glb.sqla_engine, ['representation']):
+        # Do nothing, but set message
+        output_msg += "Face representation table ('representation') "\
+                   +  'does not exist! Please ensure that this table exists '\
+                   +  'before using this endpoint.\n'
 
+    # Otherwise (database is not empty and table exists), 
     else:
-        raise AssertionError('[create_database] Database should have a ' +  
-                             'length of 0 or more - this should not happen!')
-
-    # Modifies the database change flag (and sorts the database if there is at
-    # least 1 element)
-    if glb.rep_db.size == 1:
-        glb.db_changed = True
-
-    elif glb.rep_db.size > 1:
-        # Sorts database and sets changed flag to True
-        glb.rep_db.sort_database('image_name')
-        glb.db_changed = True
-
-    else:
-        glb.db_changed = False
-
-    return {'n_records':glb.rep_db.size, 'message':output_msg}
+        # Processes face images from the image directory provided. Note that
+        # this function adds the changes to the global session but does not
+        # commit them.
+        records = process_faces_from_dir(image_dir, glb.models, glb.models,
+                            detector_name  = params.detector_name,
+                            verifier_names = params.verifier_names,
+                            normalization  = params.normalization,
+                            align          = params.align,
+                            auto_grouping  = params.auto_grouping,
+                            eps            = params.eps,
+                            min_samples    = params.min_samples,
+                            metric         = params.metric,
+                            pct            = params.pct,
+                            check_models   = params.check_models,
+                            verbose        = params.verbose)
+        
+        # Commits the records and updates the message
+        glb.sqla_session.commit()
+        output_msg += ' success!'
+    
+    return {'n_records':len(records), 'message':output_msg}
 
 # ------------------------------------------------------------------------------
 
@@ -1087,9 +1063,10 @@ async def create_database_from_directory(cdb_params: CreateDatabaseParams,
 async def create_database_from_zip(myfile: UploadFile,
     params      : CreateDatabaseParams = Depends(),
     image_dir   : Optional[str]  = Query(glb.IMG_DIR, description="Full path to directory containing images (string)"),
-    auto_rename : Optional[bool] = Query(True       , description="Flag to force auto renaming of images in the zip file with names that match images already in the image directory (boolean)"),
-    force_create: Optional[bool] = Query(False      , description="Flag to force database creation even if one already exists, overwritting the old one (boolean)")):
+    auto_rename : Optional[bool] = Query(True       , description="Flag to force auto renaming of images in the zip file with names that match images already in the image directory (boolean)")):
     """
+    TODO: UPDATE DESCRIPTION!
+
     API endpoint: create_database_from_zip()
 
     Creates a database from a zip file. The zip file is expected to contain
@@ -1162,74 +1139,66 @@ async def create_database_from_zip(myfile: UploadFile,
                    +  'directory. Using default directory instead.\n'
         image_dir = img_dir
 
-    # Database exists (and has at least one element) and force create is False
-    if glb.rep_db.size > 0 and not force_create:
+    # Database does not exist
+    if  database_is_empty(glb.sqla_engine):
         # Do nothing, but set message
-        output_msg += 'Database exists (and force create is False). '\
-                   +  'Skipping database creation.\n'
+        output_msg += 'Database does not exist! '\
+                   +  'Please create one before using this endpoint.\n'
 
-    elif glb.rep_db.size == 0 or force_create:
+    # Face Representation table does not exist
+    elif not all_tables_exist(glb.sqla_engine, ['representation']):
+        # Do nothing, but set message
+        output_msg += "Face representation table ('representation') "\
+                   +  'does not exist! Please ensure that this table exists '\
+                   +  'before using this endpoint.\n'
+
+    # Otherwise (database is not empty and table exists), 
+    else:
         # Initialize dont_skip flag as True
-        dont_skip = True
+        dont_skip   = True
 
         # Extract zip files
         output_msg += 'Extracting images in zip:'
 
         try:
             # Process the zip file containing the image files
-            new_names = process_image_zip_file(myfile, image_dir,
-                                               auto_rename=auto_rename)
+            skipped_files = process_image_zip_file(myfile, image_dir,
+                                                    auto_rename=auto_rename)
             output_msg += ' success! '
 
         except Exception as excpt:
             dont_skip   = False
             output_msg += f' failed (reason: {excpt}).'
 
-        # Create database
+        # Processes face images from the image directory provided if 'dont_skip'
+        # is True
         if dont_skip:
             output_msg += 'Creating database: '
-            glb.rep_db  = create_reps_from_dir(image_dir, glb.models,
-                                glb.models, detector_name=params.detector_name,
-                                align=params.align, show_prog_bar=True,
-                                verifier_names=params.verifier_names,
-                                normalization=params.normalization,
-                                tags=params.tags, uids=params.uids,
-                                auto_grouping=params.auto_grouping,
-                                min_samples=params.min_samples,
-                                eps=params.eps, metric=params.metric,
-                                verbose=params.verbose)
-
-            # Fixes unique ids of renamed images (ensuring that the unique id in
-            # the image name matches the Representation's unique id and
-            # vice-versa)
-            fix_uid_of_renamed_imgs(new_names)
-
-            output_msg += 'success!\n'
+            records = process_faces_from_dir(image_dir, glb.models, glb.models,
+                            detector_name  = params.detector_name,
+                            verifier_names = params.verifier_names,
+                            normalization  = params.normalization,
+                            align          = params.align,
+                            auto_grouping  = params.auto_grouping,
+                            eps            = params.eps,
+                            min_samples    = params.min_samples,
+                            metric         = params.metric,
+                            pct            = params.pct,
+                            check_models   = params.check_models,
+                            verbose        = params.verbose)
+        
+            # Commits the records and updates the message
+            glb.sqla_session.commit()
+            output_msg += ' success!'
         else:
-            output_msg += 'Skipping database creation.\n'
+            records = []
 
-    else:
-        raise AssertionError('[create_database] Database should have a ' +  
-                             'length of 0 or more - this should not happen!')
-
-    # Modifies the database change flag (and sorts the database if there is at
-    # least 1 element)
-    if glb.rep_db.size == 1:
-        glb.db_changed = True
-
-    elif glb.rep_db.size > 1:
-        # Sorts database and sets changed flag to True
-        glb.rep_db.sort_database('image_name')
-        glb.db_changed = True
-
-    else:
-        glb.db_changed = False
-
-    return {'length':glb.rep_db.size, 'message':output_msg}
+    return {'n_records':len(records), 'n_skipped':len(skipped_files),
+            'skipped_files':skipped_files, 'message':output_msg}
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/verify/no_upload", response_model=List[List[VerificationMatch]])
+@fr_router.post("/verify/no_upload", response_model=List[List[List[VerificationMatch]]])
 async def verify_no_upload(files: List[UploadFile],
                           params: VerificationParams = Depends()):
     """
@@ -1271,7 +1240,7 @@ async def verify_no_upload(files: List[UploadFile],
     # Initializes results list and obtains the relevant embeddings from the 
     # representation database
     verification_results = []
-    dtb_embs = get_embeddings_as_array(glb.rep_db, params.verifier_name)
+    dtb_embs = get_embeddings_as_array(params.verifier_name)
 
     # Loops through each file
     for f in files:
@@ -1283,49 +1252,55 @@ async def verify_no_upload(files: List[UploadFile],
         # Detects faces
         output = do_face_detection(image, detector_models=glb.models,
                                     detector_name=params.detector_name,
-                                    align=params.align, verbose=False)
+                                    align=params.align, verbose=params.verbose)
 
-        # Assumes only 1 face is detected (even if multiple are present). If no
-        # face are detected, skips this image file
-        if output is not None:
-            face   = [output['faces'][0]]
-        else:
-            continue
+        # Filter regions & faces which are too small
+        filtered_regions, idxs = discard_small_regions(output['regions'],
+                                                    image.shape, pct=params.pct)
+        filtered_faces         = [output['faces'][i] for i in idxs]
 
-        # Calculate the face image embedding
-        embeddings = calc_embeddings(face, glb.models,
+        # Calculates the deep neural embeddings for each face image in outputs
+        embeddings = calc_embeddings(filtered_faces, glb.models,
                                      verifier_names=params.verifier_name,
                                      normalization=params.normalization)
-        cur_emb    = embeddings[0][params.verifier_name]
+        # cur_emb    = embeddings[0][params.verifier_name]
 
-        # Calculates the similarity between the current embedding and all
-        # embeddings from the database
-        similarity_obj = calc_similarity(cur_emb, dtb_embs,
-                                         metric=params.metric,
-                                         face_verifier=params.verifier_name,
-                                         threshold=params.threshold)
+        # Initialize current image's result container
+        cur_img_results = []
 
-        # Gets all matches based on the similarity object and append the result
-        # to the results list
-        result = get_matches_from_similarity(similarity_obj, glb.rep_db)
-        #result_df = pd.DataFrame(result)
-        #print(result_df)
-        #verification_results = result_df.to_dict('records')
-        verification_results.append(result)
-        # TODO: check for multiple file, not working at the moment!
+        # 
+        for cur_embd in embeddings:
+            # Calculates the similarity between the current embedding and all
+            # embeddings from the database
+            similarity_obj = calc_similarity(cur_embd[params.verifier_name],
+                                             dtb_embs,
+                                             metric=params.metric,
+                                             face_verifier=params.verifier_name,
+                                             threshold=params.threshold)
+
+            # Gets all matches based on the similarity object and append the
+            # result to the results list
+            result = get_matches_from_similarity(similarity_obj)
+
+            # Stores the result for each face on the current image
+            cur_img_results.append(result)
+
+        # Then, stores the set of results (of the current image) to the
+        # verification results list
+        verification_results.append(cur_img_results)
 
     return verification_results
     
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/verify/with_upload", response_model=List[List[VerificationMatch]])
+@fr_router.post("/verify/with_upload", response_model=List[List[List[VerificationMatch]]])
 async def verify_with_upload(files: List[UploadFile],
     params     : VerificationParams = Depends(),
     img_dir    : str                = Query(glb_img_dir, description="Full path to image directory (string)"),
     save_as    : ImageSaveTypes     = Query(default_image_save_type, description="File type which uploaded images should be saved as (string)"),
     overwrite  : bool               = Query(False, description="Flag to indicate if an uploaded image with the same name as an existing one in the server should be saved and replace it (boolean)"),
     auto_rename: bool               = Query(True, description="Flag to force auto renaming of images in the zip file with (boolean)"),
-    auto_tag   : bool               = Query(True, description="Flag to automatically generate name tags based on verification results (boolean)"),
+  # auto_tag   : bool               = Query(True, description="Flag to automatically generate name tags based on verification results (boolean)"),
     auto_group : bool               = Query(True, description="Flag to automatically group image based on verification results (boolean)")):
     """
     API endpoint: verify_with_upload()
@@ -1384,17 +1359,14 @@ async def verify_with_upload(files: List[UploadFile],
         Note that the final output for multiple files, each with multiple
         matches, will be a list of list of JSON-encoded structures.
     """
-    # Initializes results list, gets all files in the image directory and
-    # obtains the relevant embeddings from the representation database
+    # Initializes FaceReps & results list, gets all files in the image directory
+    # and obtains the relevant embeddings from the representation database
     verification_results = []
     all_files            = [name.split('.')[0] for name in os.listdir(img_dir)]
-    dtb_embs   = get_embeddings_as_array(glb.rep_db, params.verifier_name)
+    dtb_embs             = get_embeddings_as_array(params.verifier_name)
 
     # Loops through each file
     for f in files:
-        # Initializes empty unique id
-        uid = ''
-
         # Obtains contents of the file & transforms it into an image
         data  = np.fromfile(f.file, dtype=np.uint8)
         img   = cv2.imdecode(data, cv2.IMREAD_UNCHANGED)
@@ -1417,8 +1389,7 @@ async def verify_with_upload(files: List[UploadFile],
             # Creates a new unique object identifier using uuid4, converts it
             # into a string, sets it as the file name, creates the file's full
             # path and saves it
-            uid      = uuid4().hex 
-            img_name = uid
+            img_name = str(uuid4())
             img_fp   = os.path.join(img_dir, img_name + '.' + save_as)
 
             if save_as == ImageSaveTypes.NPY:
@@ -1431,71 +1402,66 @@ async def verify_with_upload(files: List[UploadFile],
         # Detects faces
         output = do_face_detection(img, detector_models=glb.models,
                                     detector_name=params.detector_name,
-                                    align=params.align, verbose=False)
+                                    align=params.align, verbose=params.verbose)
 
-        # Assumes only 1 face is detected (even if multiple are present). If no
-        # face are detected, skips this image file
-        if output is not None:
-            face   = [output['faces'][0]]
-            region = output['regions'][0]
-        else:
-            continue
+        # Filter regions & faces which are too small
+        filtered_regions, idxs = discard_small_regions(output['regions'],
+                                                    img.shape, pct=params.pct)
+        filtered_faces         = [output['faces'][i] for i in idxs]
 
-        # Calculate the face image embedding
-        embeddings = calc_embeddings(face, glb.models,
+        # Calculates the deep neural embeddings for each face image in outputs
+        embeddings = calc_embeddings(filtered_faces, glb.models,
                                      verifier_names=params.verifier_name,
                                      normalization=params.normalization)
-        cur_emb    = embeddings[0][params.verifier_name]
 
-        # Calculates the similarity between the current embedding and all
-        # embeddings from the database
-        similarity_obj = calc_similarity(cur_emb, dtb_embs,
-                                         metric=params.metric,
-                                         face_verifier=params.verifier_name,
-                                         threshold=params.threshold)
+        # Initialize current image's result container
+        cur_img_results = []
 
-        # Gets all matches based on the similarity object and append the result
-        # to the results list
-        result = get_matches_from_similarity(similarity_obj, glb.rep_db)
+        # Loops through each face region and embedding and creates a FaceRep for
+        # each face
+        for region, cur_embd in zip(filtered_regions, embeddings):
+            # Calculates the similarity between the current embedding and all
+            # embeddings from the database
+            similarity_obj = calc_similarity(cur_embd[params.verifier_name],
+                                             dtb_embs, metric=params.metric,
+                                             face_verifier=params.verifier_name,
+                                             threshold=params.threshold)
 
-        # Chooses a tag automatically from the best match if it has a distance / 
-        # similarity of <=0.75*threshold and if 'auto_tag' is True
-        if auto_tag and len(result) > 0:
-            if similarity_obj['distances'][0]\
-                <= 0.75 * similarity_obj['threshold']:
-                tag = result[0].name_tag
-            else:
-                tag = ''
-        else:
-            tag = ''
+            # Gets all matches based on the similarity object and appends the
+            # result to the current image results list
+            result = get_matches_from_similarity(similarity_obj)
+            cur_img_results.append(result)
 
-        # Automatically determines the image's group based on the best match if
-        # it has a distance / similarity of <=0.75*threshold and if 'auto_group'
-        # is True
-        if auto_group and len(result) > 0:
-            if similarity_obj['distances'][0]\
-                <= 0.75 * similarity_obj['threshold']:
-                group_no = result[0].group_no
+            # Automatically determines the image's group based on the best match
+            # if it has a distance / similarity of <=0.75*threshold and if
+            # 'auto_group' is True
+            if auto_group and len(result) > 0:
+                if similarity_obj['distances'][0]\
+                    <= 0.75 * similarity_obj['threshold']:
+                    group_no = result[0].group_no
+                else:
+                    group_no = -1
             else:
                 group_no = -1
-        else:
-            group_no = -1
 
-        # Creates a representation object for this image and adds it to the
-        # database
-        new_rep = create_new_rep(img_fp, img_fp, region, embeddings,
-                                 group_no=group_no, tag=tag, uid=uid)
-        glb.rep_db.reps.append(new_rep)
-        glb.db_changed = True
+            # Creates a FaceRep for each detected face
+            rep = FaceRep(image_name_orig=img_name, image_name='',
+                             image_fp_orig=img_fp, image_fp='',
+                             group_no=group_no, region=region,
+                             embeddings=cur_embd)
 
-        # Stores the verification result
-        verification_results.append(result)
+            # Adds each FaceRep to the global session
+            glb.sqla_session.add(rep)
+
+        # Stores the verification result and commits the FaceReps
+        verification_results.append(cur_img_results)
+        glb.sqla_session.commit()
 
     return verification_results
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/verify/existing_file", response_model=List[List[VerificationMatch]])
+@fr_router.post("/verify/existing_file", response_model=List[List[List[VerificationMatch]]])
 async def verify_existing_file(files: List[str],
             params : VerificationParams = Depends(),
             img_dir: str = Query(glb.IMG_DIR, description="Full path to image directory (string)")):
@@ -1557,36 +1523,25 @@ async def verify_existing_file(files: List[str],
     # Initializes results list and obtains the relevant embeddings from the 
     # Representation database
     verification_results = []
-    dtb_embs = get_embeddings_as_array(glb.rep_db, params.verifier_name)
+    dtb_embs             = get_embeddings_as_array(params.verifier_name)
 
-    # Gets the unique ids in the database depending on the database's size
-    if glb.rep_db.size == 0:   # no representations
-        all_uids = []
-
-    elif glb.rep_db.size > 1:  # one or many representations
-        # Loops through each Representation in the database and gets the unique
-        # id tag
-        all_uids = []
-        for rep in glb.rep_db.reps:
-            all_uids.append(rep.unique_id)
-    
-    else: # this should never happen (negative size for a database? preposterous!)
-        raise AssertionError('Representation database can '
-                            +'not have a negative size!')
+    # Gets the unique ids in the database
+    query    = glb.sqla_session.query(FaceRep.id)
+    all_uids = [id[0] for id in query.all()]
 
     # Loops through each file
-    for f in files:
-        # Tries to load (or find) the file and obtain its embedding
-        if string_is_valid_uuid4(f): # string is valid uuid
-            # Finds the Representation from the unique identifier. If this
-            # fails, skips the file and continue
-            try:
-                index = all_uids.index(UUID(f))
-            except:
-                continue
+    for i, f in enumerate(files):
+        # Tries to convert file string into a unique identifier
+        try:
+            is_valid_uid = int(f) in all_uids
+        except:
+            is_valid_uid = False
 
+        # Tries to load (or find) the file and obtain its embedding
+        if is_valid_uid: # string is valid uuid
             # Obtain the embeddings
-            cur_emb = glb.rep_db.reps[index].embeddings[params.verifier_name]
+            query      = glb.sqla_session.query(FaceRep.embeddings).where(FaceRep.id == int(f))
+            embeddings = list(query.all()[0])
 
         elif os.path.isfile(os.path.join(img_dir, f)): # string is a valid file
             # Opens the image file
@@ -1594,38 +1549,44 @@ async def verify_existing_file(files: List[str],
             image = image[:, :, ::-1]
 
             # Detects faces
-            output = do_face_detection(image, detector_models=glb.models,
-                                        detector_name=params.detector_name,
-                                        align=params.align, verbose=False)
+            output = do_face_detection(f, detector_models=glb.models,
+                                    detector_name=params.detector_name,
+                                    align=params.align, verbose=params.verbose)
 
-            # Assumes only 1 face is detected (even if multiple are present). If no
-            # face are detected, skips this image file
-            if output is not None:
-                face   = [output['faces'][0]]
-                region = output['regions'][0]
-            else:
-                continue
+            # Filter regions & faces which are too small
+            filtered_regions, idxs = discard_small_regions(output['regions'],
+                                        mpimg.imread(f).shape, pct=params.pct)
+            filtered_faces         = [output['faces'][i] for i in idxs]
 
-            # Calculate the face image embedding
-            embeddings = calc_embeddings(face, glb.models,
-                                         verifier_names=params.verifier_name,
-                                         normalization=params.normalization)
-            cur_emb    = embeddings[0][params.verifier_name]
+            # Calculates the deep neural embeddings for each face image in
+            # outputs
+            embeddings = calc_embeddings(filtered_faces, glb.models,
+                                            verifier_names=params.verifier_name,
+                                            normalization=params.normalization)
 
-        else: # string is not a valid uuid nor file
+        else: # string is not a valid unique identifier nor file
             continue
 
-        # Calculates the similarity between the current embedding and all
-        # embeddings from the database
-        similarity_obj = calc_similarity(cur_emb, dtb_embs,
-                                        metric=params.metric,
-                                        face_verifier=params.verifier_name,
-                                        threshold=params.threshold)
+        # Initialize current image's result container
+        cur_img_results = []
 
-        # Gets all matches based on the similarity object and append the result
-        # to the results list
-        result = get_matches_from_similarity(similarity_obj, glb.rep_db)
-        verification_results.append(result)
+        # Loops through each face region and embedding and creates a FaceRep for
+        # each face
+        for cur_embd in embeddings:
+            # Calculates the similarity between the current embedding and all
+            # embeddings from the database
+            similarity_obj = calc_similarity(cur_embd[params.verifier_name],
+                                             dtb_embs, metric=params.metric,
+                                             face_verifier=params.verifier_name,
+                                             threshold=params.threshold)
+
+            # Gets all matches based on the similarity object and appends the
+            # result to the current image results list
+            result = get_matches_from_similarity(similarity_obj)
+            cur_img_results.append(result)
+
+        # 
+        verification_results.append(cur_img_results)
 
     return verification_results
     

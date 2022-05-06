@@ -14,17 +14,23 @@ import api.global_variables  as glb
 
 from io                      import BytesIO
 from tqdm                    import tqdm
-from uuid                    import uuid4, UUID
+from uuid                    import uuid4
 from zipfile                 import ZipFile
 from tempfile                import TemporaryDirectory
+from sqlalchemy              import create_engine, inspect, MetaData, select, insert, update
 from IFR.classes             import RepDatabase, Representation,\
-                                    VerificationMatch
+                                    VerificationMatch, Base
 from IFR.functions           import get_image_paths, do_face_detection,\
-                                    calc_embeddings
+                                    calc_embeddings, ensure_detectors_exists,\
+                                    ensure_verifiers_exists, discard_small_regions
 from sklearn.cluster         import DBSCAN
 
-from shutil                  import move             as sh_move
-
+from shutil                          import move           as sh_move
+from deepface.DeepFace               import build_model    as build_verifier
+from deepface.detectors.FaceDetector import build_model    as build_detector
+from sqlalchemy.orm           import sessionmaker
+from sqlalchemy               import text, update
+from IFR.classes              import FaceRep, Person
 
 # ______________________________________________________________________________
 #                       UTILITY & GENERAL USE FUNCTIONS
@@ -271,49 +277,214 @@ def load_built_model(model_name, save_dir, verbose=False):
     return model
 
 # ------------------------------------------------------------------------------
-        
-def load_representation_db(file_path, verbose=False):
+
+def init_load_detectors(detector_names, saved_models_dir, models={}):
     """
-    Loads a database (at 'file_path') containing representations of face images.
-    The database is assumed to be a pickled Python object. The database is
-    expected to be a list of Representation object (see help(Representation)
-    for more information). If verbose is set to True, the loading processing is
-    printed, with any errors being reported to the user.
+    Loads all face detectors with names 'detector_names' which are saved in the
+    'saved_models_dir' directory. This function is used at server start up to
+    avoid the need (if possible) to build models from scatch everytime.
+
+    If a saved face detector does not exist, this function tries to build it
+    from scratch.
+
+    Note: this function ensures that 'detector_names' is a list so it can handle
+    cases where 'detector_names' is just a single string.
 
     Inputs:
-        1. file_path - string with file's full path
-        2. verbose - flag indicating if the function should print information
-            about the loading process and errors ([verbose=False])
+        1. detector_names   - names of saved face detectors [string or list of
+                               strings].
+
+        2. saved_models_dir - full path of the directory containing the saved
+                               face detector models [string].
+
+        3. models           - contains model names (key) and built model objects
+                               (pair). This is mainly used if one dictionary is
+                               used to store different types of models, such as
+                               face detectors and verifiers for example
+                               [dictionary, default={}].
 
     Output:
-        1. database object (list of Representation objects)
-    
+        1. dictionary containing model names (key) and built model objects
+            (pair) [dictionary].
+
     Signature:
-        db = load_representation_db(file_path, verbose=False)
+        models = init_load_detectors(detector_names, saved_models_dir,
+                                     models={})
     """
-    # Prints message
-    if verbose:
-        print('Opening database: ', end='')
+    # Ensures that 'detector_names' is a list
+    if not isinstance(detector_names, list):
+        detector_names = [detector_names]
 
-    # Checks if path provided points to a valid database
-    if os.path.isfile(file_path):
-        # Try to open pickled database (list of objects)
-        try:
-            db = pickle.load(open(file_path, 'rb'))
-            if verbose:
-                print('success!')
-        
-        except (OSError, IOError) as e:
-            if verbose:
-                print(f'failed! Reason: {e}')
-            db = RepDatabase()
+    # Loops through each detector name in 'detector_names'
+    for detector_name in detector_names:
+        # First, try loading (opening) the model
+        model = load_built_model(detector_name + '.pickle', saved_models_dir,
+                                   verbose=True)
 
-    # If path does not point to a file, open an 'empty' database
-    else:
-        print(f'failed! Reason: database does not exist.')
-        db = RepDatabase()
+        # If successful, save the model in a dictionary
+        if model is not None:
+            models[detector_name] = model
 
-    return db
+        # Otherwise, build the model from scratch
+        else:
+            print(f'[build_detector] Building {detector_name}: ', end='')
+            try:
+                models[detector_name] = build_detector(detector_name)
+                print('success!\n')
+
+            except Exception as excpt:
+                print(f'failed! Reason: {excpt}\n')
+
+    return models
+
+# ------------------------------------------------------------------------------
+
+def init_load_verifiers(verifier_names, saved_models_dir, models={}):
+    """
+    Loads all face verifiers with names 'verifier_names' which are saved in the
+    'saved_models_dir' directory. This function is used at server start up to
+    avoid the need (if possible) to build models from scatch everytime.
+
+    If a saved face verifier does not exist, this function tries to build it
+    from scratch.
+
+    Note: this function ensures that 'verifier_names' is a list so it can handle
+    cases where 'verifier_names' is just a single string.
+
+    Inputs:
+        1. verifier_names   - names of saved face verifiers [string or list of
+                               strings].
+
+        2. saved_models_dir - full path of the directory containing the saved
+                               face verifier models [string].
+
+        3. models           - contains model names (key) and built model objects
+                               (pair). This is mainly used if one dictionary is
+                               used to store different types of models, such as
+                               face detectors and verifiers for example
+                               [dictionary, default={}].
+
+    Output:
+        1. dictionary containing model names (key) and built model objects
+            (pair) [dictionary].
+
+    Signature:
+        models = init_load_verifiers(verifier_names, saved_models_dir,
+                                     models={})
+    """
+    # Ensures that 'verifier_names' is a list
+    if not isinstance(verifier_names, list):
+        verifier_names = [verifier_names]
+
+    # Loops through each verifier name in 'verifier_names'
+    for verifier_name in verifier_names:
+        # First, try loading (opening) the model
+        model = load_built_model(verifier_name + '.pickle', saved_models_dir,
+                                   verbose=True)
+
+        # If successful, save the model in a dictionary
+        if model is not None:
+            models[verifier_name] = model
+
+        # Otherwise, build the model from scratch
+        else:
+            print(f'[build_verifier] Building {verifier_name}: ', end='')
+            try:
+                models[verifier_name] = build_verifier(verifier_name)
+                print('success!\n')
+
+            except Exception as excpt:
+                print(f'failed! Reason: {excpt}\n')
+
+    return models
+
+# ------------------------------------------------------------------------------
+
+def save_built_detectors(detector_names, saved_models_dir, overwrite=False,
+                         verbose=False):
+    """
+    Saves built face detectors with names in 'detector_names' at the directory
+    'saved_models_dir'. If a face detector with a given name already exists,
+    this function does not save (skips) it UNLESS overwrite is True, in which
+    case it overwrites it with the new detector.
+
+    Inputs:
+        1. verifier_names   - names of saved face detectors [string or list of
+                               strings].
+
+        2. saved_models_dir - full path of the directory containing the saved
+                               face detector models [string].
+
+        3. overwrite        - toggles between overwriting existing face detector
+                               models [boolean, default=False].
+
+        4. verbose          - toggles if the function should print useful
+                               information to the console [boolean,
+                               default=False].
+
+    Output:
+        1. None
+
+    Signature:
+        save_built_detectors(detector_names, saved_models_dir, overwrite=False,
+                             verbose=False)
+    """
+    # Ensures that 'verifier_names' is a list
+    if not isinstance(detector_names, list):
+        detector_names = [detector_names]
+
+    # Loops through each verifier name in 'verifier_names'
+    for detector_name in detector_names:
+        # Saving face detectors
+        if glb.models[detector_name] is not None:
+            save_built_model(detector_name, glb.models[detector_name],
+                                saved_models_dir, overwrite=overwrite,
+                                verbose=verbose)
+
+# ------------------------------------------------------------------------------
+
+def save_built_verifiers(verifier_names, saved_models_dir, overwrite=False,
+                         verbose=False):
+    """
+    Saves built face verifiers with names in 'verifier_names' at the directory
+    'saved_models_dir'. If a face verifier with a given name already exists,
+    this function does not save (skips) it UNLESS overwrite is True, in which
+    case it overwrites it with the new verifier.
+
+    Inputs:
+        1. verifier_names   - names of saved face verifiers [string or list of
+                               strings].
+
+        2. saved_models_dir - full path of the directory containing the saved
+                               face verifier models [string].
+
+        3. overwrite        - toggles between overwriting existing face verifier
+                               models [boolean, default=False].
+
+        4. verbose          - toggles if the function should print useful
+                               information to the console [boolean,
+                               default=False].
+
+    Output:
+        1. None
+
+    Signature:
+        save_built_verifiers(verifier_names, saved_models_dir, overwrite=False,
+                             verbose=False)
+    """
+    # Ensures that 'verifier_names' is a list
+    if not isinstance(verifier_names, list):
+        verifier_names = [verifier_names]
+
+    # Loops through each verifier name in 'verifier_names'
+    for verifier_name in verifier_names:
+        # Saving face verifiers
+        if glb.models[verifier_name] is not None:
+            save_built_model(verifier_name, glb.models[verifier_name],
+                                saved_models_dir, overwrite=overwrite,
+                                verbose=verbose)
+
+    return None
 
 # ______________________________________________________________________________
 #                   REPRESENTATION DATABASE RELATED FUNCTIONS
@@ -383,26 +554,32 @@ def create_new_rep(original_fp, img_fp, region, embeddings, uid='',
 
 # ------------------------------------------------------------------------------
 
-def get_embeddings_as_array(db, verifier_name):
+def get_embeddings_as_array(verifier_name):
     """
-    Gets all of the embeddings for a given 'verifier_name' from the database
-    'db' and returns it as a N x M numpy array where N is the number of
-    embeddings and M is the number of elements of each embeddings.
+    Gets all of the embeddings for a given 'verifier_name' from the session
+    object stored in the global variable 'sqla_session' in
+    'global_variables.py', and returns it as a N x M numpy array where N is the
+    number of embeddings and M is the number of elements of each embeddings.
 
     Inputs:
-        1. db            - Representation database [RepDatabase object].
-        2. verifier_name - name of verifier [string].
+        1. verifier_name - name of verifier [string].
 
     Output:
         1. N x M numpy array where each row corresponds to a face image's
-            embedding
+            embedding [numpy array].
 
     Signature:
-        embeddings = get_embeddings_as_array(db, verifier_name)
+        embeddings = get_embeddings_as_array(verifier_name)
     """
+    # Get all face embeddings
+    query = glb.sqla_session.query(FaceRep.embeddings)
+
+    # Loops through each query result, appending the appropriate embedding to
+    # the list
     embeddings = [] # initializes empty list
-    for rep in db.reps:
-        embeddings.append(rep.embeddings[verifier_name])
+    for row in query.all():
+        # print(f'Iter {i}:', type(row[0]), row[0][verifier_name], sep=' | ')
+        embeddings.append(row[0][verifier_name])
 
     return np.array(embeddings)
 
@@ -576,6 +753,7 @@ def create_reps_from_dir(img_dir, detector_models, verifier_models,
         rep_list.append(create_new_rep(img_path, img_path, region, embeddings,
                                         tag=tag, uid=uid))
 
+
     # Clusters Representations together using the DBSCAN algorithm
     if auto_grouping:
         # Clusters embeddings using DBSCAN algorithm
@@ -596,18 +774,280 @@ def create_reps_from_dir(img_dir, detector_models, verifier_models,
 
 # ------------------------------------------------------------------------------
 
+def process_faces_from_dir(img_dir, detector_models, verifier_models,
+                        detector_name='retinaface', verifier_names=['ArcFace'],
+                        normalization='base', align=True, auto_grouping=True, 
+                        eps=0.5, min_samples=2, metric='cosine', pct=0.02,
+                        check_models=True, verbose=False):
+    """
+    Processes face images contained in the directory 'img_dir'. If there are no
+    images in the directory, an assertion error is raised. The 'processing'
+    includes the following steps, performed per image:
+        1. Faces are detected in the image using the 'detector_name' face
+            detector.
+
+        2. If a detected face (region) is too small, it is discarded. This
+            filtering is determined by 'pct'. If a region's area is smaller than
+            the original image's area multiplied by this percentage factor
+            'pct', then it is discarded. This helps with detection of tiny faces
+            which are not useful for recognition.
+
+        3. For each filtered face, the deep neural embeddings (which is just a
+            vector representation of the face) is calculated.
+
+        4. A face representation object (see help(FaceRep) for more details) is
+            created for each face and added (but not committed!) to the current
+            session.
+
+    An optional 'fifth' step is performed if 'auto_grouping' is True. The
+    function tries to group similar face representations using the DBSCAN
+    algorithm on the embeddings, such that each group corresponds to faces of
+    (ideally) the same person. If multiple face verifiers were passed to this
+    function, the grouping is performed using the embeddings obtained from the
+    FIRST face verifier in the list.
+
+    If 'check_models' is True, then the function ensures that:
+        1. the 'detector_name' face detector is in the 'detector_models'
+            dictionary.
+
+        2. the 'verifier_names' face verifier is in the 'verifier_models'
+            dictionary.
+
+    In both cases, if a detector or verifier is not in the respective
+    dictionary, the function attempts to build them from scratch. If the
+    building process fails, then an assertion error is raised as either a face
+    detector and/or verifier will be missing.
+
+    IMPORTANT: This function uses the 'sqla_session' global variable from the
+    'global_variables.py' module to add changes (but not commit) to the SQL
+    alchemy session.
+
+    Inputs:
+         1. img_dir         - full path to the directory containing the images
+                                [string].
+
+         2. detector_models - dictionary of face detector model names (keys) and
+                                objects (values) [dictionary].
+
+         3. verifier_models - dictionary of face verifier model names (keys) and
+                                objects (values) [dictionary].
+
+         4. detector_name   - chosen face detector's name. Options: opencv, ssd,
+                                mtcnn or retinaface [string,
+                                default='retinaface'].
+
+         5. verifier_names  - chosen face verifiers' name(s). Options: VGG-Face,
+                                OpenFace, Facenet, Facenet512, DeepFace, DeepID
+                                and ArcFace. Can be either a string (with a
+                                single name) or a list of string (with several
+                                names) [string or list of strings,
+                                default=['ArcFace']].
+
+         6. normalization   - normalizes the face image and may increase face
+                                recognition performance depending on the
+                                normalization type and the face verifier model.
+                                Options: base, raw, Facenet, Facenet2018,
+                                VGGFace, VGGFace2 and ArcFace [string,
+                                default='base'].
+        
+         7. align           - toggles if face images should be aligned. This
+                                improves face recognition performance at the
+                                cost of some speed [boolean, default=True].
+
+         8. auto_grouping   - toggles whether the faces should be grouped
+                                automatically using the DBSCAN algorithm. If
+                                multiple verifier names are passed, uses the
+                                embeddings of the first verifier during the
+                                clustering procedure [boolean, default=True].
+
+         9. eps             - the maximum distance between two samples for one
+                                to be considered as in the neighborhood of the
+                                other. This is the most important DBSCAN
+                                parameter to choose appropriately for the
+                                specific data set and distance function
+                                [float, default=0.5].
+
+        10. min_samples     - the number of samples (or total weight) in a
+                                neighborhood for a point to be considered as a
+                                core point. This includes the point itself
+                                [integer, min_samples=2].
+
+        11. metric          - the metric used when calculating distance between
+                                instances in a feature array. It must be one of
+                                the options allowed by
+                                sklearn.metrics.pairwise_distances
+                                [string, default='cosine'].
+
+        12. pct             - percentage of image area as a decimal. This will
+                                be used to filter out 'small' detections [float,
+                                default=0.02].
+
+        12. check_models    - toggles if the function should ensure the face 
+                                detectors and verifiers are contained in the
+                                respective dictionaries [boolean, default=True].
+            
+        14. verbose         - toggles the function's warnings and other messages
+                                [boolean, default=True].
+
+    Output:
+        1. returns a list of the FaceRep objects created [list of FaceRep
+            objects].
+
+    Signature:
+        records = process_faces_from_dir(img_dir, detector_models,
+                        verifier_models, detector_name='retinaface',
+                        verifier_names=['ArcFace'], normalization='base',
+                        align=True, auto_grouping=True, eps=0.5, min_samples=2,
+                        metric='cosine', check_models=True, verbose=False)
+    """
+    # Initializes records (which will be a list of FaceReps)
+    records = []
+
+    # Assuming img_dir is a directory containing images
+    img_paths = get_image_paths(img_dir)
+    img_paths.sort()
+
+    # No images found, do something about it
+    if len(img_paths) == 0:
+        # Does something about the fact that there are no images in the
+        # directory - for now just raise an assertion error
+        raise AssertionError('No images in the directory specified')
+
+    # Ensures that the face detector and verifiers exist
+    if check_models:
+        # Ensures face detectors exist
+        ret1, detector_models = ensure_detectors_exists(models=detector_models,
+                                                detector_names=[detector_name],
+                                                verbose=verbose)
+
+        # Ensures face verifiers exist
+        ret2, verifier_models = ensure_verifiers_exists(models=verifier_models,
+                                                verifier_names=verifier_names,
+                                                verbose=verbose)
+
+        # Asserts that the face detectors and verifiers exist
+        assert ret1 and ret2, f'Could not ensure existence of '\
+                            + f'face detectors ({ret1}) or verifiers ({ret2})!'
+
+    # Creates the progress bar
+    n_imgs = len(img_paths)
+    pbar   = tqdm(range(0, n_imgs), desc='Processing face images',
+                    disable=False)
+
+    # If auto grouping is True, then initialize the embeddings list
+    if auto_grouping:
+        embds = []
+
+    # Loops through each image in the 'img_dir' directory
+    for index, i, img_path in zip(pbar, range(0, n_imgs), img_paths):
+        # Detects faces
+        output = do_face_detection(img_path, detector_models=detector_models,
+                                    detector_name=detector_name, align=align,
+                                    verbose=verbose)
+
+        # Filter regions & faces which are too small
+        image_size             = mpimg.imread(img_path).shape
+        filtered_regions, idxs = discard_small_regions(output['regions'],
+                                                        image_size, pct=pct)
+        filtered_faces         = [output['faces'][i] for i in idxs]
+
+        # Calculates the deep neural embeddings for each face image in outputs
+        embeddings = calc_embeddings(filtered_faces, verifier_models,
+                                     verifier_names=verifier_names,
+                                     normalization=normalization)
+
+        # Loops through each (region, embedding) pair and create a record
+        # (FaceRep object)
+        for region, cur_embds in zip(filtered_regions, embeddings):
+            # id        - handled by sqlalchemy
+            # person_id - dont now exactly how to handle this (sqlalchemy?)
+            # image_name_orig = img_path.split('/')[-1]
+            # image_fp_orig   = img_path
+            # image_name      = ''   # currently not being used in this approach
+            # image_fp        = ''   # currently not being used in this approach
+            # group_no        = -1
+            # region          = region
+            # embeddings      = cur_embds
+            record = FaceRep(image_name_orig=img_path.split('/')[-1],
+                        image_name='', image_fp_orig=img_path,
+                        image_fp='', group_no=-1, region=region,
+                        embeddings=cur_embds)
+            
+            # Appends each record to the records list
+            records.append(record)
+
+            # If auto grouping is True, then store each calculated embedding
+            if auto_grouping:
+                embds.append(cur_embds[verifier_names[0]])
+
+
+    # Clusters Representations together using the DBSCAN algorithm
+    if auto_grouping:
+        # Clusters embeddings using DBSCAN algorithm
+        results = DBSCAN(eps=eps, min_samples=min_samples,
+                         metric=metric).fit(embds)
+
+        # Loops through each label and updates the 'group_no' attribute of each
+        # record IF group_no != -1 (because -1 is already the default value and
+        # means "no group")
+        for i, lbl in enumerate(results.labels_):
+            if lbl == -1:
+                continue
+            else:
+                records[i].group_no = int(lbl)
+
+    # Loops through each record and add them to the global session
+    if glb.DEBUG:
+        print('add representation to FaceRep table')
+    for record in records:
+        glb.sqla_session.add(record)
+    glb.sqla_session.commit()
+
+    # Add how many person to Person table as the detected clusters
+    if glb.DEBUG:
+        print('add person to Person table')
+    subquery = select(FaceRep.group_no).where(FaceRep.group_no > -1).group_by(FaceRep.group_no).order_by(FaceRep.group_no)
+    query = insert(Person).from_select(["group_no"], subquery)
+    glb.sqla_session.execute(query)
+    glb.sqla_session.commit()
+
+    # Populate the person_id field in FaceRep with the corresponding ID in Person table
+    if glb.DEBUG:
+        print('Create joins between Person and FaceRep tables')
+    subquery = select(Person.id).where(FaceRep.group_no == Person.group_no).where(FaceRep.group_no > -1)
+    query = update(FaceRep).values(person_id = subquery.scalar_subquery())
+    if glb.DEBUG:
+        print(query)
+    glb.sqla_session.execute(query)
+    glb.sqla_session.commit()
+    
+    # Set group_no to -2 for the representation that have been linked with person
+    if glb.DEBUG:
+        print('Set group_no to -2 for FaceRep and Person that have been already linked together')
+    query = update(FaceRep).values(group_no = -2).where(FaceRep.group_no > -1)
+    glb.sqla_session.execute(query)
+    query = update(Person).values(group_no = -2).where(Person.group_no > -1)
+    glb.sqla_session.execute(query)    
+    glb.sqla_session.commit()
+
+    # Return representation database
+    return records
+
+# ------------------------------------------------------------------------------
+
 def process_image_zip_file(myfile, image_dir, auto_rename=True):
     """
     Processes a zip file containing image files. The zip file ('myfile') is
     assumed to have only valid image files (i.e. '.jpg', '.png', etc).
     
     First, the contents of the zip file are extracted to a named temporary
-    directory. All file names in the save directory 'image_dir' is obtained. If
+    directory. All file names in the save directory 'image_dir' are obtained. If
     'auto_rename' is True, then each image with the same name as a file in
-    'image_dir' directory gets renamed. Each image is then moved from the
-    temporary directory to the 'image_dir' directory, and the temporary
-    directory is deleted. If 'auto_rename' is False then images with the same
-    name are simply ignored.
+    'image_dir' directory gets renamed to a unique identifier using uuid4 from
+    the uuid library. Each image is then moved from the temporary directory to
+    the 'image_dir' directory, and the temporary directory is deleted. If
+    'auto_rename' is False then images with the same name are skipped and their
+    names are added to a list which is then returned.
 
     Inputs:
         1. myfile      - zip file obtained through FastAPI [zip file].
@@ -619,10 +1059,12 @@ def process_image_zip_file(myfile, image_dir, auto_rename=True):
                             a non-unique name [boolean, default=True].
 
     Output:
-        1. list with the names of each image file saved [list of strings].
+        1. list with the names of each image file that was skipped [list of
+            strings].
 
     Signature:
-        new_names = process_image_zip_file(myfile, image_dir, auto_rename=True)
+        skipped_file_names = process_image_zip_file(myfile, image_dir,
+                                                    auto_rename=True)
     """
     # Create temporary directory and extract all files to it
     with TemporaryDirectory(prefix="create_database_from_zip-") as tempdir:
@@ -630,28 +1072,24 @@ def process_image_zip_file(myfile, image_dir, auto_rename=True):
             # Extracts all files in the zip folder
             myzip.extractall(tempdir)
             
-            # Obtais all file names and temporary file names
+            # Obtains all file names and temporary file names
             all_fnames = [name.split('/')[-1] for name in os.listdir(image_dir)]
             all_tnames = [name.split('/')[-1] for name in os.listdir(tempdir)]
 
             # Initializes new names list
-            new_names = []
+            skipped_file_names = []
 
             # Loops through each temporary file name
             for tname in all_tnames:
                 # If they match any of the current file names, rename them using
                 # a unique id if 'auto_rename' is True. If 'auto_rename' is 
-                # False (and file requires renaming) skip this file.
+                # False (and file requires renaming) skip this file and add it
+                # to the skipped file names list.
                 if tname in all_fnames:
                     if auto_rename:
-                        uid        = uuid4().hex
-                        new_name   = uid + '.' + tname.split('.')[-1] # uid.extension
-                        new_names.append(uid[0:8]   + '-' +\
-                                         uid[8:12]  + '-' +\
-                                         uid[12:16] + '-' +\
-                                         uid[16::])
+                        new_name = str(uuid4()) + '.' + tname.split('.')[-1] # uid.extension
                     else:
-                        continue
+                        skipped_file_names.append(tname)
 
                 # Otherwise, dont rename it
                 else:
@@ -662,50 +1100,16 @@ def process_image_zip_file(myfile, image_dir, auto_rename=True):
                 old_fp = os.path.join(tempdir, tname)
                 sh_move(old_fp, new_fp)
 
-    return new_names
-
-# ------------------------------------------------------------------------------
-
-def fix_uid_of_renamed_imgs(new_names):
-    """
-    Ensures that the unique identifier of the renamed images matches the name of
-    the image (names of renamed images are valid unique identifiers). This
-    function modifies entries in the database contained in the 'rep_db' global
-    variable (for more information see global_variables.py).
-
-    Input:
-        1. new_names - new names (of renamed files) [list of strings].
-
-    Output:
-        1. None
-
-    Signature:
-        fix_uid_of_renamed_imgs(new_names)
-    """
-    # Loops through each representation
-    for i, rep in enumerate(glb.rep_db.reps):
-        # Determines the current image name and, if it is one of the
-        # files that was renamed, use its name (which is a unique id) as
-        # its unique id
-        cur_img_name = rep.image_name.split('.')[0]
-        cur_img_name = cur_img_name[0:8]   + '-' +\
-                       cur_img_name[8:12]  + '-' +\
-                       cur_img_name[12:16] + '-' +\
-                       cur_img_name[16::]
-                
-        if cur_img_name in new_names:
-            glb.rep_db.reps[i].unique_id = UUID(cur_img_name)
-            glb.db_changed               = True
-
-    return None
+    return skipped_file_names
 
 # ______________________________________________________________________________
 #                               OTHER FUNCTIONS
 # ------------------------------------------------------------------------------
 
-def get_matches_from_similarity(similarity_obj, db):
+def get_matches_from_similarity(similarity_obj):
     """
-    Gets all matches from the database 'db' based on the current similairty
+    Gets all matches from the session object stored in the global variable
+    'sqla_session' from global_variable.py based on the current similairty
     object 'similairty_obj'. This object is obtained from 'calc_similarity()'
     function (see help(calc_similarity) for more information).
 
@@ -713,32 +1117,230 @@ def get_matches_from_similarity(similarity_obj, db):
         1. similarity_obj - dictionary containing the indexes of matches (key:
             idxs), the threshold value used (key: threshold) and the distances
             of the matches (key: distances) [dictionary].
-        
-        2. db             - representation database [RepDatabase object].
 
     Output:
-        1. List containing each matched Representation. Note that the length of
-            this list is equal to the number of matches.
+        1. list containing each matched as a VerificationMatch object. Note
+            that the length of this list is equal to the number of matches (so
+            an empty list means no matches).
 
     Signature:
-        match_obj = get_matches_from_similarity(similarity_obj, db)
+        matches = get_matches_from_similarity(similarity_obj)
     """
-
     # Initializes the matches list
     matches = []
+
+    # Get all face embeddings
+    query = glb.sqla_session.query(FaceRep)
 
     # Loops through each index in the similarity object and stores the
     # corresponding Representation
     for i, dst in zip(similarity_obj['idxs'], similarity_obj['distances']):
-        rep = db.reps[i]
-        matches.append(VerificationMatch(unique_id=rep.unique_id,
-                            image_name=rep.image_name, group_no=rep.group_no,
-                            name_tag=rep.name_tag, image_fp=rep.image_fp,
-                            region=rep.region, distance=dst,
+        rep = query.all()[i]
+        matches.append(VerificationMatch(unique_id=rep.id,
+                            image_name=rep.image_name_orig,
+                            group_no=rep.group_no,
+                            image_fp=rep.image_fp_orig,
+                            region=rep.region,
+                            distance=dst,
                             embeddings=[name for name in rep.embeddings.keys()],
                             threshold=similarity_obj['threshold']))
     
     return matches
 
+# ______________________________________________________________________________
+#                           DATABASE RELATED FUNCTIONS 
 # ------------------------------------------------------------------------------
 
+def database_exists(db_full_path):
+    """
+    Checks if a database file exists in the path provided 'db_full_path',
+    returning True if so and False otherwise. Remember to include the file's
+    extension in the full path along with its name.
+
+    Input:
+        1. db_full_path - full path to the database file [string].
+
+    Output:
+        1. boolean indicating if the database file exists [boolean].
+        
+    Signature:
+        ret = database_exists(db_full_path)
+    """
+    return True if os.path.isfile(db_full_path) else False
+
+# ------------------------------------------------------------------------------
+
+def database_is_empty(engine):
+    """
+    Checks if the database is empty, returning True if so and False otherwise.
+    This function handles exceptions (e.g. if engine == None), returning False
+    in these cases (as they are not a database).
+
+    Input:
+        1. engine - engine object (see help(load_database) for more information
+                    on what this object is) [engine object].
+
+    Output:
+        1. boolean indicating if the database provided is empty or not
+            [boolean]. 
+
+    Signature:
+        ret = database_is_empty(engine)
+    """
+    try:
+        ret = inspect(engine).get_table_names() == []
+    except:
+        ret = False
+
+    return ret
+
+# ------------------------------------------------------------------------------
+
+def all_tables_exist(engine, check_names):
+    """
+    Checks if the database accessed by the engine object 'engine' contains all
+    table names provided in the list 'check_names', returning True if that is
+    the case and False otherwise.
+
+    Note: this function ensures that 'check_names' is a list so it can handle
+    cases where 'check_names' is just a single string.
+
+    Inputs:
+        1. engine      - engine object (see help(load_database) for more
+                            information on what this object is) [engine object].
+
+        2. check_names - table names [string or list of strings].
+
+    Output:
+        1. boolean indicating if all tables exist in the database provided
+            [boolean].
+        
+    Signature:
+        ret = all_tables_exist(engine, check_names)
+    """
+    # Ensures 'check_names' is a list
+    if not isinstance(check_names, list):
+        check_names = [check_names]
+
+    # Initializes the return value 'ret' as True, then loops over each name in
+    # 'check_names' list
+    ret = True
+    for name in check_names:
+        ret = ret and inspect(engine).has_table(name)
+
+    return ret
+
+# ------------------------------------------------------------------------------
+
+def load_database(relative_path, create_new=True, force_create=False):
+    """
+    Loads a SQLite database specified by its full path 'db_full_path'.
+
+    Inputs:
+        1. relative_path - full path to the database file [string].
+
+        2. create_new    - toggles if a new database should be created IF one
+                             could not be loaded from the full path provided
+                             [boolean, default=True].
+
+        3. force_create  - toggles if a new database should be created REGARDLESS
+                             of a database existing in the full path provided
+                             (this effectively disregards 'db_full_path')
+                             [boolean, default=False].
+
+    Output:
+        1. returns a engine object (if successful) or a None object
+            [engine object].
+
+        2. returns a base object (if successful) or a None object [base object].
+
+    Signature:
+        engine, base = load_database(db_full_path, create_new=True,
+                                     force_create=False)
+    """
+    db_full_path = os.path.join(glb.API_DIR   , relative_path)
+    engine       = create_engine("sqlite:///" + relative_path)
+
+    # If database exists, opens it
+    if   database_exists(db_full_path) and not force_create:
+        # Binds the metadata to the engine
+        metadata_obj = MetaData()
+        metadata_obj.reflect(bind=engine)
+
+    # If 'create_new' or 'force_create' are True, creates a new database
+    elif create_new or force_create:
+        # create the SQLAlchemy tables' definitions
+        Base.metadata.create_all(engine)
+
+    else:
+        # Otherwise, returns a None object with a warning
+        print('[load_database] WARNING: Database loading failed',
+              '(and a new was NOT created).')
+        engine = None
+    
+    # TODO: add TRY - EXPECT for dealing with error
+
+    return engine
+
+# ------------------------------------------------------------------------------
+
+def start_session(engine):
+    """
+    Creates a Session object from the database connected by the engine object
+    'engine'.
+    
+    The primary usage interface for persistence operations is the Session
+    object, from now on referred to as simply 'session'. The session establishes
+    all conversations with the database and represents a “holding zone” for all
+    the objects which have been loaded or associated with it during its
+    lifespan.
+    
+    It provides the interface where SELECT and other queries are made that will
+    return and modify ORM-mapped objects. The ORM objects themselves are
+    maintained inside the session, inside a structure called the identity map -
+    a data structure that maintains unique copies of each object, where “unique”
+    means “only one object with a particular primary key”.
+
+    Input:
+        1. engine - engine object (see help(load_database) for more
+                      information on what this object is) [engine object].
+
+    Output:
+        1. the session as a Session object (if successful) or None object
+            (on failure) [session object or None].
+
+    Signature:
+        session = start_session(engine)
+    """
+    try:
+        Session = sessionmaker(bind=engine)
+        session = Session()
+    except:
+        session = None
+
+    return session
+
+# ------------------------------------------------------------------------------
+
+def facerep_set_groupno_done(session, face_id):
+    # Loops through each file
+    query = update(FaceRep).values(group_no = -1, person_id=None).where(FaceRep.id == face_id)
+    if session:
+        session.execute(query)
+        session.commit()
+
+
+def people_clean_without_repps(session):
+    """
+    Remove records from Person table that don't have any corresponding records in
+    FaceRep table.
+    """
+
+    textual_sql = text("DELETE FROM person WHERE person.id IN (SELECT person.id \
+                        FROM person LEFT JOIN representation \
+                        ON person.id == representation.person_id \
+                        GROUP BY person.id \
+                        HAVING COUNT(representation.id) == 0)")
+    if(session):
+        session.execute(textual_sql)
+        session.commit()
