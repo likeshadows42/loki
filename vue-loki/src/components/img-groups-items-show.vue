@@ -9,7 +9,8 @@ export default {
 
   props: {
     person_id: Number,
-    person_name: String
+    person_name: String,
+    person_note: String
   },
 
   data() {
@@ -17,7 +18,9 @@ export default {
       group_obj: null,
       group_num: 0,
       person_new_name: this.person_name != null ? this.person_name : '',
-      person_name_placeholder: this.person_name != null ? this.person_name : 'unamed'
+      person_name_placeholder: this.person_name != null ? this.person_name : 'unamed',
+      person_new_note: this.person_note,
+      person_note_placeholder: this.person_note == null ? 'insert a note' : ''
     }
   },
 
@@ -46,8 +49,6 @@ export default {
       const params = {}
       this.group_obj = await this.axiosPost(`http://127.0.0.1:8000/fr/people/get_faces?person_id=${person_id}`, params)
       this.group_num = Object.keys(this.group_obj).length
-      // return this.group_obj
-      //console.log(this.group_obj)
     },
 
     async removeImg(item_id, person_id) {
@@ -56,13 +57,12 @@ export default {
       this.getGroupMembers(person_id)
     },
 
-    async changeName(person_id) {
+    async updatePerson(person_id) {
       const params = {}
       await this.axiosPost(`http://127.0.0.1:8000/fr/people/set_name?person_id=${person_id}&person_name=${this.person_new_name}`, params)
+      await this.axiosPost(`http://127.0.0.1:8000/fr/people/set_note?person_id=${person_id}&new_note=${this.person_new_note}`, params)
       this.name_title = this.person_new_name
       this.getGroupMembers(this.person_id)
-      // alert(this.person_new_name+", "+person_id)
-
     },
 
   },
@@ -81,8 +81,8 @@ export default {
 <template>
   <div v-if="group_num > 0" class="group_div">
     <div class="header_div">
-      <!-- <div>#{{ person_id }} <input v-model="person_new_name" class="person_name_box" :size="person_new_name.length"> <button @click="changeName(person_id)">CHANGE</button></div> -->
-      <div>#{{ person_id }} <input v-model="person_new_name" :placeholder="person_name_placeholder" class="person_name_box" :size="person_new_name.length != 0 ? person_new_name.length: 5"> <button @click="changeName(person_id)">CHANGE</button></div>
+      <div>#{{ person_id }} <input v-model="person_new_name" :placeholder="person_name_placeholder" class="person_name_box" :size="person_new_name.length != 0 ? person_new_name.length: 5"> <button @click="updatePerson(person_id)">CHANGE</button></div>
+      Note <textarea :placeholder="this.person_note_placeholder" v-model="person_new_note"></textarea>
       <div>Num pics: {{group_num }}</div>
     </div>
     <div class="imgs_container">
@@ -128,5 +128,11 @@ export default {
 .img_thum {
     max-width: 80px;
     /* height: 100%; */
+}
+
+textarea {
+  width: 100%;
+  resize: none;
+  border-color: #ddd;
 }
 </style>
