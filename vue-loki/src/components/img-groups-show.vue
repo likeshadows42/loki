@@ -54,7 +54,7 @@ export default {
 <h2>List people</h2>
 
 <span v-for="person in people" :key="person.id">
-      <compGroupItems :person_id="person.id" :person_name="person.name"></compGroupItems>
+      <compGroupItems :person_id="person.id" :person_name="person.name" :person_note="person.note"></compGroupItems>
       <!-- {{group.id}}, -->
 
 </span>

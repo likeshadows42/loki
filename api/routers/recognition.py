@@ -856,6 +856,16 @@ async def people_set_name(person_id: int = Query(None, description="'person_id k
 
 # ------------------------------------------------------------------------------
 
+@fr_router.post("/people/set_note")
+async def people_set_note(person_id: int = Query(None, description="'person_id key' in Person table [integer]"),
+                          new_note: str = Query(None, description="new person note [string]")):
+
+    query = update(Person).values(note = new_note).where(Person.id == person_id)
+    glb.sqla_session.execute(query)
+    glb.sqla_session.commit()
+
+# ------------------------------------------------------------------------------
+
 @fr_router.post("/facerep/unjoin")
 async def facerep_unjoin(face_id  : int = Query(None, description="ID of FaceRep record")):
     """

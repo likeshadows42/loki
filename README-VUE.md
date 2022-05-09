@@ -19,9 +19,9 @@ end then install all Vue's dependencies in **vue-loki** package.json (`cd vue-lo
 After installation, node can be run with:
 > npm run serve
 
-A symbolic link should be created from a local images' dir inside Vue's public folder, like (MacOS):
+A symbolic link should be created from a local images' dir inside Vue's public folder, In MacOS this is done with:
 > ln -s api/data/img vue-loki/public/data
 
-The frontend enviroment should be avaiable at the defautl local address then:
+The frontend enviroment should be availalbe at the defautl local address then:
 
 http://localhost:8080/
