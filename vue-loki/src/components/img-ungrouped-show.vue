@@ -66,25 +66,39 @@ export default {
     },
 
     async setPerson(ev) {
+      var person_value
       if(ev.key == 'Enter') {
         // console.log(this.people_lookup_table['[Target]'])
-        const person = this.people_lookup_table.find(arr => arr.text == this.people_list_hidden)
         if(this.people_list_hidden != null) {
-           const requestOptions = {
-             method: "POST",
+          const person = this.people_lookup_table.find(arr => arr.text == this.people_list_hidden)
+          if(!person) {
+            // Create a new person
+            const requestOptions = {
+              method: "POST",
             }
-            const res = await fetch(`http://127.0.0.1:8000/fr/people/assign_facerep?person_id=${person.value}&facerep_id=${this.item_id_selected}`,requestOptions)
-            const json = await res.json()
-            if(json != 'ok') {
-              throw 'Error!'
-            }
+            const res = await fetch(`http://127.0.0.1:8000/fr/people/add_new?person_name=${this.people_list_hidden}`,requestOptions)
+            const result = await res.json()
+            console.log(result.id)
+            person_value = result.id
+          } else {
+            person_value = person.value
+          }
+
+          const requestOptions = {
+            method: "POST",
+          }
+          const res = await fetch(`http://127.0.0.1:8000/fr/people/assign_facerep?person_id=${person_value}&facerep_id=${this.item_id_selected}`,requestOptions)
+          const json = await res.json()
+          if(json != 'ok') {
+            throw 'Error!'
+          }
           this.fetchUngrouped()
         }
       }
     },
 
-    showEv(ev) {
-      console.log(ev)
+    showEv() {
+      // console.log(ev)
     },
 
     checkImgs(array) {
