@@ -29,7 +29,7 @@ from matplotlib                      import image          as mpimg
 from deepface.DeepFace               import build_model    as build_verifier
 from deepface.detectors.FaceDetector import build_model    as build_detector
 
-from sqlalchemy import select, update, text
+from sqlalchemy import select, update, insert
 
 glb_data_dir = glb.DATA_DIR
 glb_img_dir  = glb.IMG_DIR
@@ -843,12 +843,29 @@ async def people_get_faces(person_id: int = Query(None, description="'person_id 
 
     return return_value
 
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/people/add_new")
+async def people_add_new(person_name: str = Query(None, description="new person name [string]")):
+    """
+    API endpoiunt: add a new Person record and return its ID
+    """
+    query = insert(Person).values(name=person_name)
+    result = glb.sqla_session.execute(query)
+    glb.sqla_session.commit()
+
+    return result.inserted_primary_key
+
+
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/people/set_name")
 async def people_set_name(person_id: int = Query(None, description="'person_id key' in Person table [integer]"),
                           person_name: str = Query(None, description="new person name [string]")):
-
+    """
+    API endpoiunt: set the name of one person in Person table given its ID
+    """
     query = update(Person).values(name = person_name).where(Person.id == person_id)
     glb.sqla_session.execute(query)
     glb.sqla_session.commit()
@@ -861,7 +878,9 @@ async def people_set_name(person_id: int = Query(None, description="'person_id k
 @fr_router.post("/people/set_note")
 async def people_set_note(person_id: int = Query(None, description="'person_id key' in Person table [integer]"),
                           new_note: str = Query(None, description="new person note [string]")):
-
+    """
+    API endpoiunt: set the note of one person in Person table given its ID
+    """
     query = update(Person).values(note = new_note).where(Person.id == person_id)
     glb.sqla_session.execute(query)
     glb.sqla_session.commit()
@@ -874,6 +893,9 @@ async def people_set_note(person_id: int = Query(None, description="'person_id k
 @fr_router.post("/people/assign_facerep")
 async def people_assing_facerep(person_id: int = Query(None, description="'ID primary key in Person table [integer]"),
                           facerep_id: int = Query(None, description="ID primary key in FaceRep table [integer")):
+    """
+    API endpoiunt: join a FaceRep record to one Person record through the primary join Person.id -> FaceRep.person_id
+    """
     query = update(FaceRep).values(person_id = person_id, group_no = -2).where(FaceRep.id == facerep_id)
     glb.sqla_session.execute(query)
     glb.sqla_session.commit()
