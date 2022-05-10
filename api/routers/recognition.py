@@ -10,26 +10,26 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy                 as np
 import api.global_variables  as glb
 
-from uuid                    import UUID, uuid4
+from uuid                    import uuid4
 from typing                  import List, Optional
-from fastapi                 import APIRouter, UploadFile, Depends, Query, Body
-from IFR.api                 import load_built_model, get_embeddings_as_array,\
-                            process_image_zip_file,\
-                            get_matches_from_similarity, create_new_rep,\
-                            database_is_empty, all_tables_exist,\
-                            process_faces_from_dir, load_database, start_session,\
-                            facerep_set_groupno_done, people_clean_without_repps    
+from fastapi                 import APIRouter, UploadFile, Depends, Query
+from IFR.api                 import init_load_verifiers, init_load_detectors,\
+                               get_embeddings_as_array, process_image_zip_file,\
+                               database_is_empty, get_matches_from_similarity,\
+                               all_tables_exist, process_faces_from_dir,\
+                               load_database, facerep_set_groupno_done,\
+                               start_session, people_clean_without_repps
 from IFR.classes             import *
-from IFR.functions           import create_dir, string_is_valid_uuid4,\
-                               calc_embeddings, calc_similarity,\
-                               do_face_detection, discard_small_regions
+from IFR.functions           import ensure_dirs_exist, calc_embeddings,\
+                                    calc_similarity, do_face_detection,\
+                                    discard_small_regions
 from fastapi.responses       import Response
 
 from matplotlib                      import image          as mpimg
 from deepface.DeepFace               import build_model    as build_verifier
 from deepface.detectors.FaceDetector import build_model    as build_detector
 
-from sqlalchemy import select, update, text
+from sqlalchemy import select, update
 
 glb_data_dir = glb.DATA_DIR
 glb_img_dir  = glb.IMG_DIR
@@ -115,25 +115,19 @@ async def inspect_globals(print2console: bool = Query(True, description="Toggles
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/debug/reset_server")
-async def reset_server(no_database: bool = Query(False, description="Toggles if database should be empty or loaded [boolean]")):
+async def reset_server():
     """
-    TODO: FIX THIS ENDPOINT!
-
     API endpoint: reset_server()
 
     Allows the user to restart the server without manually requiring to shut it
     down and start it up.
-
-    Parameter:
-        1. no_database - toggles if the database should be empty or loaded on
-             server reset (default=False) [boolean]
 
     Output:\n
         JSON-encoded dictionary with the following attributes:
             1. message: message stating the server has been restarted (string)
     """
     print('\n!!!!!!!!!!!!!!!! RESTARTING THE SERVER !!!!!!!!!!!!!!!!')
-    print('======== Starting initialization process ======== \n')
+    print('\n ======== Starting initialization process ======== \n')
 
     # Directories & paths initialization
     print('  -> Resetting global variables:')
@@ -142,125 +136,83 @@ async def reset_server(no_database: bool = Query(False, description="Toggles if 
     print('[PATH]'.ljust(12), 'API_DIR'.ljust(12),
          f': reset! ({glb.API_DIR})')
     
-    glb.DATA_DIR    = os.path.join(glb.API_DIR    , 'data')
+    glb.DATA_DIR     = os.path.join(glb.API_DIR    , 'data')
     print('[PATH]'.ljust(12), 'DATA_DIR'.ljust(12),
          f': reset! ({glb.DATA_DIR})')
     
-    glb.IMG_DIR     = os.path.join(glb.DATA_DIR  , 'img')
+    glb.IMG_DIR      = os.path.join(glb.DATA_DIR  , 'img')
     print('[PATH]'.ljust(12), 'IMG_DIR'.ljust(12),
          f': reset! ({glb.IMG_DIR})')
     
-    glb.RDB_DIR     = os.path.join(glb.DATA_DIR  , 'database')
+    glb.RDB_DIR      = os.path.join(glb.DATA_DIR  , 'database')
     print('[PATH]'.ljust(12), 'RDB_DIR'.ljust(12),
          f': reset! ({glb.RDB_DIR})')
     
-    glb.SVD_MDL_DIR = os.path.join(glb.API_DIR       , 'saved_models')
+    glb.SVD_MDL_DIR  = os.path.join(glb.API_DIR       , 'saved_models')
     print('[PATH]'.ljust(12), 'SVD_MDL_DIR'.ljust(12),
          f': reset! ({glb.SVD_MDL_DIR})')
     
-    glb.SVD_VRF_DIR = os.path.join(glb.SVD_MDL_DIR   , 'verifiers')
+    glb.SVD_VRF_DIR  = os.path.join(glb.SVD_MDL_DIR   , 'verifiers')
     print('[PATH]'.ljust(12), 'SVD_VRF_DIR'.ljust(12),
          f': reset! ({glb.SVD_VRF_DIR})')
 
-    glb.SVD_DTC_DIR = os.path.join(glb.SVD_MDL_DIR   , 'detectors')
+    glb.SVD_DTC_DIR  = os.path.join(glb.SVD_MDL_DIR   , 'detectors')
     print('[PATH]'.ljust(12), 'SVD_VRF_DIR'.ljust(12),
          f': reset! ({glb.SVD_DTC_DIR})')
     print('')
 
-    glb.models     = {}
+    glb.models       = {}
     print('[MODELS]'.ljust(12), 'models'.ljust(12),
          f': reset! ({glb.models})')
-    glb.rep_db     = RepDatabase()
-    print('[DATABASE]'.ljust(12), 'rep_db'.ljust(12),
-         f': reset! ({glb.rep_db})')
-    glb.db_changed = False
-    print('[FLAG]'.ljust(12), 'db_changed'.ljust(12),
-         f': reset! ({glb.db_changed})')
+    print('')
+
+    glb.SQLITE_DB    = 'loki.sqlite'
+    print('[SQLALCH]'.ljust(12), 'SQLITE_DB'.ljust(12),
+         f': reset! ({glb.SQLITE_DB})')
+
+    glb.SQLITE_DB_FP = os.path.join('api/data/database', glb.SQLITE_DB)
+    print('[SQLALCH]'.ljust(12), 'SQLITE_DB_FP'.ljust(12),
+         f': reset! ({glb.SQLITE_DB_FP})')
+
+    glb.sqla_engine  = None
+    print('[SQLALCH]'.ljust(12), 'sqla_engine'.ljust(12),
+         f': reset! ({glb.sqla_engine})')
+
+    glb.sqla_session = None
+    print('[SQLALCH]'.ljust(12), 'sqla_session'.ljust(12),
+         f': reset! ({glb.sqla_session})')
     print('')
 
     # Directories & paths initialization
     print('  -> Directory creation:')
     directory_list = [glb.API_DIR, glb.DATA_DIR, glb.IMG_DIR, glb.RDB_DIR,
                       glb.SVD_MDL_DIR, glb.SVD_VRF_DIR, glb.SVD_DTC_DIR]
-    
-    for directory in directory_list:
-        print(f'Creating {directory} directory: ', end='')
-    
-        if create_dir(directory):
-            print('directory exists. Continuing...')
-        else:
-            print('success.')
+    ensure_dirs_exist(directory_list, verbose=True)
     print('')
 
-    # Tries to load a database if it exists and no_database == False. If not,
-    # either creates a new, empty database.
-    print('  -> Loading / creating database:')
-    if no_database:
-        print('Empty database loaded (no_database=True)')
-    else:
-        if not os.path.isfile(os.path.join(glb.RDB_DIR, 'rep_database.pickle')):
-            glb.db_changed = True
-        #glb.rep_db = load_representation_db(os.path.join(glb.RDB_DIR,
-        #                                'rep_database.pickle'), verbose=True)
+    # Tries to load a database if it exists. If not, create a new one.
+    print('  -> Loading / creating database:', end='')
+    glb.sqla_engine = load_database(glb.SQLITE_DB_FP)
+    print('success!\n')
+
+    # Loads (or creates) the session. Also commits once to create table
+    # definitions if required.
+    print('  -> Loading / creating session:', end='')
+    glb.sqla_session = start_session(glb.sqla_engine)
+    glb.sqla_session.commit()                   # create table definitions
+    print('success!\n')
     
-    print('')
-    
-    # Loads (or creates) all face detectors
-    print('  -> Loading / creating face detectors:')
-    for detector_name in glb.detector_names:
-        # Quick fix to avoid problems when len(glb.detector_names) == 1. In this
-        # case, FOR loops over each letter in the string instead of considering
-        # the entire string as one thing.
-        if detector_name == '':
-            continue
-
-        # First, try loading (opening) the model
-        model = load_built_model(detector_name + '.pickle', glb.SVD_DTC_DIR,
-                                   verbose=True)
-
-        # If successful, save the model in a dictionary
-        if model is not None:
-            glb.models[detector_name] = model
-
-        # Otherwise, build the model from scratch
-        else:
-            print(f'[build_detector] Building {detector_name}: ', end='')
-            try:
-                glb.models[detector_name] = build_detector(detector_name)
-                print('success!\n')
-
-            except Exception as excpt:
-                print(f'failed! Reason: {excpt}\n')
-
-
     # Loads (or creates) all face verifiers
     print('  -> Loading / creating face verifiers:')
-    for verifier_name in glb.verifier_names:
-        # Quick fix to avoid problems when len(glb.verifier_names) == 1. In this
-        # case, FOR loops over each letter in the string instead of considering
-        # the entire string as one thing.
-        if verifier_name == '':
-            continue
+    glb.models = init_load_verifiers(glb.verifier_names, glb.SVD_VRF_DIR)
+    print('')
 
-        # First, try loading (opening) the model
-        model = load_built_model(verifier_name + '.pickle', glb.SVD_VRF_DIR,
-                                   verbose=True)
-
-        # If successful, save the model in a dictionary
-        if model is not None:
-            glb.models[verifier_name] = model
-
-        # Otherwise, build the model from scratch
-        else:
-            print(f'[build_verifier] Building {verifier_name}: ', end='')
-            try:
-                glb.models[verifier_name] = build_verifier(verifier_name)
-                print('success!\n')
-
-            except Exception as excpt:
-                print(f'failed! Reason: {excpt}\n')
-
+    # Loads (or creates) all face detectors
+    print('  -> Loading / creating face detectors:')
+    glb.models = init_load_detectors(glb.detector_names, glb.SVD_VRF_DIR,
+                                     models=glb.models)
     print('\n -------- End of initialization process -------- \n')
+
     return {"message": "Server has been restarted"}
 
 # ------------------------------------------------------------------------------
@@ -311,60 +263,67 @@ async def edit_default_directories(img_dir: str = Query(glb.IMG_DIR, description
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/view_database")
-async def view_database(amt_detail : MessageDetailOptions = Query(default_msg_detail, description="Amount of detail in the output (string)")):
+@fr_router.post("/utility/view_tables")
+async def view_tables(
+    table_name : AvailableTables = Query(AvailableTables.FACEREP, description="Name of desired table (string)")):
     """
-    API endpoint: view_database()
+    API endpoint: view_tables()
 
-    Returns information about all Representations in the database. Either all
-    information or a summary is returned depending on the value of 'amt_detail'.
-    Similarly, the output can be either a JSON-encoded structure or a
-    string-like message depending on the value of 'output_type'.
+    Returns all information corresponding to the selected table. The table must
+    exist in the database, otherwise an assertion error is raised.
 
-    Parameters:
-    - amt_detail : amount of detail in the output (string)
-
-    - output_type: type of message format (string or structure) of the output
-                    (string)
+    Parameter:
+    - table_name : name of the desired table [string].
 
     Output:\n
-        - If output_type='structure':
-            JSON-encoded structure containing all (amt_detail='complete') or
-            some (amt_detail='summary') of the attributes of each Representation
-            in the database.
-        
-        - If output_type='message':
-            String like message containing all (amt_detail='complete') or some
-            (amt_detail='summary') of the attributes of each Representation
-            in the database.
+        List of JSON-encoded structures containing all of the attributes of each
+        record in the selected table.
     """
     # Initialize output object
     output_obj = []
 
-    # Case 1: SUMMARY
-    if   amt_detail == MessageDetailOptions.SUMMARY:
-        if glb.rep_db.size > 0:
-            for rep in glb.rep_db.reps:
-                output_obj.append(RepsSummaryOutput(unique_id=rep.unique_id,
-                                                    image_name=rep.image_name,
-                                                    group_no=rep.group_no,
-                                                    name_tag=rep.name_tag,
-                                                    region=rep.region))
+    # Prints the appropriate information if the selected table is
+    # 'representation'
+    if   table_name.lower() == AvailableTables.FACEREP:
+        query = glb.sqla_session.query(FaceRep)
+        for rep  in query.all():
+            output_obj.append(FaceRepOutput(
+                id              = rep.id,
+                person_id       = rep.person_id,
+                image_name_orig = rep.image_name_orig,
+                image_fp_orig   = rep.image_fp_orig,
+                group_no        = rep.group_no,
+                region          = rep.region,
+                embeddings      = [name for name in rep.embeddings.keys()]
+            ))
 
-    # Case 2: COMPLETE
-    elif amt_detail == MessageDetailOptions.COMPLETE:
-        if glb.rep_db.size > 0:
-            for rep in glb.rep_db.reps:
-                output_obj.append(RepsInfoOutput(unique_id=rep.unique_id,
-                        image_name=rep.image_name, group_no=rep.group_no,
-                        name_tag=rep.name_tag, image_fp=rep.image_fp,
-                        region=rep.region,
-                        embeddings=[name for name in rep.embeddings.keys()]))
+    # Prints the appropriate information if the selected table is 'person'
+    elif table_name.lower() == AvailableTables.PERSON:
+        query = glb.sqla_session.query(Person)
+        for prsn in query.all():
+            output_obj.append(PersonTableOutput(
+                id       = prsn.id,
+                name     = prsn.name,
+                group_no = prsn.group_no,
+                note     = prsn.note
+            ))
 
-    # Case 3: [Exception] UNKNOWN AMOUNT OF DETAIL
+    # Prints the appropriate information if the selected table is 'proc_files'
+    elif table_name.lower() == AvailableTables.PROCFILES:
+        query = glb.sqla_session.query(ProcessedFiles)
+        for fprc in query.all():
+            output_obj.append(ProcessedFilesOutput(
+                id       = fprc.id,
+                filename = fprc.filename,
+                filepath = fprc.filepath,
+                filesize = fprc.filesize
+            ))
+
+    # Raises an assertion error because the selected table does not exist in the
+    # database
     else:
-        raise AssertionError('Amout of detail should be '\
-                           + 'either SUMMARY or COMPLETE.')
+        raise AssertionError("Table name should be either 'person', "
+                           + "'representation' or 'proc_files'!")
 
     return output_obj
 
@@ -387,7 +346,7 @@ async def database_clear_api():
     """
     # Remove SQlite file and recreate again
     os.remove(glb.SQLITE_DB_FP)
-    glb.sqla_engine = load_database(glb.SQLITE_DB_FP)
+    glb.sqla_engine  = load_database(glb.SQLITE_DB_FP)
     glb.sqla_session = start_session(glb.sqla_engine)
     glb.sqla_session.commit()
 
@@ -395,181 +354,181 @@ async def database_clear_api():
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/search_database/", response_model=List[RepsInfoOutput])
-async def search_database(search_terms: List[str] = Query(None, description="Name tag to be searched (string)")):
-    """
-    API endpoint: search_database()
+# @fr_router.post("/utility/search_database/", response_model=List[RepsInfoOutput])
+# async def search_database(search_terms: List[str] = Query(None, description="Name tag to be searched (string)")):
+#     """
+#     API endpoint: search_database()
 
-    Allows the user to search records in the database using terms of the 'terms'
-    list. The 'terms' list can be composed of:
-        1. string(s) representation(s) of a valid unique identifiers (string(s))
-        2. image name(s) (string(s))
+#     Allows the user to search records in the database using terms of the 'terms'
+#     list. The 'terms' list can be composed of:
+#         1. string(s) representation(s) of a valid unique identifiers (string(s))
+#         2. image name(s) (string(s))
         
-    Note: a valid unique identifier string representation obeys the following
-    (case insensitive) regular expression:
-                    '^[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?' + 
-                    '[89ab][a-f0-9]{3}-?[a-f0-9]{12}\Z'
+#     Note: a valid unique identifier string representation obeys the following
+#     (case insensitive) regular expression:
+#                     '^[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?' + 
+#                     '[89ab][a-f0-9]{3}-?[a-f0-9]{12}\Z'
 
-    Each element of the 'terms' list can be one of the two string types
-    described above (i.e. one can mix and match string types in the 'terms'
-    list).
+#     Each element of the 'terms' list can be one of the two string types
+#     described above (i.e. one can mix and match string types in the 'terms'
+#     list).
 
-    This endpoint returns the records (Representations) of each term found.
-    If a term is invalid or does not match any record in the database, it is
-    ignored / skipped.
+#     This endpoint returns the records (Representations) of each term found.
+#     If a term is invalid or does not match any record in the database, it is
+#     ignored / skipped.
 
-    Parameters:
-    - search_terms : list of string representation of a valid unique identifiers
-                        or image name  (list of strings)
+#     Parameters:
+#     - search_terms : list of string representation of a valid unique identifiers
+#                         or image name  (list of strings)
 
-    Output:\n
-        JSON-encoded Representation structure with the following attributes:
-            1. unique_id : unique identifier [UUID]
-            2. image_name: image name [string]
-            3. group_no  : group number [integer]
-            4. name_tag  : name tag [string]
-            5. image_fp  : image full path [string]
-            6. region    : the region is a 4 element list [list of integers]
-            7. embedding : list of face verifier names for which this
-                            Representation has embeddings for [list of strings]
-    """
-    # Searches for the matching records, then converts them to the appropriate
-    # output response model
-    found_records = glb.rep_db.search(search_terms, get_index=False)
-    output_objs   = glb.rep_db.__records2resp_model__(found_records)
+#     Output:\n
+#         JSON-encoded Representation structure with the following attributes:
+#             1. unique_id : unique identifier [UUID]
+#             2. image_name: image name [string]
+#             3. group_no  : group number [integer]
+#             4. name_tag  : name tag [string]
+#             5. image_fp  : image full path [string]
+#             6. region    : the region is a 4 element list [list of integers]
+#             7. embedding : list of face verifier names for which this
+#                             Representation has embeddings for [list of strings]
+#     """
+#     # Searches for the matching records, then converts them to the appropriate
+#     # output response model
+#     found_records = glb.rep_db.search(search_terms, get_index=False)
+#     output_objs   = glb.rep_db.__records2resp_model__(found_records)
 
-    return output_objs
+#     return output_objs
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/search_database_by_tag/", response_model=List[RepsInfoOutput])
-async def search_database_by_tag(search_tag : str  = Query(None, description="Name tag to be searched (string)"),
-                                 ignore_case: bool = Query(False, description="Toggle between case sensitive and case insensitive search (boolean)")):
-    """
-    API endpoint: search_database_by_tag()
+# @fr_router.post("/utility/search_database_by_tag/", response_model=List[RepsInfoOutput])
+# async def search_database_by_tag(search_tag : str  = Query(None, description="Name tag to be searched (string)"),
+#                                  ignore_case: bool = Query(False, description="Toggle between case sensitive and case insensitive search (boolean)")):
+#     """
+#     API endpoint: search_database_by_tag()
 
-    Allows the user to search the database using a name tag. Returns all
-    database entries containing the name tag provided. This search can be either
-    case sensitive or case insensitive based on the value of 'ignore_case'.
+#     Allows the user to search the database using a name tag. Returns all
+#     database entries containing the name tag provided. This search can be either
+#     case sensitive or case insensitive based on the value of 'ignore_case'.
 
-    Parameters:
-    - target_tag : name tag to be searched (string)
+#     Parameters:
+#     - target_tag : name tag to be searched (string)
 
-    - ignore_case: toggle between case sensitive and case insensitive search
-                    (boolean)
+#     - ignore_case: toggle between case sensitive and case insensitive search
+#                     (boolean)
 
-    Output:\n
-        JSON-encoded Representation structure with the following attributes:
-            1. unique_id : unique identifier [UUID]
-            2. image_name: image name [string]
-            3. group_no  : group number [integer]
-            4. name_tag  : name tag [string]
-            5. image_fp  : image full path [string]
-            6. region    : the region is a 4 element list [list of integers]
-            7. embedding : list of face verifier names for which this
-                            Representation has embeddings for [list of strings]
-    """
-    # Searches for the matching records, then converts them to the appropriate
-    # output response model
-    found_records = glb.rep_db.search_by_tag(search_tag,
-                                    ignore_case=ignore_case, get_index=False)
-    output_objs   = glb.rep_db.__records2resp_model__(found_records)
+#     Output:\n
+#         JSON-encoded Representation structure with the following attributes:
+#             1. unique_id : unique identifier [UUID]
+#             2. image_name: image name [string]
+#             3. group_no  : group number [integer]
+#             4. name_tag  : name tag [string]
+#             5. image_fp  : image full path [string]
+#             6. region    : the region is a 4 element list [list of integers]
+#             7. embedding : list of face verifier names for which this
+#                             Representation has embeddings for [list of strings]
+#     """
+#     # Searches for the matching records, then converts them to the appropriate
+#     # output response model
+#     found_records = glb.rep_db.search_by_tag(search_tag,
+#                                     ignore_case=ignore_case, get_index=False)
+#     output_objs   = glb.rep_db.__records2resp_model__(found_records)
 
-    return output_objs
+#     return output_objs
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/get_attribute_from_database")
-async def get_attribute_from_database(
-    atr           : AvailableRepProperties = Query(default_property, description="Representations' attribute (string)"),
-    verifier_name : str                    = Query(default_verifier, description="Face verifier name (string)"),
-    do_sort       : bool                   = Query(False           , description="Flag to perform sorting of the results (boolean)"),
-    suppress_error: bool                   = Query(True            , description="Flag to suppress error, returning an empty list instead of raising an exception (boolean")):
-    """
-    API endpoint: get_attribute_from_database()
+# @fr_router.post("/utility/get_attribute_from_database")
+# async def get_attribute_from_database(
+#     atr           : AvailableRepProperties = Query(default_property, description="Representations' attribute (string)"),
+#     verifier_name : str                    = Query(default_verifier, description="Face verifier name (string)"),
+#     do_sort       : bool                   = Query(False           , description="Flag to perform sorting of the results (boolean)"),
+#     suppress_error: bool                   = Query(True            , description="Flag to suppress error, returning an empty list instead of raising an exception (boolean")):
+#     """
+#     API endpoint: get_attribute_from_database()
 
-    Gets a specific attribute from all Representations in the database.
+#     Gets a specific attribute from all Representations in the database.
     
-    The embeddings attribute (atr='embeddings') is a special case and works
-    differently: what is returned depends on the the 'verifier_name' parameter.
-    If a specific face verifier is chosen, then the embeddings for that verifier
-    are returned as a list (of lists), and sorting is ignored regardless of
-    'do_sort'.
+#     The embeddings attribute (atr='embeddings') is a special case and works
+#     differently: what is returned depends on the the 'verifier_name' parameter.
+#     If a specific face verifier is chosen, then the embeddings for that verifier
+#     are returned as a list (of lists), and sorting is ignored regardless of
+#     'do_sort'.
 
-    Alternatively, the string 'names' can be passed as a 'verifier_name'. In
-    this case, only the names of ALL embeddings available to each Representation
-    are returned (also as a list of lists).
+#     Alternatively, the string 'names' can be passed as a 'verifier_name'. In
+#     this case, only the names of ALL embeddings available to each Representation
+#     are returned (also as a list of lists).
     
-    For example, consider a database with 2 Representations with the following
-    available embeddings:
-        Representation 1: ArcFace, OpenFace, FaceNet 
-        Representation 2: ArcFace, VGG-Face
+#     For example, consider a database with 2 Representations with the following
+#     available embeddings:
+#         Representation 1: ArcFace, OpenFace, FaceNet 
+#         Representation 2: ArcFace, VGG-Face
 
-    The output of atr='embeddings' and verifier_name='names' would be:
-        output = [[ArcFace, OpenFace, FaceNet], [ArcFace, VGG-Face]]
+#     The output of atr='embeddings' and verifier_name='names' would be:
+#         output = [[ArcFace, OpenFace, FaceNet], [ArcFace, VGG-Face]]
 
-    Parameters:
-    - propty        : Representations' property (string).
+#     Parameters:
+#     - propty        : Representations' property (string).
 
-    - verifier_name : face verifier name (case sensitive) OR 'names'
-                        (string, default: <default_verifier>).
+#     - verifier_name : face verifier name (case sensitive) OR 'names'
+#                         (string, default: <default_verifier>).
 
-    - do_sort       : flag to perform sorting of the results
-                        (boolean, default: False).
+#     - do_sort       : flag to perform sorting of the results
+#                         (boolean, default: False).
 
-    - suppress_error: flag to suppress error, returning an empty list instead
-                        of raising an exception (boolean, default: True).
+#     - suppress_error: flag to suppress error, returning an empty list instead
+#                         of raising an exception (boolean, default: True).
 
-    Output:\n
-        JSON-encoded list containing the chosen property from each
-        Representation. The list is sorted if 'do_sort' is set to True. The list
-        will be empty if the Representation database has a length of zero or if
-        'suppress_error' is True and a non-existant property 'param' is chosen.
-    """
-    # Initializes the skip_sort flag (this is only used when the vector
-    # embeddings are returned as it does not make any sense to sort them)
-    skip_sort = False
+#     Output:\n
+#         JSON-encoded list containing the chosen property from each
+#         Representation. The list is sorted if 'do_sort' is set to True. The list
+#         will be empty if the Representation database has a length of zero or if
+#         'suppress_error' is True and a non-existant property 'param' is chosen.
+#     """
+#     # Initializes the skip_sort flag (this is only used when the vector
+#     # embeddings are returned as it does not make any sense to sort them)
+#     skip_sort = False
 
-    # Gets the desired attribute of each Representation in the database,
-    # supressing errors if suppress_error is True
-    attributes = glb.rep_db.get_attribute(atr, suppress_error=suppress_error)
+#     # Gets the desired attribute of each Representation in the database,
+#     # supressing errors if suppress_error is True
+#     attributes = glb.rep_db.get_attribute(atr, suppress_error=suppress_error)
 
-    # If the 'embeddings' property is selected, processes it based on whether
-    # the user wants a specific embedding or the embedding names
-    if atr == 'embeddings':
-        # If the user wants the embedding names
-        if verifier_name == 'names':
-            all_names = []
-            for cur_atrbs in attributes:
-                all_names.append([name for name in cur_atrbs.keys()])
-            attributes = all_names
+#     # If the 'embeddings' property is selected, processes it based on whether
+#     # the user wants a specific embedding or the embedding names
+#     if atr == 'embeddings':
+#         # If the user wants the embedding names
+#         if verifier_name == 'names':
+#             all_names = []
+#             for cur_atrbs in attributes:
+#                 all_names.append([name for name in cur_atrbs.keys()])
+#             attributes = all_names
         
-        # Otherwise, the user wants a specific embedding from the face verifier
-        # 'verifier_name'
-        else:
-            outputs = []
-            for cur_atrbs in attributes:
-                try:
-                    outputs.append([embd.tolist() for embd\
-                                    in cur_atrbs[verifier_name]])
-                except:
-                    outputs.append([])
-            attributes = outputs
+#         # Otherwise, the user wants a specific embedding from the face verifier
+#         # 'verifier_name'
+#         else:
+#             outputs = []
+#             for cur_atrbs in attributes:
+#                 try:
+#                     outputs.append([embd.tolist() for embd\
+#                                     in cur_atrbs[verifier_name]])
+#                 except:
+#                     outputs.append([])
+#             attributes = outputs
 
-            # Skips sorting regardless of the the 'do_sort' switch
-            skip_sort  = True
+#             # Skips sorting regardless of the the 'do_sort' switch
+#             skip_sort  = True
     
-    # Otherwise, the chosen parameter is not 'embeddings' so ignore this section
-    else:
-        pass # do nothing
+#     # Otherwise, the chosen parameter is not 'embeddings' so ignore this section
+#     else:
+#         pass # do nothing
 
-    # Sorts the attributes if 'do_sort' flag is set to True, skipping it if the
-    # 'attributes' list is empty. The 'skip_sort' flag is only ever True if a
-    # specific embedding is chosen.
-    if do_sort and len(attributes) > 0 and not skip_sort:
-        attributes.sort()
+#     # Sorts the attributes if 'do_sort' flag is set to True, skipping it if the
+#     # 'attributes' list is empty. The 'skip_sort' flag is only ever True if a
+#     # specific embedding is chosen.
+#     if do_sort and len(attributes) > 0 and not skip_sort:
+#         attributes.sort()
 
-    return attributes
+#     return attributes
 
 # ------------------------------------------------------------------------------
 
@@ -584,193 +543,193 @@ async def people_list():
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/update_record/", response_model=RepsInfoOutput)
-async def update_record(
-    term          : str = Query(None, description="String Representation of valid unique identifier (including dashes '-') or a valid image name (string)"),
-    new_unique_id : str = Query(None, description="String Representation of new unique identifier (including dashes '-') (string)"),
-    new_image_name: str = Query(None, description="Image name (including extension) (string)"),
-    new_image_fp  : str = Query(None, description="Image full path (string)"),
-    new_group_no  : int = Query(None, description="Group number (-1 means 'groupless' / no group) (integer)"),
-    new_name_tag  : str = Query(None, description="New name tag (string)"),
-    new_region    : List[int] = Query(None, description="Face region in the original image (list of 4 integers)"),
-    new_embeddings: dict = Body(None, description="Dictionary containing verifier name and embedding pairs (dictionary)")):
-    """
-    API endpoint: update_record()
+# @fr_router.post("/utility/update_record/", response_model=RepsInfoOutput)
+# async def update_record(
+#     term          : str = Query(None, description="String Representation of valid unique identifier (including dashes '-') or a valid image name (string)"),
+#     new_unique_id : str = Query(None, description="String Representation of new unique identifier (including dashes '-') (string)"),
+#     new_image_name: str = Query(None, description="Image name (including extension) (string)"),
+#     new_image_fp  : str = Query(None, description="Image full path (string)"),
+#     new_group_no  : int = Query(None, description="Group number (-1 means 'groupless' / no group) (integer)"),
+#     new_name_tag  : str = Query(None, description="New name tag (string)"),
+#     new_region    : List[int] = Query(None, description="Face region in the original image (list of 4 integers)"),
+#     new_embeddings: dict = Body(None, description="Dictionary containing verifier name and embedding pairs (dictionary)")):
+#     """
+#     API endpoint: update_record()
 
-    Allows the user to update / edit a single record (Representation) in the
-    database of a specific image (Representation) by providing either a string
-    representation of a valid unique identifier OR a valid image name.
+#     Allows the user to update / edit a single record (Representation) in the
+#     database of a specific image (Representation) by providing either a string
+#     representation of a valid unique identifier OR a valid image name.
         
-    Note: a VALID UUID string representation obeys the following (case
-    insensitive) regular expression:
-                    '^[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?' + 
-                    '[89ab][a-f0-9]{3}-?[a-f0-9]{12}\Z'
+#     Note: a VALID UUID string representation obeys the following (case
+#     insensitive) regular expression:
+#                     '^[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?' + 
+#                     '[89ab][a-f0-9]{3}-?[a-f0-9]{12}\Z'
 
-    If the term provided is invalid (or does not have any matching record), then
-    nothing will be updated.
+#     If the term provided is invalid (or does not have any matching record), then
+#     nothing will be updated.
         
-    All optional parameters are attributes of a record (Representation) that
-    can be modified. Only attributes that will be modified should be passed
-    as arguments to this function. The rest should be kept at their default
-    value of None.
+#     All optional parameters are attributes of a record (Representation) that
+#     can be modified. Only attributes that will be modified should be passed
+#     as arguments to this function. The rest should be kept at their default
+#     value of None.
 
-    Important note: this endpoint does not automatically determine the image's
-    full path from the image's name. If the image name attribute is modified,
-    make sure to modify the image full path attribute with the appropriate path
-    as well, or this might lead to other errors!
+#     Important note: this endpoint does not automatically determine the image's
+#     full path from the image's name. If the image name attribute is modified,
+#     make sure to modify the image full path attribute with the appropriate path
+#     as well, or this might lead to other errors!
 
-    Parameters:
-    - term      : UUID, string representation of a valid UUID or image name
-                    [UUID / string].
+#     Parameters:
+#     - term      : UUID, string representation of a valid UUID or image name
+#                     [UUID / string].
 
-    - unique_id : record's (Representation's) unique id [UUID].
+#     - unique_id : record's (Representation's) unique id [UUID].
 
-    - image_name: record's (Representation's) image name [string].
+#     - image_name: record's (Representation's) image name [string].
             
-    - image_fp  : record's (Representation's) image full path [string].
+#     - image_fp  : record's (Representation's) image full path [string].
             
-    - group_no  : record's (Representation's) group number [integer].
+#     - group_no  : record's (Representation's) group number [integer].
             
-    - name_tag  : record's (Representation's) name tag [string].
+#     - name_tag  : record's (Representation's) name tag [string].
             
-    - region    : record's (Representation's) region [list of 4 integers].
+#     - region    : record's (Representation's) region [list of 4 integers].
             
-    - embeddings: record's (Representation's) embeddings [dictionary].
+#     - embeddings: record's (Representation's) embeddings [dictionary].
 
-    Output:\n
-        JSON-encoded Representation structure with the following attributes:
-            1. unique_id : unique identifier [UUID]
-            2. image_name: image name [string]
-            3. group_no  : group number [integer]
-            4. name_tag  : name tag [string]
-            5. image_fp  : image full path [string]
-            6. region    : the region is a 4 element list [list of integers]
-            7. embedding : list of face verifier names for which this
-                            Representation has embeddings for [list of strings]
-    """
-    # If 'new_embeddings' is an empty dictionary OR is not a dictionary, set it
-    # to None so that it does not update the record by mistake
-    if isinstance(new_embeddings, dict):
-        if len(new_embeddings) == 0:
-            new_embeddings = None
-        else:
-            pass # do nothing
-    else:
-        new_embeddings = None
+#     Output:\n
+#         JSON-encoded Representation structure with the following attributes:
+#             1. unique_id : unique identifier [UUID]
+#             2. image_name: image name [string]
+#             3. group_no  : group number [integer]
+#             4. name_tag  : name tag [string]
+#             5. image_fp  : image full path [string]
+#             6. region    : the region is a 4 element list [list of integers]
+#             7. embedding : list of face verifier names for which this
+#                             Representation has embeddings for [list of strings]
+#     """
+#     # If 'new_embeddings' is an empty dictionary OR is not a dictionary, set it
+#     # to None so that it does not update the record by mistake
+#     if isinstance(new_embeddings, dict):
+#         if len(new_embeddings) == 0:
+#             new_embeddings = None
+#         else:
+#             pass # do nothing
+#     else:
+#         new_embeddings = None
 
-    # Gets the updated record and converts it to the appropriate response model.
-    # Since it is converted to a list (with 1 element), just get the first
-    # element.
-    updated_record = glb.rep_db.update_record(term, unique_id=new_unique_id,
-                            image_name=new_image_name, image_fp=new_image_fp,
-                            group_no=new_group_no, name_tag=new_name_tag,
-                            region=new_region, embeddings=new_embeddings)
-    output_obj     = glb.rep_db.__records2resp_model__([updated_record])
+#     # Gets the updated record and converts it to the appropriate response model.
+#     # Since it is converted to a list (with 1 element), just get the first
+#     # element.
+#     updated_record = glb.rep_db.update_record(term, unique_id=new_unique_id,
+#                             image_name=new_image_name, image_fp=new_image_fp,
+#                             group_no=new_group_no, name_tag=new_name_tag,
+#                             region=new_region, embeddings=new_embeddings)
+#     output_obj     = glb.rep_db.__records2resp_model__([updated_record])
 
-    return output_obj[0]
+#     return output_obj[0]
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/rename_records_by_tag/", response_model=List[RepsInfoOutput])
-async def rename_records_by_tag(
-    old_tag      : str  = Query(None, description="Old name tag (used in search) (string)"),
-    new_tag      : str  = Query(None, description="New name tag (string)"),
-    ignore_case  : bool = Query(False, description="Toggle between case sensitive and case insensitive search (boolean)"),
-    blank_strings: List[str] = Query(['""', "''", "--"], description="List of string that will be considered blank / null (list of strings)")):
-    """
-    API endpoint: rename_records_by_tag()
+# @fr_router.post("/utility/rename_records_by_tag/", response_model=List[RepsInfoOutput])
+# async def rename_records_by_tag(
+#     old_tag      : str  = Query(None, description="Old name tag (used in search) (string)"),
+#     new_tag      : str  = Query(None, description="New name tag (string)"),
+#     ignore_case  : bool = Query(False, description="Toggle between case sensitive and case insensitive search (boolean)"),
+#     blank_strings: List[str] = Query(['""', "''", "--"], description="List of string that will be considered blank / null (list of strings)")):
+#     """
+#     API endpoint: rename_records_by_tag()
 
-    Allows the user to rename all database entries related to a specific tag
-    with a new one. This operation is similar to a search_database_by_tag()
-    followed by updating the name tag of each result with the new tag.
+#     Allows the user to rename all database entries related to a specific tag
+#     with a new one. This operation is similar to a search_database_by_tag()
+#     followed by updating the name tag of each result with the new tag.
 
-    Parameters:
-    - old_tag      : old name tag - this will be used to search for the database
-                      entries (string).
+#     Parameters:
+#     - old_tag      : old name tag - this will be used to search for the database
+#                       entries (string).
 
-    - new_tag      : new name tag (string).
+#     - new_tag      : new name tag (string).
 
-    - ignore_case  : toggle between case sensitive and case insensitive search
-                      (boolean).
+#     - ignore_case  : toggle between case sensitive and case insensitive search
+#                       (boolean).
 
-    - blank_strings: list of strings which are considered blank ones. If
-                      'old_tag' and/or 'new_tag' matches any of these strings
-                      then they are treated as '' inside the function. This gets
-                      around the limitation of trying to send an empty / blank
-                      string (default=['""', "''", "--"]) (list of strings).
+#     - blank_strings: list of strings which are considered blank ones. If
+#                       'old_tag' and/or 'new_tag' matches any of these strings
+#                       then they are treated as '' inside the function. This gets
+#                       around the limitation of trying to send an empty / blank
+#                       string (default=['""', "''", "--"]) (list of strings).
 
-    Output:\n
-        JSON-encoded Representation structure with the following attributes:
-            1. unique_id : unique identifier [UUID]
-            2. image_name: image name [string]
-            3. group_no  : group number [integer]
-            4. name_tag  : name tag [string]
-            5. image_fp  : image full path [string]
-            6. region    : the region is a 4 element list [list of integers]
-            7. embedding : list of face verifier names for which this
-                            Representation has embeddings for [list of strings]
-    """
-    # Converts the 'old_tag' and/or 'new_tag' to blank / empty ones
-    # (respectively) if they match any of the strings in the 'blank_strings'
-    # list
-    if old_tag in blank_strings:
-        old_tag = ''
-    else:
-        pass # do nothing
+#     Output:\n
+#         JSON-encoded Representation structure with the following attributes:
+#             1. unique_id : unique identifier [UUID]
+#             2. image_name: image name [string]
+#             3. group_no  : group number [integer]
+#             4. name_tag  : name tag [string]
+#             5. image_fp  : image full path [string]
+#             6. region    : the region is a 4 element list [list of integers]
+#             7. embedding : list of face verifier names for which this
+#                             Representation has embeddings for [list of strings]
+#     """
+#     # Converts the 'old_tag' and/or 'new_tag' to blank / empty ones
+#     # (respectively) if they match any of the strings in the 'blank_strings'
+#     # list
+#     if old_tag in blank_strings:
+#         old_tag = ''
+#     else:
+#         pass # do nothing
 
-    if new_tag in blank_strings:
-        new_tag = ''
-    else:
-        pass # do nothing
+#     if new_tag in blank_strings:
+#         new_tag = ''
+#     else:
+#         pass # do nothing
 
-    # Renames records and converts them to the appropriate response model
-    renamed_records = glb.rep_db.rename_records_by_tag(old_tag, new_tag,
-                                                       ignore_case=ignore_case)
-    output_objs     = glb.rep_db.__records2resp_model__(renamed_records)
+#     # Renames records and converts them to the appropriate response model
+#     renamed_records = glb.rep_db.rename_records_by_tag(old_tag, new_tag,
+#                                                        ignore_case=ignore_case)
+#     output_objs     = glb.rep_db.__records2resp_model__(renamed_records)
 
-    return output_objs
+#     return output_objs
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/save_database")
-async def save_database(rdb_dir: str = Query(glb.RDB_DIR, description="Full path to Representation database directory (string)")):
-    """
-    API endpoint: save_database()
+# @fr_router.post("/utility/save_database")
+# async def save_database(rdb_dir: str = Query(glb.RDB_DIR, description="Full path to Representation database directory (string)")):
+#     """
+#     API endpoint: save_database()
 
-    Allows the user to save the database. Sets the global 'database has been
-    modified' flag to False (i.e. database has not been modified).
+#     Allows the user to save the database. Sets the global 'database has been
+#     modified' flag to False (i.e. database has not been modified).
 
-    Parameters:
-    - rdb_dir: full path to Representation database directory (string)
+#     Parameters:
+#     - rdb_dir: full path to Representation database directory (string)
 
-    Output:\n
-        JSON-encoded dictionary with the following attributes:
-            1. message: message stating the database has been saved
-            2. status : indicates if an error occurred (status=1) or not
-                        (status=0) (boolean)
-    """
-    try:
-        # Obtains the database's full path
-        db_fp = os.path.join(rdb_dir, 'rep_database.pickle')
+#     Output:\n
+#         JSON-encoded dictionary with the following attributes:
+#             1. message: message stating the database has been saved
+#             2. status : indicates if an error occurred (status=1) or not
+#                         (status=0) (boolean)
+#     """
+#     try:
+#         # Obtains the database's full path
+#         db_fp = os.path.join(rdb_dir, 'rep_database.pickle')
 
-        # Opens the database file (or creates one if necessary) and stores the
-        # database object
-        with open(db_fp, 'wb') as handle:
-            pickle.dump(glb.rep_db, handle, protocol=pickle.HIGHEST_PROTOCOL)
+#         # Opens the database file (or creates one if necessary) and stores the
+#         # database object
+#         with open(db_fp, 'wb') as handle:
+#             pickle.dump(glb.rep_db, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-        # Updates the database changed flag
-        glb.db_changed = False
+#         # Updates the database changed flag
+#         glb.db_changed = False
 
-        # Creates output message and sets the status as 0
-        output_msg = "Databased saved!"
-        status     = False
-    except Exception as excpt:
-        # On exception, create output message (with exception) and sets the
-        # status as 1 (something went wrong)
-        output_msg = f"Unable to save database. Reason: {excpt}"
-        status     = True
+#         # Creates output message and sets the status as 0
+#         output_msg = "Databased saved!"
+#         status     = False
+#     except Exception as excpt:
+#         # On exception, create output message (with exception) and sets the
+#         # status as 1 (something went wrong)
+#         output_msg = f"Unable to save database. Reason: {excpt}"
+#         status     = True
 
-    return {"message":output_msg, "status":status}
+#     return {"message":output_msg, "status":status}
 
 # ------------------------------------------------------------------------------
 
@@ -822,14 +781,14 @@ async def reload_database(
 @fr_router.post("/people/get_faces")
 async def people_get_faces(person_id: int = Query(None, description="'person_id key' in Person table [integer]")):
     """
-    API endpoint: view_by_group_no()
+    API endpoint: people_get_faces()
 
     Views all information of all Representations belonging to a group number 
     specified by 'person_id'. Raises a Value Error if the 'return_type'
     provided is neither 'records' nor 'image'.
 
     Parameters:
-    - person_id : desired group / cluster number [integer].
+        - person_id : desired group / cluster number [integer].
 
     Output:\n
             JSON-encoded FaceRep result for a specific person_id
@@ -848,6 +807,11 @@ async def people_get_faces(person_id: int = Query(None, description="'person_id 
 @fr_router.post("/people/set_name")
 async def people_set_name(person_id: int = Query(None, description="'person_id key' in Person table [integer]"),
                           person_name: str = Query(None, description="new person name [string]")):
+    """
+    TODO: Update documentation
+
+    I need some information :'(
+    """
 
     query = update(Person).values(name = person_name).where(Person.id == person_id)
     glb.sqla_session.execute(query)
@@ -859,6 +823,11 @@ async def people_set_name(person_id: int = Query(None, description="'person_id k
 @fr_router.post("/people/set_note")
 async def people_set_note(person_id: int = Query(None, description="'person_id key' in Person table [integer]"),
                           new_note: str = Query(None, description="new person note [string]")):
+    """
+    TODO: Update documentation
+
+    I need some information :'(
+    """
 
     query = update(Person).values(note = new_note).where(Person.id == person_id)
     glb.sqla_session.execute(query)
@@ -891,6 +860,7 @@ async def facerep_unjoin(face_id  : int = Query(None, description="ID of FaceRep
 
     return 'OK'
 
+# ------------------------------------------------------------------------------
 
 @fr_router.post("/facerep/get_ungrouped")
 async def facerep_get_ungrouped():
@@ -953,55 +923,57 @@ async def edit_tag_by_group_no(target_group_no: int = Query(None, description="T
 async def create_database_from_directory(params: CreateDatabaseParams,
     image_dir   : Optional[str]  = Query(glb_img_dir, description="Full path to directory containing images (string)")):
     """
-    TODO: UPDATE DESCRIPTION!
-
     API endpoint: create_database_from_directory()
 
-    Creates a database (RepDatabase object) from a directory. The directory is
-    expected to have image files in any of the following formats: .jpg, .png,
-    .npy.
+    Creates an SQLite database from a directory containing images. The image
+    files are expected to have any of the following formats: .jpg, .png, .npy.
 
     Parameters:
-    - cdb_params: a structure with the following parameters:
-        1. detector_name  - name of face detector model [string]
+    - params: a structure with the following parameters:
+        1. detector_name  - name of face detector model [string].
         2. verifier_names - list of names of face verifier models [list of
-                            strings]
-        3. align          - perform face alignment flag (default=True) [boolean]
-        4. normalization  - name of image normalization [string]
-        5. tags           - list of name tags [list of strings]
-        6. uids           - list of uids [list of strings]
-        7. auto_grouping  - toggles whether Representations should be grouped /
+                            strings].
+        3. align          - perform face alignment flag (default=True)
+                            [boolean].
+        4. normalization  - name of image normalization [string].
+        5. auto_grouping  - toggles whether Representations should be grouped /
                             clusted automatically using the DBSCAN algorithm
-                            (default=True) [boolean]
-        8. eps            - maximum distance between two samples for one to be
+                            (default=True) [boolean].
+        6. eps            - maximum distance between two samples for one to be
                             considered as in the neighborhood of the other. This
                             is the most important DBSCAN parameter to choose
                             appropriately for the specific data set and distance
-                            function (default=0.5) [float]
-        9. min_samples    - the number of samples (or total weight) in a
+                            function (default=0.5) [float].
+        7. min_samples    - the number of samples (or total weight) in a
                             neighborhood for a point to be considered as a core
                             point. This includes the point itself
-                            (min_samples=2) [integer]
-       10. metric         - the metric used when calculating distance between
+                            (min_samples=2) [integer].
+        8. metric         - the metric used when calculating distance between
                             instances in a feature array. It must be an option
                             allowed by sklearn.metrics.pairwise_distances
-                            (default='cosine') [string]
-       11. verbose        - output messages to server's console (boolean,
-                            default: False)
+                            (default='cosine') [string].
+        9. pct            - used to filter faces which are smaller than this
+                            percentage of the original image's area (width x
+                            height) [float].
+       10. check_models   - toggles if the function should check if all desired
+                            face detector & verifiers are correctly loaded. If
+                            they are not, builds them from scratch, exitting if
+                            the building fails [boolean].
+       11. verbose        - output messages to server's console [boolean].
 
         [Example] JSON schema:
         {
-            "detector_name": "retinaface",
-            "verifier_names": ["ArcFace"],
-            "align": true,
-            "normalization": "base",
-            "tags": [],
-            "uids": [],
-            "auto_grouping": true,
-            "eps": 0.5,
-            "min_samples": 2,
-            "metric": "cosine",
-            "verbose": false
+          "detector_name": "retinaface",
+          "verifier_names": ["ArcFace"],
+          "align": true,
+          "normalization": "base",
+          "auto_grouping": true,
+          "eps": 0.5,
+          "min_samples": 2,
+          "metric": "cosine",
+          "pct": 0.02,
+          "check_models": true,
+          "verbose": false
         }
 
     - image_dir   : full path to directory containing images (string,
@@ -1075,47 +1047,66 @@ async def create_database_from_zip(myfile: UploadFile,
     image_dir   : Optional[str]  = Query(glb.IMG_DIR, description="Full path to directory containing images (string)"),
     auto_rename : Optional[bool] = Query(True       , description="Flag to force auto renaming of images in the zip file with names that match images already in the image directory (boolean)")):
     """
-    TODO: UPDATE DESCRIPTION!
-
     API endpoint: create_database_from_zip()
 
-    Creates a database from a zip file. The zip file is expected to contain
-    image files in any of the following formats: .jpg, .png, .npy. The database
-    is a list of Representation objects.
+    Creates an SQLite database from a zip file. The zip file is expected to
+    contain image files in any of the following formats: .jpg, .png, .npy.
 
     The images in the zip file are extracted to a temporary directory. Any image
     with the same name of another image in the 'image directory' is either
     renamed (auto_rename=True) or skipped (auto_rename=False). Renamed images
-    are renamed using its unique object identifier.
+    are renamed using a random unique object identifier obtained by uuid4() from
+    the uuid library.
 
     Parameters:
     - myfile: a zip file
+
     - params: a structure with the following parameters:
-        1. detector_name  - name of face detector model [string]
+        1. detector_name  - name of face detector model [string].
         2. verifier_names - list of names of face verifier models [list of
-                            strings]
-        3. align          - perform face alignment flag (default=True) [boolean]
-        4. normalization  - name of image normalization [string]
-        5. tags           - list of name tags [list of strings]
-        6. uids           - list of uids [list of strings]
-        7. auto_grouping  - toggles whether Representations should be grouped /
+                            strings].
+        3. align          - perform face alignment flag (default=True)
+                            [boolean].
+        4. normalization  - name of image normalization [string].
+        5. auto_grouping  - toggles whether Representations should be grouped /
                             clusted automatically using the DBSCAN algorithm
-                            (default=True) [boolean]
-        8. eps            - maximum distance between two samples for one to be
+                            (default=True) [boolean].
+        6. eps            - maximum distance between two samples for one to be
                             considered as in the neighborhood of the other. This
                             is the most important DBSCAN parameter to choose
                             appropriately for the specific data set and distance
-                            function (default=0.5) [float]
-        9. min_samples    - the number of samples (or total weight) in a
+                            function (default=0.5) [float].
+        7. min_samples    - the number of samples (or total weight) in a
                             neighborhood for a point to be considered as a core
                             point. This includes the point itself
-                            (min_samples=2) [integer]
-       10. metric         - the metric used when calculating distance between
+                            (min_samples=2) [integer].
+        8. metric         - the metric used when calculating distance between
                             instances in a feature array. It must be an option
                             allowed by sklearn.metrics.pairwise_distances
-                            (default='cosine') [string]
-       11. verbose        - output messages to server's console (boolean,
-                            default: False)
+                            (default='cosine') [string].
+        9. pct            - used to filter faces which are smaller than this
+                            percentage of the original image's area (width x
+                            height) [float].
+       10. check_models   - toggles if the function should check if all desired
+                            face detector & verifiers are correctly loaded. If
+                            they are not, builds them from scratch, exitting if
+                            the building fails [boolean].
+       11. verbose        - output messages to server's console [boolean].
+
+        [Example] JSON schema:
+        {
+          "detector_name": "retinaface",
+          "verifier_names": ["ArcFace"],
+          "align": true,
+          "normalization": "base",
+          "auto_grouping": true,
+          "eps": 0.5,
+          "min_samples": 2,
+          "metric": "cosine",
+          "pct": 0.02,
+          "check_models": true,
+          "verbose": false
+        }
 
     - image_dir   : full path to directory containing images (string,
                      default: <glb.IMG_DIR>)
@@ -1221,31 +1212,25 @@ async def verify_no_upload(files: List[UploadFile],
     - files: list of image files
 
     - params: a structure with the following parameters:
-        1. detector_name - name of face detector model (string)
-        2. verifier_name - name of face verifier model (string)
-        3. align         - perform face alignment flag (boolean, default: True)
-        4. normalization - name of image normalization (string)
-        5. metric        - name of similarity / distance metric (string)
-        6. threshold     - cutoff value for positive (match) decision (float)
-        7. verbose       - output messages to server's console (boolean,
-                            default: False)
+        1. detector_name - name of face detector model [string]
+        2. verifier_name - name of face verifier model [string]
+        3. align         - perform face alignment flag [boolean, default=True]
+        4. normalization - name of image normalization [string]
+        5. metric        - name of similarity / distance metric [string]
+        6. threshold     - cutoff value for positive (match) decision [float]
+        7. verbose       - output messages to server's console [boolean,
+                            default=False]
 
     Output:\n
-        For each file, returns a list of JSON-encoded structure with the
-        following attributes:
-            1. unique_ids : list of unique identifiers (list of UUIDs)
-            2. name_tags  : list of name tags (list of strings)
-            3. image_names: list of image names (list of strings)
-            4. image_fps  : list of image full paths (list of strings)
-            5. regions    : list of regions. Each region is a 4 element list
-                            (list of list of integers)
-            6. embeddings : list of face verifier names for which this
-                            Representation has embeddings for
-            7. distances  : list of distances (similarity) (list of floats)
-            8. threshold  : decision (match) cutoff threshold (float)
-
-        Note that the final output for multiple files, each with multiple
-        matches, will be a list of list of JSON-encoded structures.
+        Returns a 4-level (triple nested list), where each level allows for the
+        following:
+            Level 1: contemplates multiple images in a single function call
+                     (list of images)
+            Level 2: contemplates (possibly) multiple faces per image
+                     (list of faces)
+            Level 3: contemplates (possibly) multiple matches per face
+                     (list of matches)
+            Level 4: the result / match object itself (JSON-encoded structures)
     """
     # Initializes results list and obtains the relevant embeddings from the 
     # representation database
@@ -1273,7 +1258,6 @@ async def verify_no_upload(files: List[UploadFile],
         embeddings = calc_embeddings(filtered_faces, glb.models,
                                      verifier_names=params.verifier_name,
                                      normalization=params.normalization)
-        # cur_emb    = embeddings[0][params.verifier_name]
 
         # Initialize current image's result container
         cur_img_results = []
@@ -1310,7 +1294,6 @@ async def verify_with_upload(files: List[UploadFile],
     save_as    : ImageSaveTypes     = Query(default_image_save_type, description="File type which uploaded images should be saved as (string)"),
     overwrite  : bool               = Query(False, description="Flag to indicate if an uploaded image with the same name as an existing one in the server should be saved and replace it (boolean)"),
     auto_rename: bool               = Query(True, description="Flag to force auto renaming of images in the zip file with (boolean)"),
-  # auto_tag   : bool               = Query(True, description="Flag to automatically generate name tags based on verification results (boolean)"),
     auto_group : bool               = Query(True, description="Flag to automatically group image based on verification results (boolean)")):
     """
     API endpoint: verify_with_upload()
@@ -1345,29 +1328,19 @@ async def verify_with_upload(files: List[UploadFile],
                     names that match images already in the image directory
                     (boolean, default: True).
 
-    - auto_tag    : toggles automatic name tag generation of the uploaded image
-                    based on the face verification results
-                    (boolean, default: True).
-
     - auto_group  : toggles automatic grouping of the uploaded image based on
                     the face verification results (boolean, default: True).
 
     Output:\n
-        For each file, returns a list of JSON-encoded structure with the
-        following attributes:
-            1. unique_ids : list of unique identifiers (list of UUIDs)
-            2. name_tags  : list of name tags (list of strings)
-            3. image_names: list of image names (list of strings)
-            4. image_fps  : list of image full paths (list of strings)
-            5. regions    : list of regions. Each region is a 4 element list
-                            (list of list of integers)
-            6. embeddings : list of face verifier names for which this
-                            Representation has embeddings for
-            7. distances  : list of distances (similarity) (list of floats)
-            8. threshold  : decision (match) cutoff threshold (float)
-
-        Note that the final output for multiple files, each with multiple
-        matches, will be a list of list of JSON-encoded structures.
+        Returns a 4-level (triple nested list), where each level allows for the
+        following:
+            Level 1: contemplates multiple images in a single function call
+                     (list of images)
+            Level 2: contemplates (possibly) multiple faces per image
+                     (list of faces)
+            Level 3: contemplates (possibly) multiple matches per face
+                     (list of matches)
+            Level 4: the result / match object itself (JSON-encoded structures)
     """
     # Initializes FaceReps & results list, gets all files in the image directory
     # and obtains the relevant embeddings from the representation database
@@ -1514,21 +1487,15 @@ async def verify_existing_file(files: List[str],
     - img_dir: full path of directory containing images [string].
 
     Output:\n
-        For each file, returns a list of JSON-encoded structure with the
-        following attributes:
-            1. unique_ids : list of unique identifiers (list of UUIDs)
-            2. name_tags  : list of name tags (list of strings)
-            3. image_names: list of image names (list of strings)
-            4. image_fps  : list of image full paths (list of strings)
-            5. regions    : list of regions. Each region is a 4 element list
-                            (list of list of integers)
-            6. embeddings : list of face verifier names for which this
-                            Representation has embeddings for
-            7. distances  : list of distances (similarity) (list of floats)
-            8. threshold  : decision (match) cutoff threshold (float)
-
-        Note that the final output for multiple files, each with multiple
-        matches, will be a list of list of JSON-encoded structures.
+        Returns a 4-level (triple nested list), where each level allows for the
+        following:
+            Level 1: contemplates multiple images in a single function call
+                     (list of images)
+            Level 2: contemplates (possibly) multiple faces per image
+                     (list of faces)
+            Level 3: contemplates (possibly) multiple matches per face
+                     (list of matches)
+            Level 4: the result / match object itself (JSON-encoded structures)
     """
     # Initializes results list and obtains the relevant embeddings from the 
     # Representation database
