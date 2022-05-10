@@ -81,7 +81,7 @@ export default {
 <template>
   <div v-if="group_num > 0" class="group_div">
     <div class="header_div">
-      <div>#{{ person_id }} <input v-model="person_new_name" :placeholder="person_name_placeholder" class="person_name_box" :size="person_new_name.length != 0 ? person_new_name.length: 5"> <button @click="updatePerson(person_id)">CHANGE</button></div>
+      <div>#{{ person_id }} <input v-model="person_new_name" :placeholder="person_name_placeholder" class="person_name_box" :size="person_new_name.length != 0 ? person_new_name.length: 7"> <button @click="updatePerson(person_id)">CHANGE</button></div>
       Note <textarea :placeholder="this.person_note_placeholder" v-model="person_new_note"></textarea>
       <div>Num pics: {{group_num }}</div>
     </div>
