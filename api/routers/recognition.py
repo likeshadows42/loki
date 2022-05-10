@@ -853,6 +853,8 @@ async def people_set_name(person_id: int = Query(None, description="'person_id k
     glb.sqla_session.execute(query)
     glb.sqla_session.commit()
 
+    return 'ok'
+
 
 # ------------------------------------------------------------------------------
 
@@ -863,6 +865,20 @@ async def people_set_note(person_id: int = Query(None, description="'person_id k
     query = update(Person).values(note = new_note).where(Person.id == person_id)
     glb.sqla_session.execute(query)
     glb.sqla_session.commit()
+
+    return 'ok'
+
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/people/assign_facerep")
+async def people_assing_facerep(person_id: int = Query(None, description="'ID primary key in Person table [integer]"),
+                          facerep_id: int = Query(None, description="ID primary key in FaceRep table [integer")):
+    query = update(FaceRep).values(person_id = person_id, group_no = -2).where(FaceRep.id == facerep_id)
+    glb.sqla_session.execute(query)
+    glb.sqla_session.commit()
+
+    return 'ok'
 
 # ------------------------------------------------------------------------------
 
