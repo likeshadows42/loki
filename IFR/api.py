@@ -19,8 +19,7 @@ from filecmp                 import cmp
 from zipfile                 import ZipFile
 from tempfile                import TemporaryDirectory
 from sqlalchemy              import create_engine, inspect, MetaData, select, insert, update
-from IFR.classes             import RepDatabase, Representation,\
-                                    VerificationMatch, ProcessedFiles, Base
+from IFR.classes             import VerificationMatch, ProcessedFiles, Base
 from IFR.functions           import has_same_img_size, get_image_paths,\
                                     do_face_detection, calc_embeddings,\
                                     ensure_detectors_exists,\
@@ -493,67 +492,67 @@ def save_built_verifiers(verifier_names, saved_models_dir, overwrite=False,
 #                   REPRESENTATION DATABASE RELATED FUNCTIONS
 # ------------------------------------------------------------------------------
 
-def create_new_rep(original_fp, img_fp, region, embeddings, uid='',
-                   group_no=-1, tag='', ignore_taglist=['--', '---']):
-    """
-    Creates a new representation object. For more information see
-    help(Representation).
+# def create_new_rep(original_fp, img_fp, region, embeddings, uid='',
+#                    group_no=-1, tag='', ignore_taglist=['--', '---']):
+#     """
+#     Creates a new representation object. For more information see
+#     help(Representation).
 
-    Inputs:
-        1. original_fp    - original image's full path [string].
+#     Inputs:
+#         1. original_fp    - original image's full path [string].
 
-        2. img_fp         - image's full path [string].
+#         2. img_fp         - image's full path [string].
 
-        3. region         - face region on the original image [list of 4
-            integers].
+#         3. region         - face region on the original image [list of 4
+#             integers].
 
-        4. embeddings     - face verifier name (key) and embedding
-            [1-D numpy array] (item). Can have multiple verifier, embedding
-            pairs (key, value pairs) [dictionary].
+#         4. embeddings     - face verifier name (key) and embedding
+#             [1-D numpy array] (item). Can have multiple verifier, embedding
+#             pairs (key, value pairs) [dictionary].
 
-        5. uid            - valid unique object identifier. If left empty ('') a
-            unique object identifier is created using uuid4 from the uuid
-            library [string, default=''].
+#         5. uid            - valid unique object identifier. If left empty ('') a
+#             unique object identifier is created using uuid4 from the uuid
+#             library [string, default=''].
         
-            Note: a valid uid string representation obeys the following (case
-            insensitive) regular expression:
-                        '^[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?' + 
-                        '[89ab][a-f0-9]{3}-?[a-f0-9]{12}\Z'
+#             Note: a valid uid string representation obeys the following (case
+#             insensitive) regular expression:
+#                         '^[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?' + 
+#                         '[89ab][a-f0-9]{3}-?[a-f0-9]{12}\Z'
 
-        6. group_no       - group number. If group_no == -1 then this means
-            'no group' / 'groupless' [integer, default=-1].
+#         6. group_no       - group number. If group_no == -1 then this means
+#             'no group' / 'groupless' [integer, default=-1].
 
-        7. tag            - name tag or nickname [string, default=''].
+#         7. tag            - name tag or nickname [string, default=''].
 
-        8. ignore_taglist - list of strings that are treated as equivalent to ''
-            (i.e. no tag) [list of strings, default=['--', '---']].
+#         8. ignore_taglist - list of strings that are treated as equivalent to ''
+#             (i.e. no tag) [list of strings, default=['--', '---']].
     
-    Output:
-        1. Representation object
+#     Output:
+#         1. Representation object
 
-    Signature:
-        new_rep = create_new_rep(original_fp, img_fp, region, embeddings,
-                    uid='', group_no=-1, tag='', ignore_taglist=['--', '---'])
-    """
+#     Signature:
+#         new_rep = create_new_rep(original_fp, img_fp, region, embeddings,
+#                     uid='', group_no=-1, tag='', ignore_taglist=['--', '---'])
+#     """
 
-    # If Unique IDentifier (UID) is not provided, generate one
-    if len(uid) == 0 or uid == '':
-        uid = uuid4()
+#     # If Unique IDentifier (UID) is not provided, generate one
+#     if len(uid) == 0 or uid == '':
+#         uid = uuid4()
 
-    # If tag is in the ignore taglist, then it is considered as a "ignore" tag
-    if tag in ignore_taglist:
-        tag = ''
+#     # If tag is in the ignore taglist, then it is considered as a "ignore" tag
+#     if tag in ignore_taglist:
+#         tag = ''
 
-    # If group number is less than -1 (i.e. invalid) set it to -1 (i.e. no
-    # group)
-    if group_no < -1:
-        group_no = -1
+#     # If group number is less than -1 (i.e. invalid) set it to -1 (i.e. no
+#     # group)
+#     if group_no < -1:
+#         group_no = -1
 
-    # Returns the new representation
-    return Representation(uid, orig_name=original_fp.split('/')[-1],
-                          image_name=img_fp.split('/')[-1], orig_fp=original_fp,
-                          image_fp=img_fp, group_no=group_no, name_tag=tag,
-                          region=region, embeddings=embeddings)
+#     # Returns the new representation
+#     return Representation(uid, orig_name=original_fp.split('/')[-1],
+#                           image_name=img_fp.split('/')[-1], orig_fp=original_fp,
+#                           image_fp=img_fp, group_no=group_no, name_tag=tag,
+#                           region=region, embeddings=embeddings)
 
 # ------------------------------------------------------------------------------
 
@@ -588,192 +587,192 @@ def get_embeddings_as_array(verifier_name):
 
 # ------------------------------------------------------------------------------
 
-def create_reps_from_dir(img_dir, detector_models, verifier_models,
-            detector_name='retinaface', align=True, verifier_names=['ArcFace'],
-            show_prog_bar=True, normalization='base', tags=[], uids=[],
-            auto_grouping=True, eps=0.5, min_samples=2, metric='cosine',
-            verbose=False):
-    """
-    Creates a representations from images in a directory 'img_dir'. The
-    representations are returned in a list, and the list of representations. If
-    tags and/or unique identifiers (uids) are provided, make sure that they 
-    correspond to the sorted (ascending) image names contained in 'img_dir'.
+# def create_reps_from_dir(img_dir, detector_models, verifier_models,
+#             detector_name='retinaface', align=True, verifier_names=['ArcFace'],
+#             show_prog_bar=True, normalization='base', tags=[], uids=[],
+#             auto_grouping=True, eps=0.5, min_samples=2, metric='cosine',
+#             verbose=False):
+#     """
+#     Creates a representations from images in a directory 'img_dir'. The
+#     representations are returned in a list, and the list of representations. If
+#     tags and/or unique identifiers (uids) are provided, make sure that they 
+#     correspond to the sorted (ascending) image names contained in 'img_dir'.
 
-    Inputs:
-        1. img_dir - full path to the directory containing the images [string].
+#     Inputs:
+#         1. img_dir - full path to the directory containing the images [string].
 
-        2. verifier_models - dictionary of model names (keys) and model objects
-             (values) [dictionary].
+#         2. verifier_models - dictionary of model names (keys) and model objects
+#              (values) [dictionary].
 
-        3. detector_name - chosen face detector's name. Options: opencv, ssd,
-             dlib, mtcnn, retinaface (default=retinaface) [string].
+#         3. detector_name - chosen face detector's name. Options: opencv, ssd,
+#              dlib, mtcnn, retinaface (default=retinaface) [string].
         
-        4. align - toggles if face images should be aligned. This improves face
-             recognition performance at the cost of some speed (default=True)
-             [boolean].
+#         4. align - toggles if face images should be aligned. This improves face
+#              recognition performance at the cost of some speed (default=True)
+#              [boolean].
 
-        5. verifier_names - chosen face verifier's name. Options: VGG-Face,
-             OpenFace, Facenet, Facenet512, DeepFace, DeepID and ArcFace
-             (default=ArcFace) [string].
+#         5. verifier_names - chosen face verifier's name. Options: VGG-Face,
+#              OpenFace, Facenet, Facenet512, DeepFace, DeepID and ArcFace
+#              (default=ArcFace) [string].
 
-        6. show_prog_bar - toggles the progress bar on or off (default=True)
-             [boolean].
+#         6. show_prog_bar - toggles the progress bar on or off (default=True)
+#              [boolean].
 
-        7. normalization - normalizes the face image and may increase face
-             recognition performance depending on the normalization type and the
-             face verifier model. Options: base, raw, Facenet, Facenet2018,
-             VGGFace, VGGFace2 and ArcFace (default='base') [string].
+#         7. normalization - normalizes the face image and may increase face
+#              recognition performance depending on the normalization type and the
+#              face verifier model. Options: base, raw, Facenet, Facenet2018,
+#              VGGFace, VGGFace2 and ArcFace (default='base') [string].
 
-        8. tags - list of strings where each string corresponds to a tag for the
-             i-th image, i.e. tags[0] is the tag for the first image in the
-             sorted list of image names obtained from 'img_dir' directory. If an
-             empty list is provided, this is skipped during the Representation
-             creation process (default='') [string or list of strings].
+#         8. tags - list of strings where each string corresponds to a tag for the
+#              i-th image, i.e. tags[0] is the tag for the first image in the
+#              sorted list of image names obtained from 'img_dir' directory. If an
+#              empty list is provided, this is skipped during the Representation
+#              creation process (default='') [string or list of strings].
 
-        9. uids - list of strings where each string corresponds to a unique
-             identifier (UID) for the i-th image, i.e. uids[0] is the UID for
-             the first image in the sorted list of image name obtain from
-             'img_dir' directory. If an empty list is provided, a UID is created
-             for each image during the representation creation process
-             (default='') [string or list of strings].
+#         9. uids - list of strings where each string corresponds to a unique
+#              identifier (UID) for the i-th image, i.e. uids[0] is the UID for
+#              the first image in the sorted list of image name obtain from
+#              'img_dir' directory. If an empty list is provided, a UID is created
+#              for each image during the representation creation process
+#              (default='') [string or list of strings].
 
-        10. auto_grouping - toggles whether Representations should be grouped /
-             clusted automatically using the DBSCAN algorithm. If multiple
-             verifier names are passed, uses the embeddings of the first
-             verifier during the clustering procedure (default=True) [boolean].
+#         10. auto_grouping - toggles whether Representations should be grouped /
+#              clusted automatically using the DBSCAN algorithm. If multiple
+#              verifier names are passed, uses the embeddings of the first
+#              verifier during the clustering procedure (default=True) [boolean].
 
-        11. eps - the maximum distance between two samples for one to be
-             considered as in the neighborhood of the other. This is the most
-             important DBSCAN parameter to choose appropriately for the
-             specific data set and distance function (default=0.5) [float].
+#         11. eps - the maximum distance between two samples for one to be
+#              considered as in the neighborhood of the other. This is the most
+#              important DBSCAN parameter to choose appropriately for the
+#              specific data set and distance function (default=0.5) [float].
 
-        12. min_samples - the number of samples (or total weight) in a
-             neighborhood for a point to be considered as a core point. This
-             includes the point itself (min_samples=2) [integer].
+#         12. min_samples - the number of samples (or total weight) in a
+#              neighborhood for a point to be considered as a core point. This
+#              includes the point itself (min_samples=2) [integer].
 
-        13. metric - the metric used when calculating distance between instances
-              in a feature array. It must be one of the options allowed by
-              sklearn.metrics.pairwise_distances (default='cosine') [string].
+#         13. metric - the metric used when calculating distance between instances
+#               in a feature array. It must be one of the options allowed by
+#               sklearn.metrics.pairwise_distances (default='cosine') [string].
             
-        14. verbose - toggles the function's warnings and other messages
-            (default=True) [boolean].
+#         14. verbose - toggles the function's warnings and other messages
+#             (default=True) [boolean].
 
-        Note: the 'tags' and 'uids' lists (inputs 8 and 9) must have the same
-        number of elements (length) and must match the number of images in
-        'img_dir'. If not, these inputs will be treated as empty lists (i.e.
-        ignored).
+#         Note: the 'tags' and 'uids' lists (inputs 8 and 9) must have the same
+#         number of elements (length) and must match the number of images in
+#         'img_dir'. If not, these inputs will be treated as empty lists (i.e.
+#         ignored).
 
-    Outputs:
-        1. list of Representation objects. For more information about the
-            Representation class attributes and methods, use
-            help(Representation)
+#     Outputs:
+#         1. list of Representation objects. For more information about the
+#             Representation class attributes and methods, use
+#             help(Representation)
 
-    Signature:
-        rep_db = create_reps_from_dir(img_dir, verifier_models, 
-                        detector_name='opencv', align=True,
-                        verifier_names='VGG-Face', show_prog_bar=True,
-                        normalization='base', tags=[], uids=[], verbose=False)
-    """
-    # Initializes skip flags and database (list of Representation objects)
-    skip_tag = False
-    skip_uid = False
-    rep_list = []
+#     Signature:
+#         rep_db = create_reps_from_dir(img_dir, verifier_models, 
+#                         detector_name='opencv', align=True,
+#                         verifier_names='VGG-Face', show_prog_bar=True,
+#                         normalization='base', tags=[], uids=[], verbose=False)
+#     """
+#     # Initializes skip flags and database (list of Representation objects)
+#     skip_tag = False
+#     skip_uid = False
+#     rep_list = []
     
-    # Assuming img_dir is a directory containing images
-    img_paths = get_image_paths(img_dir)
-    img_paths.sort()
+#     # Assuming img_dir is a directory containing images
+#     img_paths = get_image_paths(img_dir)
+#     img_paths.sort()
 
-    # No images found, return empty database
-    if len(img_paths) == 0:
-        return RepDatabase()
+#     # No images found, return empty database
+#     if len(img_paths) == 0:
+#         return RepDatabase()
 
-    # If tags list does not have the same number of elements as the images (i.e.
-    # 1 tag per image), ignore it
-    if len(tags) != len(img_paths):
-        if verbose:
-            print('[create_reps_from_dir] Number of tags and image paths',
-                  'must match. Ignoring tags list.')
-        skip_tag = True
+#     # If tags list does not have the same number of elements as the images (i.e.
+#     # 1 tag per image), ignore it
+#     if len(tags) != len(img_paths):
+#         if verbose:
+#             print('[create_reps_from_dir] Number of tags and image paths',
+#                   'must match. Ignoring tags list.')
+#         skip_tag = True
 
-    # If uids list does not have the same number of elements as the images (i.e.
-    # 1 UID per image), ignore it
-    if len(uids) != len(img_paths):
-        if verbose:
-            print('[create_reps_from_dir] Number of UIDs and image paths',
-                  'must match. Ignoring uids list.')
-        skip_uid = True
+#     # If uids list does not have the same number of elements as the images (i.e.
+#     # 1 UID per image), ignore it
+#     if len(uids) != len(img_paths):
+#         if verbose:
+#             print('[create_reps_from_dir] Number of UIDs and image paths',
+#                   'must match. Ignoring uids list.')
+#         skip_uid = True
 
-    # Creates the progress bar
-    n_imgs  = len(img_paths)
-    disable = not show_prog_bar
-    pbar    = tqdm(range(0, n_imgs), desc='Creating representations',
-                    disable=disable)
+#     # Creates the progress bar
+#     n_imgs  = len(img_paths)
+#     disable = not show_prog_bar
+#     pbar    = tqdm(range(0, n_imgs), desc='Creating representations',
+#                     disable=disable)
 
-    # If auto grouping is True, then initialize the embeddings list
-    if auto_grouping:
-        embds = []
+#     # If auto grouping is True, then initialize the embeddings list
+#     if auto_grouping:
+#         embds = []
 
-    # Loops through each image in the 'img_dir' directory
-    for pb_idx, i, img_path in zip(pbar, range(0, n_imgs), img_paths):
-        # Detects faces
-        output = do_face_detection(img_path, detector_models=detector_models,
-                                    detector_name=detector_name, align=align,
-                                    verbose=verbose)
+#     # Loops through each image in the 'img_dir' directory
+#     for pb_idx, i, img_path in zip(pbar, range(0, n_imgs), img_paths):
+#         # Detects faces
+#         output = do_face_detection(img_path, detector_models=detector_models,
+#                                     detector_name=detector_name, align=align,
+#                                     verbose=verbose)
 
-        # Assumes only 1 face is detect (even if multiple are present). If no
-        # face are detected, skips this image file
-        if output is not None:
-            face   = [output['faces'][0]]
-            region = output['regions'][0]
-        else:
-            continue
+#         # Assumes only 1 face is detect (even if multiple are present). If no
+#         # face are detected, skips this image file
+#         if output is not None:
+#             face   = [output['faces'][0]]
+#             region = output['regions'][0]
+#         else:
+#             continue
 
-        # Calculate the face image embedding
-        embeddings = calc_embeddings(face, verifier_models,
-                                     verifier_names=verifier_names,
-                                     normalization=normalization)
-        embeddings = embeddings[0]
+#         # Calculate the face image embedding
+#         embeddings = calc_embeddings(face, verifier_models,
+#                                      verifier_names=verifier_names,
+#                                      normalization=normalization)
+#         embeddings = embeddings[0]
 
-        # If auto grouping is True, then store each calculated embedding
-        if auto_grouping:
-            embds.append(embeddings[verifier_names[0]])
+#         # If auto grouping is True, then store each calculated embedding
+#         if auto_grouping:
+#             embds.append(embeddings[verifier_names[0]])
 
-        # Determines if tag was provided and should be used when creating this
-        # representation
-        if skip_tag:
-            tag = ''
-        else:
-            tag = tags[i]
+#         # Determines if tag was provided and should be used when creating this
+#         # representation
+#         if skip_tag:
+#             tag = ''
+#         else:
+#             tag = tags[i]
 
-        # Determines if UID was provided and should be used when creating this
-        # representation
-        if skip_uid:
-            uid = ''
-        else:
-            uid = uids[i]
+#         # Determines if UID was provided and should be used when creating this
+#         # representation
+#         if skip_uid:
+#             uid = ''
+#         else:
+#             uid = uids[i]
 
-        # Create a new representation and adds it to the database
-        rep_list.append(create_new_rep(img_path, img_path, region, embeddings,
-                                        tag=tag, uid=uid))
+#         # Create a new representation and adds it to the database
+#         rep_list.append(create_new_rep(img_path, img_path, region, embeddings,
+#                                         tag=tag, uid=uid))
 
 
-    # Clusters Representations together using the DBSCAN algorithm
-    if auto_grouping:
-        # Clusters embeddings using DBSCAN algorithm
-        results = DBSCAN(eps=eps, min_samples=min_samples,
-                         metric=metric).fit(embds)
+#     # Clusters Representations together using the DBSCAN algorithm
+#     if auto_grouping:
+#         # Clusters embeddings using DBSCAN algorithm
+#         results = DBSCAN(eps=eps, min_samples=min_samples,
+#                          metric=metric).fit(embds)
 
-        # Loops through each label and updates the 'group_no' attribute of each
-        # Representation IF group_no != -1 (because -1 is already the default
-        # value and means "no group")
-        for i, lbl in enumerate(results.labels_):
-            if lbl == -1:
-                continue
-            else:
-                rep_list[i].group_no = lbl
+#         # Loops through each label and updates the 'group_no' attribute of each
+#         # Representation IF group_no != -1 (because -1 is already the default
+#         # value and means "no group")
+#         for i, lbl in enumerate(results.labels_):
+#             if lbl == -1:
+#                 continue
+#             else:
+#                 rep_list[i].group_no = lbl
 
-    # Return representation database
-    return RepDatabase(*rep_list)
+#     # Return representation database
+#     return RepDatabase(*rep_list)
 
 # ------------------------------------------------------------------------------
 
