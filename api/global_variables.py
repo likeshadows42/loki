@@ -4,8 +4,6 @@
 
 import os
 
-from IFR.classes import RepDatabase
-
 DEBUG = True
 
 # Path variables
@@ -31,8 +29,6 @@ verifier_names = ('ArcFace') # to avoid long startups during developing
 
 # Other variables
 models      = {}             # stores all face verifier & detector models
-rep_db      = RepDatabase()  # stores representation database
-db_changed  = False          # indicates whether database has been modified (and should be saved)
 
 # SQLAlchemy global variables
 

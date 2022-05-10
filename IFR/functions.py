@@ -6,8 +6,8 @@
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import re
-import time
 import cv2
+import imagesize
 
 import numpy                 as np
 
@@ -147,6 +147,24 @@ def string_is_valid_uuid4(uuid_string):
     # Returns a boolean indicating if a match was found or not (i.e. a valid
     # uuid4 exists or not)
     return bool(match)
+
+# ------------------------------------------------------------------------------
+
+def has_same_img_size(fpath1, fpath2):
+    """
+    Determines if the 2 files with paths 'fpath1' and 'fpath2' have the same
+    image size (i.e. the same width and height). If any of the 2 files are not a
+    valid image file, returns False. On any error, also returns False.
+
+    TODO: Finish doc
+    """
+    try:
+        w1, h1 = imagesize.get(fpath1)
+        w2, h2 = imagesize.get(fpath2)
+
+        return True if w1 == w2 and h1 == h2 else False
+    except:
+        return False
 
 # ______________________________________________________________________________
 #                    FACE DETECTION / VERIFICATION RELATED

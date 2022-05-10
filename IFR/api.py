@@ -15,14 +15,17 @@ import api.global_variables  as glb
 from io                      import BytesIO
 from tqdm                    import tqdm
 from uuid                    import uuid4
+from filecmp                 import cmp
 from zipfile                 import ZipFile
 from tempfile                import TemporaryDirectory
 from sqlalchemy              import create_engine, inspect, MetaData, select, insert, update
 from IFR.classes             import RepDatabase, Representation,\
-                                    VerificationMatch, Base
-from IFR.functions           import get_image_paths, do_face_detection,\
-                                    calc_embeddings, ensure_detectors_exists,\
-                                    ensure_verifiers_exists, discard_small_regions
+                                    VerificationMatch, ProcessedFiles, Base
+from IFR.functions           import has_same_img_size, get_image_paths,\
+                                    do_face_detection, calc_embeddings,\
+                                    ensure_detectors_exists,\
+                                    ensure_verifiers_exists,\
+                                    discard_small_regions
 from sklearn.cluster         import DBSCAN
 
 from shutil                          import move           as sh_move
@@ -929,17 +932,69 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
         assert ret1 and ret2, f'Could not ensure existence of '\
                             + f'face detectors ({ret1}) or verifiers ({ret2})!'
 
+    # If auto grouping is True, then initialize the embeddings list
+    if auto_grouping:
+        embds = []
+    
+    # Obtains the processed files from the ProcessedFiles table
+    proc_files = glb.sqla_session.query(ProcessedFiles)
+
     # Creates the progress bar
     n_imgs = len(img_paths)
     pbar   = tqdm(range(0, n_imgs), desc='Processing face images',
                     disable=False)
 
-    # If auto grouping is True, then initialize the embeddings list
-    if auto_grouping:
-        embds = []
-
     # Loops through each image in the 'img_dir' directory
     for index, i, img_path in zip(pbar, range(0, n_imgs), img_paths):
+        # Checks if the current file already exists in the ProcessedFiles table,
+        # or if it matches any existing file. If so, skips it
+        if len(proc_files.all()) > 0:
+            # First, checks if file already exists in the ProcessedFiles table
+            already_exists = proc_files.filter(
+                        ProcessedFiles.filename.like(img_path.split('/')[-1]),
+                        ProcessedFiles.filesize.like(os.path.getsize(img_path))
+                        )
+
+            # Current file does not match any other file in ProcessedFiles table
+            # (same name and file size)
+            if len(already_exists.all()) == 0:
+                # Creates a subquery to find if there is/are file(s) in the
+                # ProcessedFiles table with the same file size and determines
+                # the number of files with the same size
+                subqry   = proc_files.filter(
+                        ProcessedFiles.filesize.like(os.path.getsize(img_path))
+                            )
+                n_subqry = len(subqry.all())
+
+                # If there are no matching files in the subquery, process the
+                # current file normally
+                if n_subqry > 0:
+                    # Loops through each matching file
+                    for i in range(0, n_subqry):
+                        # Initialize the skip file flag
+                        skip_this_file = False
+
+                        # Compares if the current file is equal to any of the
+                        # subquery ones. By equal, we mean: same file size &
+                        # same image dimensions (width & height)
+                        if cmp(img_path, subqry.all()[i].filepath,
+                                shallow=True):
+                            # The files are the same according to filecmp.cmp,
+                            # so check their image sizes
+                            if has_same_img_size(img_path,
+                                             subqry.all()[i].filepath):
+                                # The files have the same dimensions - and
+                                # finally are assumed to be the same - so break
+                                # the loop and skip the file
+                                skip_this_file = True
+                                break
+
+                    # Skips the current file if 'skip_this_file' flag is True
+                    if skip_this_file:
+                        continue
+            else:
+                continue
+
         # Detects faces
         output = do_face_detection(img_path, detector_models=detector_models,
                                     detector_name=detector_name, align=align,
@@ -980,9 +1035,17 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
             if auto_grouping:
                 embds.append(cur_embds[verifier_names[0]])
 
+        # After file has been processed, add it to the ProcessedFiles table
+        glb.sqla_session.add(ProcessedFiles(filename=img_path.split('/')[-1],
+                                            filepath=img_path,
+                                            filesize=os.path.getsize(img_path)))
+    
+    if glb.DEBUG:
+        print('Commits processed files')
+    glb.sqla_session.commit()
 
     # Clusters Representations together using the DBSCAN algorithm
-    if auto_grouping:
+    if auto_grouping and len(embds) > 0:
         # Clusters embeddings using DBSCAN algorithm
         results = DBSCAN(eps=eps, min_samples=min_samples,
                          metric=metric).fit(embds)
