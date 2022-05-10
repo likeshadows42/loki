@@ -823,7 +823,7 @@ async def people_add_new(person_name: str = Query(None, description="new person 
 async def people_set_name(person_id: int = Query(None, description="'person_id key' in Person table [integer]"),
                           person_name: str = Query(None, description="new person name [string]")):
     """
-    API endpoiunt: set the name of one person in Person table given its ID
+    API endpoint: set the name of one person in Person table given its ID
     """
     query = update(Person).values(name = person_name).where(Person.id == person_id)
     glb.sqla_session.execute(query)
@@ -838,7 +838,7 @@ async def people_set_name(person_id: int = Query(None, description="'person_id k
 async def people_set_note(person_id: int = Query(None, description="'person_id key' in Person table [integer]"),
                           new_note: str = Query(None, description="new person note [string]")):
     """
-    API endpoiunt: set the note of one person in Person table given its ID
+    API endpoint: set the note of one person in Person table given its ID
     """
     query = update(Person).values(note = new_note).where(Person.id == person_id)
     glb.sqla_session.execute(query)
