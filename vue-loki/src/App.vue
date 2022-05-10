@@ -4,19 +4,19 @@
     <aside class="aside aside-1">
       
       <h3>Load images</h3>
-      <p><a href="#" @click.prevent="dbLoadFromDir">OK Load images from directory</a></p>
+      <p><a href="#" @click.prevent="dbLoadFromDir">Load images from directory</a></p>
       <p><a href="#" @click.prevent="zipUploaderToggle">Load images from zip</a></p>
 
-      <h3>Face recognition</h3>    
+      <h3>Face recognition</h3>
+      <p><a href="#" @click.prevent="imgGroupsShow">Show people</a></p>     
       <p><a href="#" @click.prevent="imgUngroupedShow">Show ungrouped images</a></p>
-      <p><a href="#" @click.prevent="imgGroupsShow">OK Show people</a></p> 
       <!-- <p><a href="#" @click.prevent="imgUploaderAdvToggle">Upload multiple images</a></p> -->
       
-      <p><a>Upload multiple images</a></p>
+      <!-- <p><a>Upload multiple images</a></p> -->
       <p><a href="#" @click.prevent="imgVerWithoutUpToggle">Verify image (without upload)</a></p>
-      <!-- <p><a href="#" @click.prevent="imgVerWithUpToggle">Verify image (with upload)</a></p> -->
+      <p><a href="#" @click.prevent="imgVerWithUpToggle">Verify image (with upload)</a></p>
       
-      <p><a>Verify image (with upload)</a></p>
+      <!-- <p><a>Verify image (with upload)</a></p> -->
       <!-- <SecondComp @response="(msg) => MainContent = msg"/>
       <SecondComp @response="mainClear"/> -->
 
