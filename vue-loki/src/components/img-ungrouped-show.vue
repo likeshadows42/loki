@@ -87,8 +87,9 @@ export default {
       console.log(ev)
     },
 
-    checkLength(obj) {
-      return Object.keys(obj).length
+    checkImgs(array) {
+      // return Array.isArray(array)
+      return array?.length == 0
     }
 
   },  
@@ -105,7 +106,7 @@ export default {
 
 
 <template>
-<h2>List all untagged images</h2>
+<h2>List all ungrouped images</h2>
 
 <!-- <div v-if="item_id_selected">{{ this.item_id_selected }}</div>
 <div v-if="people_list_selected">{{ this.people_list_selected}} </div> -->
@@ -123,7 +124,6 @@ export default {
 
 <span v-for="img in imgs" :key="img.id">
     <compGroupItemsCanvas :item="img" @parent-handler="fetchImg"></compGroupItemsCanvas>
-
     <span v-if="displayCombobox(img.id)">
       <v-combobox
         v-model="people_list_hidden"
@@ -131,14 +131,13 @@ export default {
         no-data-text="No people in the database"
         placeholder="Input the name of the person (existing or not)"
         persistent-placeholder
-        @change="showEv"
+        @input="showEv"
         @keydown="setPerson"
       >
       </v-combobox>
     </span>
 </span>
-
-<!-- <p v-if="checkLength(imgs)">No ungrouped images</p> -->
+<p v-if="checkImgs(imgs)">No ungrouped images</p>
 
 </template>
 
