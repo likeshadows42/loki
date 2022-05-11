@@ -13,8 +13,8 @@
       <!-- <p><a href="#" @click.prevent="imgUploaderAdvToggle">Upload multiple images</a></p> -->
       
       <!-- <p><a>Upload multiple images</a></p> -->
-      <p><a href="#" @click.prevent="imgVerWithoutUpToggle">Verify image (without upload)</a></p>
-      <p><a href="#" @click.prevent="imgVerWithUpToggle">Verify image (with upload)</a></p>
+      <!-- <p><a href="#" @click.prevent="imgVerWithoutUpToggle">Verify image (without upload)</a></p>
+      <p><a href="#" @click.prevent="imgVerWithUpToggle">Verify image (with upload)</a></p> -->
       
       <!-- <p><a>Verify image (with upload)</a></p> -->
       <!-- <SecondComp @response="(msg) => MainContent = msg"/>
