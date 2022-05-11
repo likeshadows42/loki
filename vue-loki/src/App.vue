@@ -23,15 +23,15 @@
       
 
       <h3>Database</h3>
-      <p><a href="#" @click.prevent="">Load database</a></p>
-      <p><a href="#" @click.prevent="">Save database</a></p>
+      <!-- <p><a href="#" @click.prevent="">Load database</a></p>
+      <p><a href="#" @click.prevent="">Save database</a></p> -->
       
-      <p><a href="#" @click.prevent="dbClear">OK Clear database</a></p>
-      <p><a href="#" @click.prevent="dbReload">Reload database</a></p>
+      <p><a href="#" @click.prevent="dbClear">Clear database</a></p>
+      <!-- <p><a href="#" @click.prevent="dbReload">Reload database</a></p> -->
 
-      <h3>Utility</h3>
+      <!-- <h3>Utility</h3>
       <p><a href="#" @click.prevent="getGlobaldata">Get global parameters</a></p>
-      <p><a href="#" @click.prevent="serverReset">Server reset&restart</a></p>
+      <p><a href="#" @click.prevent="serverReset">Server reset&restart</a></p> -->
     </aside>
     <article class="main">
        <!-- <ImagesUploader @changed="handleImages" @response="(msg) => MainContent = msg"/> -->

@@ -102,7 +102,6 @@ export default {
     },
 
     checkImgs(array) {
-      // return Array.isArray(array)
       return array?.length == 0
     }
 
@@ -133,8 +132,6 @@ export default {
   @selectItem="selectPerson"
 >
 </vue3-simple-typeahead> -->
-
-
 
 <span v-for="img in imgs" :key="img.id">
     <compGroupItemsCanvas :item="img" @parent-handler="fetchImg"></compGroupItemsCanvas>
