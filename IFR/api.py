@@ -1077,7 +1077,7 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
     if glb.DEBUG:
         print('Create joins between Person and FaceRep tables')
     subquery = select(Person.id).where(FaceRep.group_no == Person.group_no).where(FaceRep.group_no > -1)
-    query = update(FaceRep).values(person_id = subquery.scalar_subquery())
+    query = update(FaceRep).values(person_id = subquery.scalar_subquery()).where(FaceRep.group_no > -1)
     if glb.DEBUG:
         print(query)
     glb.sqla_session.execute(query)
