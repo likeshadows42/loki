@@ -1,3 +1,34 @@
+<script>
+import axios from "axios"
+export default {
+    emits: ['response'],
+    methods: {
+        async uploadZip(evt) {
+            const file  = evt.target.files[0]
+            let formData = new FormData()
+            formData.append('myfile', file)
+            formData.append('verifier_names', 'ArcFace')
+
+            const params = {
+                headers: {
+                    'Content-Type': 'multipart/form-data'
+                } 
+            }
+            const response = await axios.post(`http://127.0.0.1:8000/fr/create_database/from_zip`, formData, params)
+            // return response.json()
+            return response.data
+            
+        },
+
+        onChange(evt) {
+            // this.fetchData(evt)
+            this.uploadZip(evt)
+                .then(data => this.$emit('response', data))
+        },
+    },
+}
+</script>
+
 <template>
 <h2>Upload an image archive</h2>
     <input
@@ -6,30 +37,3 @@
         accept=".zip"
     />
 </template>
-
-<script>
-export default {
-    emits: ['response'],
-    methods: {
-        async fetchData(evt) {
-            let formData = new FormData()
-            formData.append('files', evt.target.files[0])
-
-            const stringAPI = 'fr/create_database/from_directory'
-            
-            const fetchResult = await fetch(`http://localhost:8000/`+stringAPI,
-                {
-                    method: 'POST',
-                    body: formData,
-                }
-            )
-            return fetchResult.json()
-        },
-
-        onChange(evt) {
-            this.fetchData(evt)
-                .then(data => this.$emit('response', data))
-        },
-    },
-}
-</script>

@@ -1188,6 +1188,7 @@ async def create_database_from_zip(myfile: UploadFile,
 
         # Extract zip files
         output_msg += 'Extracting images in zip:'
+        skipped_files = []
 
         try:
             # Process the zip file containing the image files

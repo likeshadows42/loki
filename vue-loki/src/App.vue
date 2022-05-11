@@ -275,7 +275,7 @@ export default {
     },
 
     zipOnSubmit(msg) {
-       console.log("Zip received!")
+       console.log(msg)
        this.MainContent = msg
     },
 
