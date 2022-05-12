@@ -912,6 +912,21 @@ async def facerep_get_ungrouped():
 
     return return_value
 
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/facerep/get_person")
+async def facerep_get_person(facerep_id: int = Query(None, description="ID primary key in FaceRep table [integer")):
+    """
+    API endpoiunt: get the related Person record by using FaceRep.id reference key join
+    """
+    query = select(Person).join(FaceRep).where(FaceRep.id == facerep_id)
+    result = glb.sqla_session.execute(query)
+    # glb.sqla_session.commit()
+
+    return result.fetchall()
+
+
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/utility/edit_tag_by_group_no")
