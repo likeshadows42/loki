@@ -88,7 +88,6 @@ export default {
     </p>
 
     <div v-if="image_loaded">
-        {{ image_loaded }}
         <h3>Image loaded</h3>
         <img :src="image_loaded" class="img_thumb">
     </div>
