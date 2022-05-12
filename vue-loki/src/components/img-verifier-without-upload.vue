@@ -42,10 +42,11 @@ export default {
         },
 
         async onChange(evt) {
+            this.alert_text = null
+            this.returnData = null 
             this.image_loaded = URL.createObjectURL(evt.target.files[0])
             const res = await this.checkImage(evt.target.files[0])
             if(res[0][0].length > 0) {
-                this.alert_text = null
                 const facerep_id_0 = res[0][0][0].unique_id
                 const person = await this.getPersonByID(facerep_id_0)
                 if(person.length > 0) {
@@ -55,7 +56,6 @@ export default {
                 }
             }
             this.alert_text = "No match for the image"
-            this.returnData = null 
         },
 
         checkThreshold(threshold) {
