@@ -101,7 +101,7 @@ export default {
         <div v-if="visibilityToSimilar(returnData[0].distance)">
             <h3>Best match</h3>
                 <div>{{ this.checkThreshold(returnData[0].distance)}} <b>{{ person_name }}</b></div>
-                <div>ID: {{returnData[0].unique_id}}, filename: {{ returnData[0].image_name}}, threshold: {{ returnData[0].distance}})</div>
+                <div>ID: {{returnData[0].unique_id}}, {{ returnData[0].image_name}}, threshold:{{ returnData[0].distance}})</div>
                 <div>&nbsp;</div>
         </div>
         <div v-else>
@@ -109,7 +109,7 @@ export default {
             <div>{{ this.checkThreshold(returnData[0].distance)}}</div>
             <div>&nbsp;</div>
             <div v-if="returnData.length > 0">
-                <div>closeset match: ID: {{returnData[0].unique_id}}, filename: {{ returnData[0].image_name}}, threshold: {{ returnData[0].distance}})</div>
+                <div>closest match: ID: {{returnData[0].unique_id}}, {{ returnData[0].image_name}}, threshold:{{ returnData[0].distance}}</div>
                 <img :src="'/data/'+returnData[0].image_name" class="img_thumb"/>
             </div>
         </div>
@@ -122,7 +122,7 @@ export default {
                 <div v-for="person in returnData.slice(1)" :key="person.unique_id">
                     <div v-if="visibilityToSimilar(person.distance)">
                         <div><img :src="'/data/'+person.image_name" class="img_thumb"/></div>
-                        <div>{{person.unique_id}}, {{ person.image_name}}, {{ person.distance}}</div>
+                        <div>ID: {{person.unique_id}}, {{ person.image_name}}, threshold:{{ person.distance}}</div>
                         <div>&nbsp;</div>
                     </div>
                 </div>
