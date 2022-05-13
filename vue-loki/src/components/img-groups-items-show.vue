@@ -19,8 +19,8 @@ export default {
       group_num: 0,
       person_new_name: this.person_name != null ? this.person_name : '',
       person_name_placeholder: this.person_name != null ? this.person_name : 'unamed',
-      person_new_note: this.person_note,
-      person_note_placeholder: this.person_note == null ? 'insert a note' : ''
+      person_new_note: this.person_note != null ? this.person_note : '',
+      person_note_placeholder: this.person_new_note == null ? 'insert a note' : ''
     }
   },
 
