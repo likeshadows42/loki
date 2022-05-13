@@ -87,17 +87,21 @@ async def finish_processes():
     if glb.DEBUG:
         print('\n ======== Performing finishing processes ======== \n')
 
-    # Saves (built) face detectors (if needed)
-    if glb.DEBUG:
-        print('  -> Saving face detectors (if needed):')
-    save_built_detectors(glb.detector_names, glb.SVD_DTC_DIR, overwrite=False,
-                         verbose=True)
+    if not glb.skip_model_save: # this is just to speed up my (Rodrigo's)
+                                # development but will be removed later in
+                                # production
+        # Saves (built) face detectors (if needed)
+        if glb.DEBUG:
+            print('  -> Saving face detectors (if needed):')
+        save_built_detectors(glb.detector_names, glb.SVD_DTC_DIR,
+                             overwrite=False, verbose=True)
 
-    # Saves (built) face verifiers (if needed)
-    if glb.DEBUG:
-        print('  -> Saving face verifiers (if needed):')
-    save_built_verifiers(glb.verifier_names, glb.SVD_VRF_DIR, overwrite=False,
-                         verbose=False)
+        # Saves (built) face verifiers (if needed)
+        if glb.DEBUG:
+            print('  -> Saving face verifiers (if needed):')
+        save_built_verifiers(glb.verifier_names, glb.SVD_VRF_DIR,
+                             overwrite=False, verbose=False)
+    
     if glb.DEBUG:
         print('\n -------- Exitting program: goodbye! -------- \n')
 
