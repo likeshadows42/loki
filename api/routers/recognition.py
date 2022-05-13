@@ -1338,8 +1338,8 @@ async def verify_with_upload(files: List[UploadFile],
     save_as         : ImageSaveTypes     = Query(default_image_save_type, description="File type which uploaded images should be saved as (string)"),
     overwrite       : bool               = Query(False, description="Flag to indicate if an uploaded image with the same name as an existing one in the server should be saved and replace it (boolean)"),
     auto_rename     : bool               = Query(True, description="Flag to force auto renaming of images in the zip file with (boolean)"),
-    auto_group      : bool               = Query(True, description="Flag to automatically group image based on verification results (boolean)")):
-    threshold_per   : float              = Query(.75, description="Threshold percentage below which the autogroup algorythm automatically assign the images to the best matching person")
+    auto_group      : bool               = Query(True, description="Flag to automatically group image based on verification results (boolean)"),
+    threshold_per   : float              = Query(.75, description="Threshold percentage below which the autogroup algorythm automatically assign the images to the best matching person")):
     """
     API endpoint: verify_with_upload()
 
