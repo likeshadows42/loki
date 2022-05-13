@@ -141,7 +141,7 @@ export default {
     async dbLoadFromDir() {
       console.log("Loading database from directory")
       const params = {"force_create": true}
-      this.MainContent = await this.axiosPost('http://localhost:8000/fr/create_database/from_directory', params)
+      this.MainContent = await this.axiosPost('http://localhost:8000/fr/database/create_from_directory', params)
     },
 
     async dbClear() {
@@ -151,7 +151,7 @@ export default {
 
     async dbReload() {
       console.log("Reload database")
-      this.MainContent = await this.axiosPost('http://localhost:8000/fr/utility/reload_database')
+      this.MainContent = await this.axiosPost('http://localhost:8000/fr/database/reload')
     },
 
     async serverReset(){
