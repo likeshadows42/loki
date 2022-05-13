@@ -18,13 +18,14 @@ from uuid                    import uuid4
 from filecmp                 import cmp
 from zipfile                 import ZipFile
 from tempfile                import TemporaryDirectory
-from sqlalchemy              import create_engine, inspect, MetaData, select, insert, update
+from sqlalchemy              import create_engine, inspect, MetaData, select,\
+                                    insert, update
 from IFR.classes             import VerificationMatch, ProcessedFiles, Base
 from IFR.functions           import has_same_img_size, get_image_paths,\
                                     do_face_detection, calc_embeddings,\
                                     ensure_detectors_exists,\
                                     ensure_verifiers_exists,\
-                                    discard_small_regions
+                                    discard_small_regions, img_files_are_same
 from sklearn.cluster         import DBSCAN
 
 from shutil                          import move           as sh_move
@@ -111,6 +112,43 @@ def show_cluster_results(group_no, db, ncols=4, figsize=(15, 15), color='black',
     plt.savefig(img_file, format='png')
 
     return img_file
+
+# ------------------------------------------------------------------------------
+
+def file_is_not_unique(fpath, proc_qry=None):
+    """
+    TODO: Update documentation
+    """
+    # Initializes 'is_not_unique' flag
+    is_not_unique = False
+
+    # Obtains the processed files from the ProcessedFiles table if it is not
+    # provided by the user (i.e. proc_qry is None)
+    if proc_qry is None:
+        proc_qry = glb.sqla_session.query(ProcessedFiles)
+
+    # Creates a subquery to find if there is/are file(s) in the ProcessedFiles
+    # table with the same file size and determines the number of files with the
+    # same size
+    subqry   = proc_qry.filter(
+                        ProcessedFiles.filesize.like(os.path.getsize(fpath))
+                              )
+    n_subqry = len(subqry.all())
+
+    # Checks if there is at least 1 matching file in the subquery
+    if n_subqry > 0:
+        # Loops through each matching file
+        for j in range(0, n_subqry):
+            # Determines if the files are the same (and should be skipped)
+            is_not_unique = img_files_are_same(fpath, subqry.all()[j].filepath)
+                                
+            # Current file matches another one. It's not unique so no need to
+            # continue this loop
+            if is_not_unique:
+                break
+
+    return is_not_unique
+
 
 # ______________________________________________________________________________
 #                DETECTORS & VERIFIERS BUILDING, SAVING & LOADING
@@ -492,70 +530,6 @@ def save_built_verifiers(verifier_names, saved_models_dir, overwrite=False,
 #                   REPRESENTATION DATABASE RELATED FUNCTIONS
 # ------------------------------------------------------------------------------
 
-# def create_new_rep(original_fp, img_fp, region, embeddings, uid='',
-#                    group_no=-1, tag='', ignore_taglist=['--', '---']):
-#     """
-#     Creates a new representation object. For more information see
-#     help(Representation).
-
-#     Inputs:
-#         1. original_fp    - original image's full path [string].
-
-#         2. img_fp         - image's full path [string].
-
-#         3. region         - face region on the original image [list of 4
-#             integers].
-
-#         4. embeddings     - face verifier name (key) and embedding
-#             [1-D numpy array] (item). Can have multiple verifier, embedding
-#             pairs (key, value pairs) [dictionary].
-
-#         5. uid            - valid unique object identifier. If left empty ('') a
-#             unique object identifier is created using uuid4 from the uuid
-#             library [string, default=''].
-        
-#             Note: a valid uid string representation obeys the following (case
-#             insensitive) regular expression:
-#                         '^[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?' + 
-#                         '[89ab][a-f0-9]{3}-?[a-f0-9]{12}\Z'
-
-#         6. group_no       - group number. If group_no == -1 then this means
-#             'no group' / 'groupless' [integer, default=-1].
-
-#         7. tag            - name tag or nickname [string, default=''].
-
-#         8. ignore_taglist - list of strings that are treated as equivalent to ''
-#             (i.e. no tag) [list of strings, default=['--', '---']].
-    
-#     Output:
-#         1. Representation object
-
-#     Signature:
-#         new_rep = create_new_rep(original_fp, img_fp, region, embeddings,
-#                     uid='', group_no=-1, tag='', ignore_taglist=['--', '---'])
-#     """
-
-#     # If Unique IDentifier (UID) is not provided, generate one
-#     if len(uid) == 0 or uid == '':
-#         uid = uuid4()
-
-#     # If tag is in the ignore taglist, then it is considered as a "ignore" tag
-#     if tag in ignore_taglist:
-#         tag = ''
-
-#     # If group number is less than -1 (i.e. invalid) set it to -1 (i.e. no
-#     # group)
-#     if group_no < -1:
-#         group_no = -1
-
-#     # Returns the new representation
-#     return Representation(uid, orig_name=original_fp.split('/')[-1],
-#                           image_name=img_fp.split('/')[-1], orig_fp=original_fp,
-#                           image_fp=img_fp, group_no=group_no, name_tag=tag,
-#                           region=region, embeddings=embeddings)
-
-# ------------------------------------------------------------------------------
-
 def get_embeddings_as_array(verifier_name):
     """
     Gets all of the embeddings for a given 'verifier_name' from the session
@@ -584,195 +558,6 @@ def get_embeddings_as_array(verifier_name):
         embeddings.append(row[0][verifier_name])
 
     return np.array(embeddings)
-
-# ------------------------------------------------------------------------------
-
-# def create_reps_from_dir(img_dir, detector_models, verifier_models,
-#             detector_name='retinaface', align=True, verifier_names=['ArcFace'],
-#             show_prog_bar=True, normalization='base', tags=[], uids=[],
-#             auto_grouping=True, eps=0.5, min_samples=2, metric='cosine',
-#             verbose=False):
-#     """
-#     Creates a representations from images in a directory 'img_dir'. The
-#     representations are returned in a list, and the list of representations. If
-#     tags and/or unique identifiers (uids) are provided, make sure that they 
-#     correspond to the sorted (ascending) image names contained in 'img_dir'.
-
-#     Inputs:
-#         1. img_dir - full path to the directory containing the images [string].
-
-#         2. verifier_models - dictionary of model names (keys) and model objects
-#              (values) [dictionary].
-
-#         3. detector_name - chosen face detector's name. Options: opencv, ssd,
-#              dlib, mtcnn, retinaface (default=retinaface) [string].
-        
-#         4. align - toggles if face images should be aligned. This improves face
-#              recognition performance at the cost of some speed (default=True)
-#              [boolean].
-
-#         5. verifier_names - chosen face verifier's name. Options: VGG-Face,
-#              OpenFace, Facenet, Facenet512, DeepFace, DeepID and ArcFace
-#              (default=ArcFace) [string].
-
-#         6. show_prog_bar - toggles the progress bar on or off (default=True)
-#              [boolean].
-
-#         7. normalization - normalizes the face image and may increase face
-#              recognition performance depending on the normalization type and the
-#              face verifier model. Options: base, raw, Facenet, Facenet2018,
-#              VGGFace, VGGFace2 and ArcFace (default='base') [string].
-
-#         8. tags - list of strings where each string corresponds to a tag for the
-#              i-th image, i.e. tags[0] is the tag for the first image in the
-#              sorted list of image names obtained from 'img_dir' directory. If an
-#              empty list is provided, this is skipped during the Representation
-#              creation process (default='') [string or list of strings].
-
-#         9. uids - list of strings where each string corresponds to a unique
-#              identifier (UID) for the i-th image, i.e. uids[0] is the UID for
-#              the first image in the sorted list of image name obtain from
-#              'img_dir' directory. If an empty list is provided, a UID is created
-#              for each image during the representation creation process
-#              (default='') [string or list of strings].
-
-#         10. auto_grouping - toggles whether Representations should be grouped /
-#              clusted automatically using the DBSCAN algorithm. If multiple
-#              verifier names are passed, uses the embeddings of the first
-#              verifier during the clustering procedure (default=True) [boolean].
-
-#         11. eps - the maximum distance between two samples for one to be
-#              considered as in the neighborhood of the other. This is the most
-#              important DBSCAN parameter to choose appropriately for the
-#              specific data set and distance function (default=0.5) [float].
-
-#         12. min_samples - the number of samples (or total weight) in a
-#              neighborhood for a point to be considered as a core point. This
-#              includes the point itself (min_samples=2) [integer].
-
-#         13. metric - the metric used when calculating distance between instances
-#               in a feature array. It must be one of the options allowed by
-#               sklearn.metrics.pairwise_distances (default='cosine') [string].
-            
-#         14. verbose - toggles the function's warnings and other messages
-#             (default=True) [boolean].
-
-#         Note: the 'tags' and 'uids' lists (inputs 8 and 9) must have the same
-#         number of elements (length) and must match the number of images in
-#         'img_dir'. If not, these inputs will be treated as empty lists (i.e.
-#         ignored).
-
-#     Outputs:
-#         1. list of Representation objects. For more information about the
-#             Representation class attributes and methods, use
-#             help(Representation)
-
-#     Signature:
-#         rep_db = create_reps_from_dir(img_dir, verifier_models, 
-#                         detector_name='opencv', align=True,
-#                         verifier_names='VGG-Face', show_prog_bar=True,
-#                         normalization='base', tags=[], uids=[], verbose=False)
-#     """
-#     # Initializes skip flags and database (list of Representation objects)
-#     skip_tag = False
-#     skip_uid = False
-#     rep_list = []
-    
-#     # Assuming img_dir is a directory containing images
-#     img_paths = get_image_paths(img_dir)
-#     img_paths.sort()
-
-#     # No images found, return empty database
-#     if len(img_paths) == 0:
-#         return RepDatabase()
-
-#     # If tags list does not have the same number of elements as the images (i.e.
-#     # 1 tag per image), ignore it
-#     if len(tags) != len(img_paths):
-#         if verbose:
-#             print('[create_reps_from_dir] Number of tags and image paths',
-#                   'must match. Ignoring tags list.')
-#         skip_tag = True
-
-#     # If uids list does not have the same number of elements as the images (i.e.
-#     # 1 UID per image), ignore it
-#     if len(uids) != len(img_paths):
-#         if verbose:
-#             print('[create_reps_from_dir] Number of UIDs and image paths',
-#                   'must match. Ignoring uids list.')
-#         skip_uid = True
-
-#     # Creates the progress bar
-#     n_imgs  = len(img_paths)
-#     disable = not show_prog_bar
-#     pbar    = tqdm(range(0, n_imgs), desc='Creating representations',
-#                     disable=disable)
-
-#     # If auto grouping is True, then initialize the embeddings list
-#     if auto_grouping:
-#         embds = []
-
-#     # Loops through each image in the 'img_dir' directory
-#     for pb_idx, i, img_path in zip(pbar, range(0, n_imgs), img_paths):
-#         # Detects faces
-#         output = do_face_detection(img_path, detector_models=detector_models,
-#                                     detector_name=detector_name, align=align,
-#                                     verbose=verbose)
-
-#         # Assumes only 1 face is detect (even if multiple are present). If no
-#         # face are detected, skips this image file
-#         if output is not None:
-#             face   = [output['faces'][0]]
-#             region = output['regions'][0]
-#         else:
-#             continue
-
-#         # Calculate the face image embedding
-#         embeddings = calc_embeddings(face, verifier_models,
-#                                      verifier_names=verifier_names,
-#                                      normalization=normalization)
-#         embeddings = embeddings[0]
-
-#         # If auto grouping is True, then store each calculated embedding
-#         if auto_grouping:
-#             embds.append(embeddings[verifier_names[0]])
-
-#         # Determines if tag was provided and should be used when creating this
-#         # representation
-#         if skip_tag:
-#             tag = ''
-#         else:
-#             tag = tags[i]
-
-#         # Determines if UID was provided and should be used when creating this
-#         # representation
-#         if skip_uid:
-#             uid = ''
-#         else:
-#             uid = uids[i]
-
-#         # Create a new representation and adds it to the database
-#         rep_list.append(create_new_rep(img_path, img_path, region, embeddings,
-#                                         tag=tag, uid=uid))
-
-
-#     # Clusters Representations together using the DBSCAN algorithm
-#     if auto_grouping:
-#         # Clusters embeddings using DBSCAN algorithm
-#         results = DBSCAN(eps=eps, min_samples=min_samples,
-#                          metric=metric).fit(embds)
-
-#         # Loops through each label and updates the 'group_no' attribute of each
-#         # Representation IF group_no != -1 (because -1 is already the default
-#         # value and means "no group")
-#         for i, lbl in enumerate(results.labels_):
-#             if lbl == -1:
-#                 continue
-#             else:
-#                 rep_list[i].group_no = lbl
-
-#     # Return representation database
-#     return RepDatabase(*rep_list)
 
 # ------------------------------------------------------------------------------
 
@@ -945,55 +730,6 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
 
     # Loops through each image in the 'img_dir' directory
     for index, i, img_path in zip(pbar, range(0, n_imgs), img_paths):
-        # Checks if the current file already exists in the ProcessedFiles table,
-        # or if it matches any existing file. If so, skips it
-        if len(proc_files.all()) > 0:
-            # First, checks if file already exists in the ProcessedFiles table
-            already_exists = proc_files.filter(
-                        ProcessedFiles.filename.like(img_path.split('/')[-1]),
-                        ProcessedFiles.filesize.like(os.path.getsize(img_path))
-                        )
-
-            # Current file does not match any other file in ProcessedFiles table
-            # (same name and file size)
-            if len(already_exists.all()) == 0:
-                # Creates a subquery to find if there is/are file(s) in the
-                # ProcessedFiles table with the same file size and determines
-                # the number of files with the same size
-                subqry   = proc_files.filter(
-                        ProcessedFiles.filesize.like(os.path.getsize(img_path))
-                            )
-                n_subqry = len(subqry.all())
-
-                # If there are no matching files in the subquery, process the
-                # current file normally
-                if n_subqry > 0:
-                    # Loops through each matching file
-                    for i in range(0, n_subqry):
-                        # Initialize the skip file flag
-                        skip_this_file = False
-
-                        # Compares if the current file is equal to any of the
-                        # subquery ones. By equal, we mean: same file size &
-                        # same image dimensions (width & height)
-                        if cmp(img_path, subqry.all()[i].filepath,
-                                shallow=True):
-                            # The files are the same according to filecmp.cmp,
-                            # so check their image sizes
-                            if has_same_img_size(img_path,
-                                             subqry.all()[i].filepath):
-                                # The files have the same dimensions - and
-                                # finally are assumed to be the same - so break
-                                # the loop and skip the file
-                                skip_this_file = True
-                                break
-
-                    # Skips the current file if 'skip_this_file' flag is True
-                    if skip_this_file:
-                        continue
-            else:
-                continue
-
         # Detects faces
         output = do_face_detection(img_path, detector_models=detector_models,
                                     detector_name=detector_name, align=align,
@@ -1102,14 +838,28 @@ def process_image_zip_file(myfile, image_dir, auto_rename=True):
     Processes a zip file containing image files. The zip file ('myfile') is
     assumed to have only valid image files (i.e. '.jpg', '.png', etc).
     
-    First, the contents of the zip file are extracted to a named temporary
-    directory. All file names in the save directory 'image_dir' are obtained. If
-    'auto_rename' is True, then each image with the same name as a file in
-    'image_dir' directory gets renamed to a unique identifier using uuid4 from
-    the uuid library. Each image is then moved from the temporary directory to
-    the 'image_dir' directory, and the temporary directory is deleted. If
-    'auto_rename' is False then images with the same name are skipped and their
-    names are added to a list which is then returned.
+    The contents of the zip file are extracted to a named temporary directory.
+    Then each file is checked to see if they have already been processed (exists
+    with the same file name and size in the ProcessedFiles table of the
+    database) OR if they are duplicate files. A file is considered a duplicate
+    if there is at least one file in the 'image_dir' directory that:
+        
+        1. has the same file size (checked via filecmp.cmp(..., shallow=False))
+        2. has the same contents (checked via filecmp.cmp(..., shallow=False))
+        3. has the same image width and height (checked via imagesize)
+    
+    An existing file or duplicate file is ignored during the extraction process.
+    If 'auto_rename' is True, then each unique file with the same name as a file
+    in 'image_dir' directory gets renamed to a unique identifier using uuid4()
+    from the uuid library. If, however, 'auto_rename' is False then the file is
+    also skipped despite being a unique file.
+
+    Finally, all unique (possibly renamed) files are moved from the temporary
+    directory to the 'image_dir' directory, and the temporary directory is
+    deleted.
+
+    Effectively, this function attempts to extract only unique (non-existing)
+    image files from the zip file provided and rename them if necessary.
 
     Inputs:
         1. myfile      - zip file obtained through FastAPI [zip file].
@@ -1121,12 +871,12 @@ def process_image_zip_file(myfile, image_dir, auto_rename=True):
                             a non-unique name [boolean, default=True].
 
     Output:
-        1. list with the names of each image file that was skipped [list of
+        1. list with the paths of each image file that was skipped [list of
             strings].
 
     Signature:
-        skipped_file_names = process_image_zip_file(myfile, image_dir,
-                                                    auto_rename=True)
+        skipped_files = process_image_zip_file(myfile, image_dir,
+                                                auto_rename=True)
     """
     # Create temporary directory and extract all files to it
     with TemporaryDirectory(prefix="create_database_from_zip-") as tempdir:
@@ -1134,24 +884,85 @@ def process_image_zip_file(myfile, image_dir, auto_rename=True):
             # Extracts all files in the zip folder
             myzip.extractall(tempdir)
             
-            # Obtains all file names and temporary file names
+            # Obtains all file names, temporary file names and temporary file
+            # paths
             all_fnames = [name.split('/')[-1] for name in os.listdir(image_dir)]
             all_tnames = [name.split('/')[-1] for name in os.listdir(tempdir)]
+            all_tpaths = [os.path.join(tempdir, tname) for tname in all_tnames]
 
-            # Initializes new names list
-            skipped_file_names = []
+            # Obtains the processed files from the ProcessedFiles table
+            proc_files = glb.sqla_session.query(ProcessedFiles)
 
-            # Loops through each temporary file name
-            for tname in all_tnames:
-                # If they match any of the current file names, rename them using
-                # a unique id if 'auto_rename' is True. If 'auto_rename' is 
-                # False (and file requires renaming) skip this file and add it
-                # to the skipped file names list.
+            # Loops through each file extracted in the temporary directory
+            for i, tname, tpath in zip(range(0, len(all_tpaths)), all_tnames,
+                                             all_tpaths):
+                # ---------------- Verifying if file is unique -----------------
+                # Initializes skipped_files list
+                skipped_files = []
+                
+                # Checks if the current file already exists in the
+                # ProcessedFiles table, or if it matches any existing file. If
+                # so, skips it
+                if len(proc_files.all()) > 0:
+                    # First, checks if file already exists in the ProcessedFiles
+                    # table
+                    already_exists = proc_files.filter(
+                            ProcessedFiles.filename.like(tname),
+                            ProcessedFiles.filesize.like(os.path.getsize(tpath))
+                        )
+
+                    # Checks if the current file does not match any other file
+                    # in ProcessedFiles table (same name and file size)
+                    if len(already_exists.all()) == 0:
+                        # Creates a subquery to find if there is/are file(s) in
+                        # the ProcessedFiles table with the same file size and
+                        # determines the number of files with the same size
+                        subqry   = proc_files.filter(
+                                            ProcessedFiles.filesize.like(
+                                                        os.path.getsize(tpath))
+                                                )
+                        n_subqry = len(subqry.all())
+
+                        # Checks if there are matching files in the subquery
+                        if n_subqry > 0:
+                            # Loops through each matching file
+                            for j in range(0, n_subqry):
+                                # Determines if the files are the same (and
+                                # should be skipped)
+                                skip_this_file = img_files_are_same(tpath,
+                                                      subqry.all()[j].filepath)
+                                
+                                # Current file matches another one. It's not
+                                # unique so no need to continue this loop
+                                if skip_this_file:
+                                    break
+
+                        # Otherwise, the current file is unique and can be
+                        # processed normally
+                        else:
+                            skip_this_file = False
+
+                        # Skips the current file if skip_this_file=True
+                        if skip_this_file:
+                            skipped_files.append(tpath)
+                            continue
+
+                    # Otherwise, skips the current file
+                    else:
+                        skipped_files.append(tpath)
+                        continue
+                # --------------------------------------------------------------
+                
+                # Checks if the current file name matches any of the other
+                # files, renaming them using an unique id if 'auto_rename' is
+                # True. If 'auto_rename' is False (and file requires renaming)
+                # skip this file and add it to the skipped file names list.
                 if tname in all_fnames:
                     if auto_rename:
                         new_name = str(uuid4()) + '.' + tname.split('.')[-1] # uid.extension
                     else:
-                        skipped_file_names.append(tname)
+                        skipped_files.append(tname)
+                        continue
 
                 # Otherwise, dont rename it
                 else:
@@ -1162,7 +973,7 @@ def process_image_zip_file(myfile, image_dir, auto_rename=True):
                 old_fp = os.path.join(tempdir, tname)
                 sh_move(old_fp, new_fp)
 
-    return skipped_file_names
+    return skipped_files
 
 # ______________________________________________________________________________
 #                               OTHER FUNCTIONS
@@ -1208,6 +1019,10 @@ def get_matches_from_similarity(similarity_obj):
                             threshold=similarity_obj['threshold']))
     
     return matches
+
+# ------------------------------------------------------------------------------
+
+
 
 # ______________________________________________________________________________
 #                           DATABASE RELATED FUNCTIONS 
@@ -1385,12 +1200,16 @@ def start_session(engine):
 # ------------------------------------------------------------------------------
 
 def facerep_set_groupno_done(session, face_id):
+    """
+    TODO: Update documentation
+    """
     # Loops through each file
     query = update(FaceRep).values(group_no = -1, person_id=None).where(FaceRep.id == face_id)
     if session:
         session.execute(query)
         session.commit()
 
+# ------------------------------------------------------------------------------
 
 def people_clean_without_repps(session):
     """
@@ -1406,3 +1225,11 @@ def people_clean_without_repps(session):
     if(session):
         session.execute(textual_sql)
         session.commit()
+
+# ------------------------------------------------------------------------------
+
+
+
+
+
+
