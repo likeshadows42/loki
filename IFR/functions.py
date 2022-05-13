@@ -12,6 +12,7 @@ import imagesize
 import numpy                 as np
 
 from tqdm                    import tqdm
+from filecmp                 import cmp
 from deepface                import DeepFace
 from deepface.basemodels     import Boosting
 from deepface.detectors      import FaceDetector
@@ -165,6 +166,123 @@ def has_same_img_size(fpath1, fpath2):
         return True if w1 == w2 and h1 == h2 else False
     except:
         return False
+
+# ------------------------------------------------------------------------------
+
+def img_files_are_same(fpath1, fpath2):
+    """
+    Compares if both image files, with paths 'fpath1' and 'fpath2' respectively,
+    are the same. They are considered to be the same if:
+        1. they have the same size
+        2. they have the same content
+        3. the images have the same width and height
+
+    Checks 1 and 2 are performed using filecmp library's cmp() method with
+    shallow=False. Check 3 is performed using the efficient imagesize library
+    which is able to extract the image's width and height without loading it
+    fully into memory.
+
+    Inputs:
+        1. fpath1 - full path of the first image file [string].
+
+        2. fpath2 - full path of the first image file [string].
+
+    Output:
+        1. flag indicating if both files are the same or not [boolean].
+
+    Signature:
+        is_same = img_files_are_same(fpath1, fpath2)
+    """
+    return True if cmp(fpath1, fpath2, shallow=False)\
+            and has_same_img_size(fpath1, fpath2) else False
+
+# ------------------------------------------------------------------------------
+
+def remove_img_file_duplicates(trgt_dir, dont_delete=False):
+    """
+    Detects and removes (if dont_delete=False) all duplicate image files in a
+    target directory 'trgt_dir'. Also returns a list with the name of all
+    duplicate files, regardless if they were deleted or not. The algorithm works
+    in the following way:
+
+        1. The full path and file size of all files (in the directory) are
+            obtained. A list with all unique file sizes is calculated.
+
+        2. For each file size in the unique file size list:
+            2.1. The indicies of all files with a matching file size are
+                  obtained.
+
+            2.2. If there are multiple matches, the first file (corresponding to
+                  the first index) is set as the reference file for comparison.
+                  Its width and height are calculated without loading the entire
+                  image to memory.
+
+            2.3. Every other match is compared to the reference file. The
+                  comparison is made by using filecmp.cmp() (with
+                  shallow=False). Their widths and heights are also calculated
+                  and compared to the reference image's width and height.
+
+            2.4. If any match is deemed the same (filecmp.cmp() results in True
+                  and has the same width and height), the matching file is
+                  considered a duplicate and is deleted (unless
+                  dont_delete=True). The file's name is also stored in the
+                  duplicate file names' list.
+
+        3. Returns a list with the names of all duplicate files (regardless if
+            they were deleted or not).
+
+    Inputs:
+        1. trgt_dir    - path to target directory [string].
+
+        2. dont_delete - toggles if the function should delete the duplicate
+                          files or not [boolean, default=False].
+
+    Output:
+        1. Returns the names of all duplicate files (regardless if they were
+            deleted or not) [list of strings].
+
+    Signature:
+        dup_file_names = remove_img_file_duplicates(trgt_dir, dont_delete=False)
+    """
+    # Initialize duplicate files' name list
+    dup_files = []
+
+    # Obtains all file full paths ('all_files'), their file sizes ('all_sizes')
+    # and a list of all unique file sizes ('unq_sizes')
+    all_files = [os.path.join(trgt_dir, pth) for pth in os.listdir(trgt_dir)]
+    all_sizes = np.array([os.path.getsize(pth) for pth in all_files])
+    unq_sizes = np.unique(all_sizes)
+
+    # Loops through all unique file sizes
+    for sze in unq_sizes:
+        # Gets the indices of all files with the same current file size
+        ii = np.where(all_sizes == sze)[0]
+
+        # If there are multiple matches, compare them to see if there are
+        # duplicates. Otherwise, just continue
+        if len(ii) > 1:
+            # Sets the first index (file) as a reference file (for comparison)
+            # and obtains their width and height
+            refw, refh = imagesize.get(all_files[ii[0]])
+
+            # Loops through each remaining file index
+            for i in ii[1:]:
+                # Calculates the current matched file's width and height
+                wi, hi = imagesize.get(all_files[i])
+
+                # Files have the same size, content and image size
+                if cmp(all_files[ii[0]], all_files[i], shallow=False)\
+                    and refw == wi and refh == hi:
+                    # Appends the duplicate file's name
+                    dup_files.append(all_files[i])
+
+                    # Removes the duplicate file if dont_delete=False
+                    if not dont_delete:
+                        os.remove(all_files[i])
+
+    return dup_files
+
+# ------------------------------------------------------------------------------
 
 # ______________________________________________________________________________
 #                    FACE DETECTION / VERIFICATION RELATED
