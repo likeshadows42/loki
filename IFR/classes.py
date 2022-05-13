@@ -219,7 +219,7 @@ class VerificationMatch(BaseModel):
     """
     unique_id : int
     image_name: str
-    group_no  : int
+    person_id : Optional[int]
     image_fp  : str
     region    : List[int]
     embeddings: List[str]

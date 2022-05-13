@@ -1200,7 +1200,7 @@ def get_matches_from_similarity(similarity_obj):
         rep = query.all()[i]
         matches.append(VerificationMatch(unique_id=rep.id,
                             image_name=rep.image_name_orig,
-                            group_no=rep.group_no,
+                            person_id=rep.person_id,
                             image_fp=rep.image_fp_orig,
                             region=rep.region,
                             distance=dst,
