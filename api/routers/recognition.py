@@ -674,12 +674,8 @@ async def create_database_from_directory(params: CreateDatabaseParams,
                    +  'does not exist! Please ensure that this table exists '\
                    +  'before using this endpoint.\n'
 
-    # Otherwise (database is not empty and table exists), 
+    # Otherwise (database is not empty and table exists)
     else:
-        # 
-        dup_file_names = remove_img_file_duplicates(image_dir,
-                                                 dont_delete=(not remove_dups))
-
         # Processes face images from the image directory provided. Note that
         # this function adds the changes to the global session but does not
         # commit them.
@@ -793,8 +789,9 @@ async def create_database_from_zip(myfile: UploadFile,
             
             2. message: informative message string
     """
-    # Initialize output message
-    output_msg = ''
+    # Initialize output message and skipped_files variable
+    output_msg    = ''
+    skipped_files = []
 
     # If image directory provided is None or is not a directory, use default
     # directory
@@ -822,18 +819,19 @@ async def create_database_from_zip(myfile: UploadFile,
         # Initialize dont_skip flag as True
         dont_skip   = True
 
-        # Extract zip files and initialize skipped_files variable
+        # Extract zip files
         output_msg   += 'Extracting images in zip:'
-        skipped_files = []
         try:
             # Process the zip file containing the image files
             skipped_files = process_image_zip_file(myfile, image_dir,
                                                     auto_rename=auto_rename)
-            output_msg += ' success! '
+            output_msg   += ' success! '
 
         except Exception as excpt:
             dont_skip     = False
             output_msg   += f' failed (reason: {excpt}).'
+
+        print('output msg:', output_msg)
 
         # Processes face images from the image directory provided if 'dont_skip'
         # is True
