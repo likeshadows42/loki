@@ -124,33 +124,6 @@ def ensure_dirs_exist(directory_list, verbose=False):
 
 # ------------------------------------------------------------------------------
 
-def string_is_valid_uuid4(uuid_string):
-    """
-    Checks if the string provided 'uuid_string' is a valid uuid4 or not.
-
-    Input:
-        1. uuid_string - string representation of uuid including dashes ('-')
-             [string].
-    
-    Output:
-        1. boolean indicating if the string is a valid uuid4 or not.
-
-    Signature:
-        is_valid = string_is_valid_uuid4(uuid_string)
-    """
-    # Creates the regular expression pattern
-    uuid4hex = re.compile('^[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?[89ab]'
-                        + '[a-f0-9]{3}-?[a-f0-9]{12}\Z', re.I)
-
-    # Tries to find a match
-    match = uuid4hex.match(uuid_string)
-
-    # Returns a boolean indicating if a match was found or not (i.e. a valid
-    # uuid4 exists or not)
-    return bool(match)
-
-# ------------------------------------------------------------------------------
-
 def has_same_img_size(fpath1, fpath2):
     """
     Determines if the 2 files with paths 'fpath1' and 'fpath2' have the same
@@ -283,6 +256,59 @@ def remove_img_file_duplicates(trgt_dir, dont_delete=False):
     return dup_files
 
 # ------------------------------------------------------------------------------
+
+def ext_is_valid(fpath, valid_exts=['.jpg', '.png', '.npy']):
+    """
+    Checks if 'fpath' extension is contained in the 'valid_exts' list, returning
+    True if so and False otherwise. Note that 'fpath' can be a full or relative
+    path or a file name.
+
+    Inputs:
+        1. fpath      - full / relative file path or file name [string].
+
+        2. valid_exts - list of valid file extensions [list of strings].
+
+    Output:
+        1. returns a boolean indicating if 'fpath' extension is in the
+            'valid_exts' list
+
+    Signature:
+        flag = ext_is_valid(fpath, valid_exts=['.jpg', '.png', '.npy'])
+    """
+    return fpath[fpath.rindex('.'):].lower() in valid_exts
+
+# ------------------------------------------------------------------------------
+
+def filter_files_by_ext(fpaths, valid_exts=['.jpg', '.png', '.npy']):
+    """
+    Filters file paths / names in 'fpaths' list if they have a valid extension.
+    A valid extension is any extension in the 'valid_exts' list.
+
+    Inputs:
+        1. fpaths     - list of file paths / names [list of strings].
+
+        2. valid_exts - list of valid file extensions [list of strings].
+
+    Output:
+        1. returns a filtered list of file paths / names, where each element has
+            an extension contained in 'valid_exts' list.
+
+    Signature:
+        filtered_fpaths = filter_files_by_ext(fpaths,
+                                            valid_exts=['.jpg', '.png', '.npy'])
+    """
+    # Initializes the valid file paths / names list
+    valid_fpaths = []
+
+    # Loops through each file path / name in the 'fpaths' list
+    for fpath in fpaths:
+        # Adds the current path / name to the 'valid_fpaths' list if it has a
+        # valid extension
+        if fpath[fpath.rindex('.'):].lower() in valid_exts:
+            valid_fpaths.append(fpath)
+
+    return valid_fpaths
+
 
 # ______________________________________________________________________________
 #                    FACE DETECTION / VERIFICATION RELATED
