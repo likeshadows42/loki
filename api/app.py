@@ -10,7 +10,8 @@ from fastapi.middleware.cors  import CORSMiddleware
 from IFR.api                  import load_database, init_load_detectors,\
                                     init_load_verifiers, save_built_detectors,\
                                     save_built_verifiers, start_session
-from IFR.functions            import ensure_dirs_exist
+from IFR.functions            import ensure_dirs_exist,\
+                                    remove_img_file_duplicates
 from api.routers.recognition  import fr_router
 
 # ______________________________________________________________________________
@@ -77,6 +78,16 @@ async def initialization():
         print('  -> Loading / creating face detectors:')
     glb.models = init_load_detectors(glb.detector_names, glb.SVD_VRF_DIR,
                                      models=glb.models)
+
+    # Ensures no duplicate image files exists in the server's image directory
+    if glb.DEBUG:
+        print('  -> Ensuring no duplicate image files exist:')
+    dup_file_names = remove_img_file_duplicates(glb.IMG_DIR, dont_delete=False)
+    if glb.DEBUG:
+        for name in dup_file_names:
+            print(f' > Deleted duplicate file: {name}')
+        print('')
+
     if glb.DEBUG:
         print('\n -------- End of initialization process -------- \n')
 
