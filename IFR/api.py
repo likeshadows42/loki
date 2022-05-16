@@ -127,9 +127,16 @@ def file_is_not_unique(fpath, proc_qry=None):
     if proc_qry is None:
         proc_qry = glb.sqla_session.query(ProcessedFiles)
 
+    # TODO: IMPLEMENT AND ADD A EXTENSIONS FILTERING
+    # -> only relevant files (valid extensions) at this stage
+
     # Creates a subquery to find if there is/are file(s) in the ProcessedFiles
     # table with the same file size and determines the number of files with the
     # same size
+    subqry   = proc_qry.filter(
+                        ProcessedFiles.filesize in tempfile_size
+    )
+    
     subqry   = proc_qry.filter(
                         ProcessedFiles.filesize.like(os.path.getsize(fpath))
                               )
@@ -825,7 +832,7 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
     query = update(FaceRep).values(group_no = -2).where(FaceRep.group_no > -1)
     glb.sqla_session.execute(query)
     query = update(Person).values(group_no = -2).where(Person.group_no > -1)
-    glb.sqla_session.execute(query)    
+    glb.sqla_session.execute(query)
     glb.sqla_session.commit()
 
     # Return representation database
@@ -1154,8 +1161,6 @@ def load_database(relative_path, create_new=True, force_create=False):
         print('[load_database] WARNING: Database loading failed',
               '(and a new was NOT created).')
         engine = None
-    
-    # TODO: add TRY - EXPECT for dealing with error
 
     return engine
 
