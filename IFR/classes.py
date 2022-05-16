@@ -338,3 +338,21 @@ class ProcessedFiles(Base):
     def __repr__(self):
         return "(id=%s)\nfile name: %s\nfile size: %s" % (self.id,
                     self.filename, self.filesize)
+
+class ProcessedFilesTemp(Base):
+    """
+    Initializes the object with appropriate attributes
+    """
+    # Table name
+    __tablename__ = 'proc_files_temp'
+
+    # Object attributes (as database columns)
+    id       = Column(Integer, primary_key=True)
+    filename = Column(String, default=None)
+    filesize = Column(INTEGER(unsigned=True), default=None)
+
+    # Standard repr for the class
+    def __repr__(self):
+        return "(id=%s)\nfile name: %s\nfile size: %s" % (self.id,
+                    self.filename, self.filesize)
+
