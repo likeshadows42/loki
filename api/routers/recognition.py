@@ -704,8 +704,7 @@ async def create_database_from_directory(params: CreateDatabaseParams,
 @fr_router.post("/create_database/from_zip")
 async def create_database_from_zip(myfile: UploadFile,
     params      : CreateDatabaseParams = Depends(),
-    image_dir   : Optional[str]  = Query(glb.IMG_DIR, description="Full path to directory containing images (string)"),
-    auto_rename : Optional[bool] = Query(True       , description="Flag to force auto renaming of images in the zip file with names that match images already in the image directory (boolean)")):
+    image_dir   : Optional[str]  = Query(glb.IMG_DIR, description="Full path to directory containing images (string)")):
     """
     API endpoint: create_database_from_zip()
 
@@ -789,9 +788,12 @@ async def create_database_from_zip(myfile: UploadFile,
             
             2. message: informative message string
     """
-    # Initialize output message and skipped_files variable
-    output_msg    = ''
-    skipped_files = []
+    # These are hard-codded constants for now
+    table_names = ['person', 'representation', 'proc_files', 'proc_files_temp']
+    valid_exts  = ['.jpg', '.png', '.npy']
+
+    # Initialize output message
+    output_msg = ''
 
     # If image directory provided is None or is not a directory, use default
     # directory
@@ -808,7 +810,7 @@ async def create_database_from_zip(myfile: UploadFile,
                    +  'Please create one before using this endpoint.\n'
 
     # Face Representation table does not exist
-    elif not all_tables_exist(glb.sqla_engine, ['representation']):
+    elif not all_tables_exist(glb.sqla_engine, table_names):
         # Do nothing, but set message
         output_msg += "Face representation table ('representation') "\
                    +  'does not exist! Please ensure that this table exists '\
@@ -820,23 +822,23 @@ async def create_database_from_zip(myfile: UploadFile,
         dont_skip   = True
 
         # Extract zip files
-        output_msg   += 'Extracting images in zip:'
+        output_msg += 'Extracting images in zip:'
+
         try:
             # Process the zip file containing the image files
             skipped_files = process_image_zip_file(myfile, image_dir,
-                                                    auto_rename=auto_rename)
-            output_msg   += ' success! '
+                                                    valid_exts=valid_exts)
+            output_msg += ' success! '
 
         except Exception as excpt:
-            dont_skip     = False
-            output_msg   += f' failed (reason: {excpt}).'
-
-        print('output msg:', output_msg)
+            dont_skip   = False
+            output_msg += f' failed (reason: {excpt}).'
 
         # Processes face images from the image directory provided if 'dont_skip'
         # is True
         if dont_skip:
             output_msg += 'Creating database: '
+
             records = process_faces_from_dir(image_dir, glb.models, glb.models,
                             detector_name  = params.detector_name,
                             verifier_names = params.verifier_names,
