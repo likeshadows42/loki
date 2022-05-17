@@ -22,8 +22,7 @@ from IFR.api                 import init_load_verifiers, init_load_detectors,\
 from IFR.classes             import *
 from IFR.functions           import ensure_dirs_exist, calc_embeddings,\
                                     calc_similarity, do_face_detection,\
-                                    discard_small_regions, img_files_are_same,\
-                                    remove_img_file_duplicates
+                                    discard_small_regions
 
 from matplotlib                      import image          as mpimg
 
