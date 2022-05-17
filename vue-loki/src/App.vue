@@ -14,7 +14,7 @@
       
       <!-- <p><a>Upload multiple images</a></p> -->
       <p><a href="#" @click.prevent="imgVerWithoutUpToggle">Verify image (without upload)</a></p>
-      <p><a href="#" @click.prevent="imgVerWithUpToggle">Verify image (with upload)</a></p>
+      <!-- <p><a href="#" @click.prevent="imgVerWithUpToggle">Verify image (with upload)</a></p> -->
       
       <!-- <p><a>Verify image (with upload)</a></p> -->
       <!-- <SecondComp @response="(msg) => MainContent = msg"/>
@@ -23,15 +23,15 @@
       
 
       <h3>Database</h3>
-      <p><a href="#" @click.prevent="">Load database</a></p>
-      <p><a href="#" @click.prevent="">Save database</a></p>
+      <!-- <p><a href="#" @click.prevent="">Load database</a></p>
+      <p><a href="#" @click.prevent="">Save database</a></p> -->
       
-      <p><a href="#" @click.prevent="dbClear">OK Clear database</a></p>
-      <p><a href="#" @click.prevent="dbReload">Reload database</a></p>
+      <p><a href="#" @click.prevent="dbClear">Clear database</a></p>
+      <!-- <p><a href="#" @click.prevent="dbReload">Reload database</a></p> -->
 
-      <h3>Utility</h3>
+      <!-- <h3>Utility</h3>
       <p><a href="#" @click.prevent="getGlobaldata">Get global parameters</a></p>
-      <p><a href="#" @click.prevent="serverReset">Server reset&restart</a></p>
+      <p><a href="#" @click.prevent="serverReset">Server reset&restart</a></p> -->
     </aside>
     <article class="main">
        <!-- <ImagesUploader @changed="handleImages" @response="(msg) => MainContent = msg"/> -->
@@ -275,7 +275,7 @@ export default {
     },
 
     zipOnSubmit(msg) {
-       console.log("Zip received!")
+       console.log(msg)
        this.MainContent = msg
     },
 

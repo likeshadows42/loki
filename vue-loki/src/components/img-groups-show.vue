@@ -29,18 +29,9 @@ export default {
         console.log(img)
     },
 
-    // checkGroup(num) {
-    //   if(num == -1) {
-    //     return true
-    //   } else {
-    //     this.all_grouped = true
-    //     return false
-    //   }
-    // }
-
-        // removeImg(img) {
-    //   this.imgs = this.imgs.filter((t) => t !== img)
-    // },
+    checkPeople(array) {
+      return array?.length == 0
+    },
   },  
 
   mounted() {
@@ -55,10 +46,8 @@ export default {
 
 <span v-for="person in people" :key="person.id">
       <compGroupItems :person_id="person.id" :person_name="person.name" :person_note="person.note"></compGroupItems>
-      <!-- {{group.id}}, -->
-
 </span>
-
+<p v-if="checkPeople(people)">No people yet.</p>
 </template>
 
 

@@ -540,6 +540,21 @@ async def facerep_get_ungrouped():
 
     return return_value
 
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/facerep/get_person")
+async def facerep_get_person(facerep_id: int = Query(None, description="ID primary key in FaceRep table [integer")):
+    """
+    API endpoiunt: get the related Person record by using FaceRep.id reference key join
+    """
+    query = select(Person).join(FaceRep).where(FaceRep.id == facerep_id)
+    result = glb.sqla_session.execute(query)
+    # glb.sqla_session.commit()
+
+    return result.fetchall()
+
+
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/utility/edit_tag_by_group_no")
@@ -822,6 +837,7 @@ async def populate_faces_from_zip(myfile: UploadFile,
 
         # Extract zip files
         output_msg += 'Extracting images in zip:'
+        skipped_files = []
 
         try:
             # Process the zip file containing the image files
@@ -952,12 +968,13 @@ async def verify_no_upload(files: List[UploadFile],
 
 @fr_router.post("/verify/with_upload", response_model=List[List[List[VerificationMatch]]])
 async def verify_with_upload(files: List[UploadFile],
-    params     : VerificationParams = Depends(),
-    img_dir    : str                = Query(glb_img_dir, description="Full path to image directory (string)"),
-    save_as    : ImageSaveTypes     = Query(default_image_save_type, description="File type which uploaded images should be saved as (string)"),
-    overwrite  : bool               = Query(False, description="Flag to indicate if an uploaded image with the same name as an existing one in the server should be saved and replace it (boolean)"),
-    auto_rename: bool               = Query(True, description="Flag to force auto renaming of images in the zip file with (boolean)"),
-    auto_group : bool               = Query(True, description="Flag to automatically group image based on verification results (boolean)")):
+    params          : VerificationParams = Depends(),
+    img_dir         : str                = Query(glb_img_dir, description="Full path to image directory (string)"),
+    save_as         : ImageSaveTypes     = Query(default_image_save_type, description="File type which uploaded images should be saved as (string)"),
+    overwrite       : bool               = Query(False, description="Flag to indicate if an uploaded image with the same name as an existing one in the server should be saved and replace it (boolean)"),
+    auto_rename     : bool               = Query(True, description="Flag to force auto renaming of images in the zip file with (boolean)"),
+    auto_group      : bool               = Query(True, description="Flag to automatically group image based on verification results (boolean)"),
+    threshold_per   : float              = Query(.75, description="Threshold percentage below which the autogroup algorythm automatically assign the images to the best matching person")):
     """
     API endpoint: verify_with_upload()
 
@@ -1100,11 +1117,11 @@ async def verify_with_upload(files: List[UploadFile],
             cur_img_results.append(result)
 
             # Automatically determines the image's group based on the best match
-            # if it has a distance / similarity of <=0.75*threshold and if
+            # if it has a distance / similarity of <=threshold_per*threshold and if
             # 'auto_group' is True
             if auto_group and len(result) > 0:
                 if similarity_obj['distances'][0]\
-                    <= 0.75 * similarity_obj['threshold']:
+                    <= threshold_per * similarity_obj['threshold']:
                     group_no = result[0].group_no
                 else:
                     group_no = -1

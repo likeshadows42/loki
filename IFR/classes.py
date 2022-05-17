@@ -286,6 +286,7 @@ class Person(Base):
     name = Column(String, default=None)
     group_no = Column(Integer, default=None)
     note = Column(String, default=None)
+    front_img = Column(Integer, default=None)
 
     # Establishes connection to associated Face Representations
     reps = relationship("FaceRep", back_populates="person",
