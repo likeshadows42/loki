@@ -7,6 +7,7 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import re
 import cv2
+import secrets
 import imagesize
 
 import numpy                 as np
@@ -121,53 +122,6 @@ def ensure_dirs_exist(directory_list, verbose=False):
                 print('success.')
 
     return None
-
-# ------------------------------------------------------------------------------
-
-def has_same_img_size(fpath1, fpath2):
-    """
-    Determines if the 2 files with paths 'fpath1' and 'fpath2' have the same
-    image size (i.e. the same width and height). If any of the 2 files are not a
-    valid image file, returns False. On any error, also returns False.
-
-    TODO: Finish doc
-    """
-    try:
-        w1, h1 = imagesize.get(fpath1)
-        w2, h2 = imagesize.get(fpath2)
-
-        return True if w1 == w2 and h1 == h2 else False
-    except:
-        return False
-
-# ------------------------------------------------------------------------------
-
-def img_files_are_same(fpath1, fpath2):
-    """
-    Compares if both image files, with paths 'fpath1' and 'fpath2' respectively,
-    are the same. They are considered to be the same if:
-        1. they have the same size
-        2. they have the same content
-        3. the images have the same width and height
-
-    Checks 1 and 2 are performed using filecmp library's cmp() method with
-    shallow=False. Check 3 is performed using the efficient imagesize library
-    which is able to extract the image's width and height without loading it
-    fully into memory.
-
-    Inputs:
-        1. fpath1 - full path of the first image file [string].
-
-        2. fpath2 - full path of the first image file [string].
-
-    Output:
-        1. flag indicating if both files are the same or not [boolean].
-
-    Signature:
-        is_same = img_files_are_same(fpath1, fpath2)
-    """
-    return True if cmp(fpath1, fpath2, shallow=False)\
-            and has_same_img_size(fpath1, fpath2) else False
 
 # ------------------------------------------------------------------------------
 
@@ -309,6 +263,38 @@ def filter_files_by_ext(fpaths, valid_exts=['.jpg', '.png', '.npy']):
 
     return valid_fpaths
 
+# ------------------------------------------------------------------------------
+
+def rename_file_w_hex_token(fname, n_token=2):
+    """
+    Renames a file name (or path) using 'n_token' hexadecimal tokens. A
+    hexadecimal token is composed of TWO hexadecimal caracters (e.g. FF). The
+    resulting file name is:
+                new name = name + _ + 'n_token' random tokens + ext
+
+    Examples:
+        1. old name: img_001.jpg
+           new name: img_001_a2be.jpg
+
+        2. old full path: user/images/img_100.png
+           new full path: user/images/img_100_fe43.png
+
+    Inputs:
+        1. fname   - file name or full path [string].
+
+        2. n_token - number of hex tokens (each token is composed of 2
+                      hexadecimal digits) [integer].
+
+    Output:
+        1. new file name or full path [string].
+
+    Signature:
+        new_fname = rename_file_w_hex_token(fname, n_token=2)
+    """
+    name = fname[:fname.rindex('.')]
+    ext  = fname[fname.rindex('.'):]
+
+    return name + '_' + secrets.token_hex(n_token) + ext
 
 # ______________________________________________________________________________
 #                    FACE DETECTION / VERIFICATION RELATED
