@@ -897,20 +897,20 @@ def process_image_zip_file(myfile, image_dir,
                 raise AssertionError("Could not repopulate"\
                                    + "'proc_files_temp' table.")
 
-            # 
+            # Queries the database to figure out which files have the same size
             query  = select(ProcessedFiles.filename,
                             ProcessedFilesTemp.filename).join(\
                             ProcessedFilesTemp, ProcessedFiles.filesize ==\
                             ProcessedFilesTemp.filesize)
             result = glb.sqla_session.execute(query)
-            invalid_names = [tup[1] for tup in result.all()]
+            processed_names = [tup[0] for tup in result.all()]
 
             # Loops through each file extracted in the temporary directory
             for i, tname, tpath in zip(range(0, len(filt_tnames)), filt_tnames,
                                              filt_tpaths):
                 # ------------------------- File check -------------------------
-                # 
-                if file_is_not_unique(tname, tempdir, invalid_names,
+                # Skips the current file if it is a duplicate file
+                if file_is_not_unique(tname, tempdir, processed_names,
                                         image_dir):
                     skipped_files.append(tpath)
                     print(f'File skipped (duplicate file): {tpath}')
