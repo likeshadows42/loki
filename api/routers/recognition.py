@@ -791,8 +791,9 @@ async def populate_faces_from_zip(myfile: UploadFile,
     table_names = ['person', 'representation', 'proc_files', 'proc_files_temp']
     valid_exts  = ['.jpg', '.png', '.npy']
 
-    # Initialize output message
-    output_msg = ''
+    # Initialize output message and skipped_files list
+    output_msg    = ''
+    skipped_files = []
 
     # If image directory provided is None or is not a directory, use default
     # directory
