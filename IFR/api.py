@@ -15,6 +15,7 @@ import api.global_variables  as glb
 from io                      import BytesIO
 from tqdm                    import tqdm
 from uuid                    import uuid4
+from filecmp                 import cmp
 from zipfile                 import ZipFile
 from tempfile                import TemporaryDirectory
 from sqlalchemy              import create_engine, inspect, MetaData, select,\
@@ -25,8 +26,8 @@ from IFR.classes             import FaceRep, Person, VerificationMatch,\
 from IFR.functions           import get_image_paths, do_face_detection,\
                                     calc_embeddings, ensure_detectors_exists,\
                                     ensure_verifiers_exists,\
-                                    discard_small_regions, img_files_are_same,\
-                                    filter_files_by_ext
+                                    discard_small_regions, filter_files_by_ext,\
+                                    rename_file_w_hex_token
 from sklearn.cluster         import DBSCAN
 
 from shutil                          import move           as sh_move
@@ -113,28 +114,28 @@ def show_cluster_results(group_no, db, ncols=4, figsize=(15, 15), color='black',
 
 # ------------------------------------------------------------------------------
 
-def file_is_not_unique(fname, fdir, invalid_names, invalid_root_dir):
+def file_is_not_unique(fname, fdir, other_names, other_root_dir):
     """
     TODO: Update documentation
     """
     # Initializes 'is_not_unique' flag
     is_not_unique = False
 
-    #
-    if fname in invalid_names:
-        # Loops through each file name in invalid names
-        for i, inv_name in zip(range(0, len(fname)), invalid_names):
-            #
-            fpath1 = os.path.join(fdir, fname)
-            fpath2 = os.path.join(invalid_root_dir, inv_name)
+    # Loops through each file name in invalid names
+    for i, inv_name in zip(range(0, len(fname)), other_names):
+        # Creates the full paths of each file
+        fpath1 = os.path.join(fdir, fname)
+        fpath2 = os.path.join(other_root_dir, inv_name)
 
-            # Determines if the files are the same (and should be skipped)
-            is_not_unique = img_files_are_same(fpath1, fpath2)
+        #print(f'{i}: fpath1: ', fpath1, '  |  fpath2: ', fpath2, sep='')
+
+        # Determines if the files are the same (and should be skipped)
+        is_not_unique = cmp(fpath1, fpath2, shallow=False)
                                 
-            # Current file matches another one. It's not unique so no need to
-            # continue this loop
-            if is_not_unique:
-                break
+        # Current file matches another one. It's not unique so no need to
+        # continue this loop
+        if is_not_unique:
+            break
 
     return is_not_unique
 
@@ -919,7 +920,7 @@ def process_image_zip_file(myfile, image_dir,
                 # Checks if the current file name matches any of the other
                 # files, renaming them using an unique id.
                 if tname in all_fnames:
-                    new_name = str(uuid4()) + '.' + tname.split('.')[-1] # uid.extension
+                    new_name = rename_file_w_hex_token(tname)
 
                 # Otherwise, dont rename it
                 else:
