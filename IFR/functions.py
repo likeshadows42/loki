@@ -253,13 +253,15 @@ def filter_files_by_ext(fpaths, valid_exts=['.jpg', '.png', '.npy']):
     """
     # Initializes the valid file paths / names list
     valid_fpaths = []
-
+    
     # Loops through each file path / name in the 'fpaths' list
     for fpath in fpaths:
         # Adds the current path / name to the 'valid_fpaths' list if it has a
         # valid extension
-        if fpath[fpath.rindex('.'):].lower() in valid_exts:
-            valid_fpaths.append(fpath)
+
+        if os.path.isdir(fpath) == False:
+            if fpath.lower().endswith(tuple(valid_exts)):
+                valid_fpaths.append(fpath)
 
     return valid_fpaths
 

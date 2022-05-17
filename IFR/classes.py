@@ -332,7 +332,7 @@ class ProcessedFiles(Base):
     # Object attributes (as database columns)
     id       = Column(Integer, primary_key=True)
     filename = Column(String, default=None)
-    filepath = Column(String, default=None)
+    # filepath = Column(String, default=None)
     filesize = Column(INTEGER(unsigned=True), default=None)
 
     # Standard repr for the class

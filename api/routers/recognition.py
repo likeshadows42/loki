@@ -312,7 +312,7 @@ async def view_tables(
             output_obj.append(ProcessedFilesOutput(
                 id       = fprc.id,
                 filename = fprc.filename,
-                filepath = fprc.filepath,
+                # filepath = fprc.filepath,
                 filesize = fprc.filesize
             ))
 

@@ -33,6 +33,7 @@ from sklearn.cluster         import DBSCAN
 from shutil                          import move           as sh_move
 from deepface.DeepFace               import build_model    as build_verifier
 from deepface.detectors.FaceDetector import build_model    as build_detector
+from secrets                 import token_hex
 
 # ______________________________________________________________________________
 #                       UTILITY & GENERAL USE FUNCTIONS
@@ -769,7 +770,7 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
 
         # After file has been processed, add it to the ProcessedFiles table
         glb.sqla_session.add(ProcessedFiles(filename=img_path.split('/')[-1],
-                                            filepath=img_path,
+                                            # filepath=img_path,
                                             filesize=os.path.getsize(img_path)))
     
     if glb.DEBUG:
@@ -881,55 +882,58 @@ def process_image_zip_file(myfile, image_dir,
         with ZipFile(BytesIO(myfile.file.read()), 'r') as myzip:
             # Extracts all files in the zip folder
             myzip.extractall(tempdir)
-            
+
             # Obtains all file names, temporary file names and temporary file
             # paths. Also initializes skipped_files list
             skipped_files = []
-            all_fnames = [name.split('/')[-1] for name in os.listdir(image_dir)]
-            all_tnames = [name.split('/')[-1] for name in os.listdir(tempdir)]
 
-            # Filter files by valid extension
-            filt_tnames = filter_files_by_ext(all_tnames, valid_exts=valid_exts)
-            filt_tpaths = [os.path.join(tempdir, name) for name in filt_tnames]
+            tfiles_path = [os.path.join(tempdir, file) for file in os.listdir(tempdir)]
+            tfiles_path_filtered = filter_files_by_ext(tfiles_path, valid_exts=valid_exts)
 
             # Repopulates the 'proc_files_temp' table
-            if repopulate_temp_file_table(filt_tpaths):
+            if repopulate_temp_file_table(tfiles_path_filtered):
                 raise AssertionError("Could not repopulate"\
                                    + "'proc_files_temp' table.")
 
-            # Queries the database to figure out which files have the same size
+            # Queries the database to figure out which files have the SAME size
             query  = select(ProcessedFiles.filename,
                             ProcessedFilesTemp.filename).join(\
                             ProcessedFilesTemp, ProcessedFiles.filesize ==\
                             ProcessedFilesTemp.filesize)
             result = glb.sqla_session.execute(query)
-            processed_names = [tup[0] for tup in result.all()]
 
-            # Loops through each file extracted in the temporary directory
-            for i, tname, tpath in zip(range(0, len(filt_tnames)), filt_tnames,
-                                             filt_tpaths):
-                # ------------------------- File check -------------------------
-                # Skips the current file if it is a duplicate file
-                if file_is_not_unique(tname, tempdir, processed_names,
-                                        image_dir):
-                    skipped_files.append(tpath)
-                    print(f'File skipped (duplicate file): {tpath}')
-                    continue
+            for fname, tname in result:
+                fname_fullpath = os.path.join(image_dir, fname)
+                tname_fullpath = os.path.join(tempdir, tname)
                 
-                # ------------------------ Auto renaming -----------------------
-                # Checks if the current file name matches any of the other
-                # files, renaming them using an unique id.
-                if tname in all_fnames:
-                    new_name = rename_file_w_hex_token(tname)
+                if not cmp(fname_fullpath, tname_fullpath): # file is different!
+                    if fname == tname: # let's rename it
+                        filename_no_ext, ext_only = tname.split('/')[-1].split('.')
+                        rnd_add = token_hex(2)
+                        tname = filename_no_ext + '-' + rnd_add + '.' + ext_only
+                    tname_fullpath_dest = os.path.join(image_dir, tname) # new fullpath for tname
+                    sh_move(tname_fullpath, tname_fullpath_dest)
+                else: # file is egual, so we remove from tempdir
+                    os.remove(tname_fullpath)
+                    skipped_files.append(tname)
 
-                # Otherwise, dont rename it
-                else:
-                    new_name = tname
+            # Queries for files that have SAME name and DIFFERENT size from the existing ones
+            # that have to be renamed
+            query = select(ProcessedFilesTemp.filename).join(ProcessedFiles, (ProcessedFilesTemp.filename == ProcessedFiles.filename) & (ProcessedFilesTemp.filesize != ProcessedFiles.filesize))
+            print(query)
+            result = glb.sqla_session.execute(query)
+            for row in result:
+                filename = row.filename
+                filename_no_ext, ext_only = filename.split('/')[-1].split('.')
+                rnd_add = token_hex(2)
+                filename_renamed = filename_no_ext + '-' + rnd_add + '.' + ext_only
+                print(filename_renamed, filename)
+                sh_move(os.path.join(tempdir, filename), os.path.join(tempdir, filename_renamed))
 
-                # Move file to appropriate directory
-                new_fp = os.path.join(image_dir, new_name)
-                old_fp = os.path.join(tempdir, tname)
-                sh_move(old_fp, new_fp)
+            # now it's safe to move the remaining files in tempdir directly to img_dir
+            for file in os.listdir(tempdir):
+                if not os.path.isdir(os.path.join(tempdir, file)):
+                    sh_move(os.path.join(tempdir,file), os.path.join(image_dir, file))
 
     return skipped_files
 
