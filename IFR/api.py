@@ -15,25 +15,23 @@ import api.global_variables  as glb
 from io                      import BytesIO
 from tqdm                    import tqdm
 from uuid                    import uuid4
-from filecmp                 import cmp
 from zipfile                 import ZipFile
 from tempfile                import TemporaryDirectory
 from sqlalchemy              import create_engine, inspect, MetaData, select,\
-                                    insert, update
-from IFR.classes             import VerificationMatch, ProcessedFiles, Base
-from IFR.functions           import has_same_img_size, get_image_paths,\
-                                    do_face_detection, calc_embeddings,\
-                                    ensure_detectors_exists,\
+                                    insert, update, delete, text, update
+from sqlalchemy.orm          import sessionmaker
+from IFR.classes             import FaceRep, Person, VerificationMatch,\
+                                    ProcessedFilesTemp, ProcessedFiles, Base
+from IFR.functions           import get_image_paths, do_face_detection,\
+                                    calc_embeddings, ensure_detectors_exists,\
                                     ensure_verifiers_exists,\
-                                    discard_small_regions, img_files_are_same
+                                    discard_small_regions, img_files_are_same,\
+                                    filter_files_by_ext
 from sklearn.cluster         import DBSCAN
 
 from shutil                          import move           as sh_move
 from deepface.DeepFace               import build_model    as build_verifier
 from deepface.detectors.FaceDetector import build_model    as build_detector
-from sqlalchemy.orm           import sessionmaker
-from sqlalchemy               import text, update
-from IFR.classes              import FaceRep, Person
 
 # ______________________________________________________________________________
 #                       UTILITY & GENERAL USE FUNCTIONS
@@ -115,39 +113,23 @@ def show_cluster_results(group_no, db, ncols=4, figsize=(15, 15), color='black',
 
 # ------------------------------------------------------------------------------
 
-def file_is_not_unique(fpath, proc_qry=None):
+def file_is_not_unique(fname, fdir, invalid_names, invalid_root_dir):
     """
     TODO: Update documentation
     """
     # Initializes 'is_not_unique' flag
     is_not_unique = False
 
-    # Obtains the processed files from the ProcessedFiles table if it is not
-    # provided by the user (i.e. proc_qry is None)
-    if proc_qry is None:
-        proc_qry = glb.sqla_session.query(ProcessedFiles)
+    #
+    if fname in invalid_names:
+        # Loops through each file name in invalid names
+        for i, inv_name in zip(range(0, len(fname)), invalid_names):
+            #
+            fpath1 = os.path.join(fdir, fname)
+            fpath2 = os.path.join(invalid_root_dir, inv_name)
 
-    # TODO: IMPLEMENT AND ADD A EXTENSIONS FILTERING
-    # -> only relevant files (valid extensions) at this stage
-
-    # Creates a subquery to find if there is/are file(s) in the ProcessedFiles
-    # table with the same file size and determines the number of files with the
-    # same size
-    subqry   = proc_qry.filter(
-                        ProcessedFiles.filesize in tempfile_size
-    )
-    
-    subqry   = proc_qry.filter(
-                        ProcessedFiles.filesize.like(os.path.getsize(fpath))
-                              )
-    n_subqry = len(subqry.all())
-
-    # Checks if there is at least 1 matching file in the subquery
-    if n_subqry > 0:
-        # Loops through each matching file
-        for j in range(0, n_subqry):
             # Determines if the files are the same (and should be skipped)
-            is_not_unique = img_files_are_same(fpath, subqry.all()[j].filepath)
+            is_not_unique = img_files_are_same(fpath1, fpath2)
                                 
             # Current file matches another one. It's not unique so no need to
             # continue this loop
@@ -155,7 +137,6 @@ def file_is_not_unique(fpath, proc_qry=None):
                 break
 
     return is_not_unique
-
 
 # ______________________________________________________________________________
 #                DETECTORS & VERIFIERS BUILDING, SAVING & LOADING
@@ -840,7 +821,8 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
 
 # ------------------------------------------------------------------------------
 
-def process_image_zip_file(myfile, image_dir, auto_rename=True):
+def process_image_zip_file(myfile, image_dir, 
+                            valid_exts=['.jpg', '.png', '.npy']):
     """
     Processes a zip file containing image files. The zip file ('myfile') is
     assumed to have only valid image files (i.e. '.jpg', '.png', etc).
@@ -892,90 +874,50 @@ def process_image_zip_file(myfile, image_dir, auto_rename=True):
             myzip.extractall(tempdir)
             
             # Obtains all file names, temporary file names and temporary file
-            # paths
+            # paths. Also initializes skipped_files list
+            skipped_files = []
             all_fnames = [name.split('/')[-1] for name in os.listdir(image_dir)]
             all_tnames = [name.split('/')[-1] for name in os.listdir(tempdir)]
-            all_tpaths = [os.path.join(tempdir, tname) for tname in all_tnames]
 
-            # Obtains the processed files from the ProcessedFiles table
-            proc_files = glb.sqla_session.query(ProcessedFiles)
+            # Filter files by valid extension
+            filt_tnames = filter_files_by_ext(all_tnames, valid_exts=valid_exts)
+            filt_tpaths = [os.path.join(tempdir, name) for name in filt_tnames]
+
+            # Repopulates the 'proc_files_temp' table
+            if repopulate_temp_file_table(filt_tpaths):
+                raise AssertionError("Could not repopulate"\
+                                   + "'proc_files_temp' table.")
+
+            # 
+            query  = select(ProcessedFiles.filename,
+                            ProcessedFilesTemp.filename).join(\
+                            ProcessedFilesTemp, ProcessedFiles.filesize ==\
+                            ProcessedFilesTemp.filesize)
+            result = glb.sqla_session.execute(query)
+            invalid_names = [tup[1] for tup in result.all()]
 
             # Loops through each file extracted in the temporary directory
-            for i, tname, tpath in zip(range(0, len(all_tpaths)), all_tnames,
-                                             all_tpaths):
-                # ---------------- Verifying if file is unique -----------------
-                # Initializes skipped_files list
-                skipped_files = []
+            for i, tname, tpath in zip(range(0, len(filt_tnames)), filt_tnames,
+                                             filt_tpaths):
+                # ------------------------- File check -------------------------
+                # 
+                if file_is_not_unique(tname, tempdir, invalid_names,
+                                        image_dir):
+                    skipped_files.append(tpath)
+                    print(f'File skipped (duplicate file): {tpath}')
+                    continue
                 
-                # Checks if the current file already exists in the
-                # ProcessedFiles table, or if it matches any existing file. If
-                # so, skips it
-                if len(proc_files.all()) > 0:
-                    # First, checks if file already exists in the ProcessedFiles
-                    # table
-                    already_exists = proc_files.filter(
-                            ProcessedFiles.filename.like(tname),
-                            ProcessedFiles.filesize.like(os.path.getsize(tpath))
-                        )
-
-                    # Checks if the current file does not match any other file
-                    # in ProcessedFiles table (same name and file size)
-                    if len(already_exists.all()) == 0:
-                        # Creates a subquery to find if there is/are file(s) in
-                        # the ProcessedFiles table with the same file size and
-                        # determines the number of files with the same size
-                        subqry   = proc_files.filter(
-                                            ProcessedFiles.filesize.like(
-                                                        os.path.getsize(tpath))
-                                                )
-                        n_subqry = len(subqry.all())
-
-                        # Checks if there are matching files in the subquery
-                        if n_subqry > 0:
-                            # Loops through each matching file
-                            for j in range(0, n_subqry):
-                                # Determines if the files are the same (and
-                                # should be skipped)
-                                skip_this_file = img_files_are_same(tpath,
-                                                      subqry.all()[j].filepath)
-                                
-                                # Current file matches another one. It's not
-                                # unique so no need to continue this loop
-                                if skip_this_file:
-                                    break
-
-                        # Otherwise, the current file is unique and can be
-                        # processed normally
-                        else:
-                            skip_this_file = False
-
-                        # Skips the current file if skip_this_file=True
-                        if skip_this_file:
-                            skipped_files.append(tpath)
-                            continue
-
-                    # Otherwise, skips the current file
-                    else:
-                        skipped_files.append(tpath)
-                        continue
-                # --------------------------------------------------------------
-                
+                # ------------------------ Auto renaming -----------------------
                 # Checks if the current file name matches any of the other
-                # files, renaming them using an unique id if 'auto_rename' is
-                # True. If 'auto_rename' is False (and file requires renaming)
-                # skip this file and add it to the skipped file names list.
+                # files, renaming them using an unique id.
                 if tname in all_fnames:
-                    if auto_rename:
-                        new_name = str(uuid4()) + '.' + tname.split('.')[-1] # uid.extension
-                    else:
-                        skipped_files.append(tname)
-                        continue
+                    new_name = str(uuid4()) + '.' + tname.split('.')[-1] # uid.extension
 
                 # Otherwise, dont rename it
                 else:
                     new_name = tname
 
-                # Move (and rename if needed) file to appropriate directory
+                # Move file to appropriate directory
                 new_fp = os.path.join(image_dir, new_name)
                 old_fp = os.path.join(tempdir, tname)
                 sh_move(old_fp, new_fp)
@@ -1026,10 +968,6 @@ def get_matches_from_similarity(similarity_obj):
                             threshold=similarity_obj['threshold']))
     
     return matches
-
-# ------------------------------------------------------------------------------
-
-
 
 # ______________________________________________________________________________
 #                           DATABASE RELATED FUNCTIONS 
@@ -1233,8 +1171,40 @@ def people_clean_without_repps(session):
 
 # ------------------------------------------------------------------------------
 
+def repopulate_temp_file_table(tpaths):
+    """
+    TODO: Documentation
+    """
 
+    # First, tries to clear everything in the 'proc_files_temp' table
+    try:
+        stmt = delete(ProcessedFilesTemp)
+        glb.sqla_session.execute(stmt)
+        glb.sqla_session.commit()
+    except Exception as excpt:
+        glb.sqla_session.rollback()
+        print("Error when clearing 'proc_files_temp' table",
+             f'(reason: {excpt})')
+        return True
 
+    if glb.DEBUG:
+        print("Populating 'proc_files_temp' table")
 
+    # Loops through each temporary path in 'tpaths'
+    for tpath in tpaths:
+        # Adds each file name and size to the 'proc_files_temp' table
+        glb.sqla_session.add(ProcessedFilesTemp(
+                                        filename=tpath[tpath.rindex('/')+1:],
+                                        filesize=os.path.getsize(tpath))
+                            )
+
+    # Commits the changes
+    if glb.DEBUG:
+        print('Committing newly added temporary files')
+    glb.sqla_session.commit()
+
+    return False
+
+# ------------------------------------------------------------------------------
 
 
