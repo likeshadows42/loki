@@ -708,8 +708,10 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
     if auto_grouping:
         embds = []
     
-    # Obtains the processed files from the ProcessedFiles table
-    proc_files = glb.sqla_session.query(ProcessedFiles)
+    # Obtains the processed files names from the ProcessedFiles table to skip
+    # already processed files
+    proc_fnames = glb.sqla_session.query(ProcessedFiles.filename)
+    proc_fnames = [item[0] for item in proc_fnames.all()]
 
     # Creates the progress bar
     n_imgs = len(img_paths)
@@ -718,6 +720,12 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
 
     # Loops through each image in the 'img_dir' directory
     for index, i, img_path in zip(pbar, range(0, n_imgs), img_paths):
+        # Skips the current file if it has already been processed
+        if img_path[img_path.rindex('/')+1:] in proc_fnames:
+            if glb.DEBUG:
+                print(f'Skipping: {img_path}'.ljust(40), '(already processed)')
+            continue
+
         # Detects faces
         output = do_face_detection(img_path, detector_models=detector_models,
                                     detector_name=detector_name, align=align,
