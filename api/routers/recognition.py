@@ -576,10 +576,9 @@ async def edit_tag_by_group_no(target_group_no: int = Query(None, description="T
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/create_database/from_directory")
-async def create_database_from_directory(params: CreateDatabaseParams,
-    image_dir   : Optional[str]  = Query(glb_img_dir, description="Full path to directory containing images (string)"),
-    remove_dups : Optional[bool] = Query(True, description="Toggles if duplicate images should be remove prior to database creation (boolean)")):
+@fr_router.post("/populate_faces/from_dir")
+async def populate_faces_from_dir(params: CreateDatabaseParams,
+    image_dir   : Optional[str]  = Query(glb_img_dir, description="Full path to directory containing images (string)")):
     """
     API endpoint: create_database_from_directory()
 
@@ -701,8 +700,8 @@ async def create_database_from_directory(params: CreateDatabaseParams,
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/create_database/from_zip")
-async def create_database_from_zip(myfile: UploadFile,
+@fr_router.post("/populate_faces/from_zip")
+async def populate_faces_from_zip(myfile: UploadFile,
     params      : CreateDatabaseParams = Depends(),
     image_dir   : Optional[str]  = Query(glb.IMG_DIR, description="Full path to directory containing images (string)")):
     """
