@@ -14,7 +14,6 @@ import api.global_variables  as glb
 
 from io                      import BytesIO
 from tqdm                    import tqdm
-from uuid                    import uuid4
 from filecmp                 import cmp
 from zipfile                 import ZipFile
 from tempfile                import TemporaryDirectory
@@ -27,7 +26,8 @@ from IFR.functions           import get_image_paths, do_face_detection,\
                                     calc_embeddings, ensure_detectors_exists,\
                                     ensure_verifiers_exists,\
                                     discard_small_regions, filter_files_by_ext,\
-                                    rename_file_w_hex_token
+                                    rename_file_w_hex_token,\
+                                    flatten_dir_structure, image_is_uncorrupted
 from sklearn.cluster         import DBSCAN
 
 from shutil                          import move           as sh_move
@@ -831,7 +831,7 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
 
 # ------------------------------------------------------------------------------
 
-def process_image_zip_file(myfile, image_dir, 
+def process_image_zip_file(myfile, image_dir, t_check=True, n_token=2,
                             valid_exts=['.jpg', '.png', '.npy']):
     """
     Processes a zip file containing image files. The zip file ('myfile') is
@@ -880,19 +880,26 @@ def process_image_zip_file(myfile, image_dir,
     # Create temporary directory and extract all files to it
     with TemporaryDirectory(prefix="create_database_from_zip-") as tempdir:
         with ZipFile(BytesIO(myfile.file.read()), 'r') as myzip:
-            # Extracts all files in the zip folder
-            myzip.extractall(tempdir)
+            # Extracts all files in the zip file to a temporary directory,
+            # flattens the directory structure and filters the files by valid
+            # extensions
+            myzip.extractall(path=tempdir)
+            flatten_dir_structure(tempdir, valid_exts=valid_exts,
+                                    n_token=n_token)
 
-            # Obtains all file names, temporary file names and temporary file
-            # paths. Also initializes skipped_files list
-            skipped_files        = []
-            tfiles_path          = [os.path.join(tempdir, file) for file\
-                                    in os.listdir(tempdir)]
-            tfiles_path_filtered = filter_files_by_ext(tfiles_path,
-                                                        valid_exts=valid_exts)
+            # Obtains the files' paths, removes corrupted images and creates a
+            # new list with only the uncorrupted files
+            all_tpaths = [os.path.join(tempdir, file) for file\
+                        in os.listdir(tempdir)]
+            tpaths     = []
+            for pth in all_tpaths:
+                if not image_is_uncorrupted(pth, transpose_check=t_check):
+                    os.remove(pth)     # deletes corrupted images
+                else:
+                    tpaths.append(pth) # appends valid path to tpaths
 
             # Repopulates the 'proc_files_temp' table
-            if repopulate_temp_file_table(tfiles_path_filtered):
+            if repopulate_temp_file_table(tpaths):
                 raise AssertionError("Could not repopulate"\
                                    + "'proc_files_temp' table.")
 
@@ -903,8 +910,9 @@ def process_image_zip_file(myfile, image_dir,
                             ProcessedFilesTemp.filesize)
             result = glb.sqla_session.execute(query)
 
-            # Loops through each matched & temporary file pairs in the query's
-            # result
+            # Initializes the skipped_files list then loops through each matched
+            # & temporary file pairs in the query's result
+            skipped_files = []
             for fname, tname in result:
                 # Obtains the full path of the matched & temporary files
                 fname_fullpath = os.path.join(image_dir, fname)
