@@ -1,27 +1,25 @@
-name: loki_env2
+name: loki_env
 channels:
   - conda-forge
   - defaults
 dependencies:
   - _libgcc_mutex=0.1=main
   - _openmp_mutex=4.5=1_gnu
-  - asttokens=2.0.5=pyhd8ed1ab_0
-  - backcall=0.2.0=pyh9f0ad1d_0
-  - backports=1.0=py_2
-  - backports.functools_lru_cache=1.6.4=pyhd8ed1ab_0
-  - ca-certificates=2021.10.8=ha878542_0
-  - certifi=2021.10.8=py39hf3d152e_1
-  - cudatoolkit=10.2.89=h8f6ccaa_8
+  - asttokens=2.0.5=pyhd3eb1b0_0
+  - backcall=0.2.0=pyhd3eb1b0_0
+  - ca-certificates=2022.4.26=h06a4308_0
+  - certifi=2021.10.8=py39h06a4308_2
+  - cudatoolkit=10.2.89=hfd86e86_1
   - debugpy=1.5.1=py39h295c915_0
-  - decorator=5.1.1=pyhd8ed1ab_0
-  - entrypoints=0.4=pyhd8ed1ab_0
-  - executing=0.8.2=pyhd8ed1ab_0
+  - decorator=5.1.1=pyhd3eb1b0_0
+  - entrypoints=0.4=py39h06a4308_0
+  - executing=0.8.3=pyhd3eb1b0_0
   - faiss=1.7.2=py39cuda102hb1acdd0_0_cuda
   - ipykernel=6.9.1=py39hef51801_0
-  - ipython=8.0.1=py39hf3d152e_1
-  - jedi=0.18.1=py39hf3d152e_0
-  - jupyter_client=7.1.2=pyhd8ed1ab_0
-  - jupyter_core=4.9.2=py39hf3d152e_0
+  - ipython=8.3.0=py39h06a4308_0
+  - jedi=0.18.1=py39h06a4308_1
+  - jupyter_client=7.2.2=py39h06a4308_0
+  - jupyter_core=4.10.0=py39h06a4308_0
   - ld_impl_linux-64=2.35.1=h7274673_9
   - libblas=3.9.0=11_linux64_openblas
   - libcblas=3.9.0=11_linux64_openblas
@@ -29,58 +27,60 @@ dependencies:
   - libfaiss-avx2=1.7.2=cuda102h1234567_0_cuda
   - libffi=3.3=he6710b0_2
   - libgcc-ng=9.3.0=h5101ec6_17
-  - libgfortran-ng=11.2.0=h69a702a_12
-  - libgfortran5=11.2.0=h5c6108e_12
+  - libgfortran-ng=9.3.0=ha5ec8a7_17
+  - libgfortran5=9.3.0=ha5ec8a7_17
   - libgomp=9.3.0=h5101ec6_17
   - liblapack=3.9.0=11_linux64_openblas
   - libopenblas=0.3.17=pthreads_h8fe5266_1
-  - libsodium=1.0.18=h36c2ea0_1
+  - libsodium=1.0.18=h7b6447c_0
   - libstdcxx-ng=9.3.0=hd4cf53a_17
-  - matplotlib-inline=0.1.3=pyhd8ed1ab_0
+  - matplotlib-inline=0.1.2=pyhd3eb1b0_2
   - ncurses=6.3=h7f8727e_2
-  - nest-asyncio=1.5.4=pyhd8ed1ab_0
-  - openssl=1.1.1m=h7f8727e_0
-  - parso=0.8.3=pyhd8ed1ab_0
-  - pexpect=4.8.0=pyh9f0ad1d_2
-  - pickleshare=0.7.5=py_1003
+  - nest-asyncio=1.5.5=py39h06a4308_0
+  - openssl=1.1.1n=h7f8727e_0
+  - parso=0.8.3=pyhd3eb1b0_0
+  - pexpect=4.8.0=pyhd3eb1b0_3
+  - pickleshare=0.7.5=pyhd3eb1b0_1003
   - pip=21.2.4=py39h06a4308_0
-  - prompt-toolkit=3.0.27=pyha770c72_0
-  - ptyprocess=0.7.0=pyhd3deb0d_0
-  - pure_eval=0.2.2=pyhd8ed1ab_0
-  - pygments=2.11.2=pyhd8ed1ab_0
-  - python=3.9.7=h12debd9_1
-  - python-dateutil=2.8.2=pyhd8ed1ab_0
+  - prompt-toolkit=3.0.20=pyhd3eb1b0_0
+  - ptyprocess=0.7.0=pyhd3eb1b0_2
+  - pure_eval=0.2.2=pyhd3eb1b0_0
+  - pygments=2.11.2=pyhd3eb1b0_0
+  - python=3.9.12=h12debd9_0
+  - python-dateutil=2.8.2=pyhd3eb1b0_0
   - python_abi=3.9=2_cp39
-  - pyzmq=19.0.2=py39hb69f2a1_2
+  - pyzmq=22.3.0=py39h295c915_2
   - readline=8.1.2=h7f8727e_1
-  - setuptools=58.0.4=py39h06a4308_0
-  - six=1.16.0=pyh6c4a22f_0
-  - sqlite=3.37.2=hc218d9a_0
-  - stack_data=0.2.0=pyhd8ed1ab_0
+  - setuptools=61.2.0=py39h06a4308_0
+  - six=1.16.0=pyhd3eb1b0_1
+  - sqlite=3.38.3=hc218d9a_0
+  - stack_data=0.2.0=pyhd3eb1b0_0
   - tk=8.6.11=h1ccaba5_0
-  - tornado=6.1=py39h3811e60_1
-  - traitlets=5.1.1=pyhd8ed1ab_0
-  - tzdata=2021e=hda174b7_0
-  - wcwidth=0.2.5=pyh9f0ad1d_2
+  - tornado=6.1=py39h27cfd23_0
+  - traitlets=5.1.1=pyhd3eb1b0_0
+  - tzdata=2022a=hda174b7_0
+  - wcwidth=0.2.5=pyhd3eb1b0_0
   - wheel=0.37.1=pyhd3eb1b0_0
-  - xz=5.2.5=h7b6447c_0
-  - zeromq=4.3.4=h9c3ff4c_0
-  - zlib=1.2.11=h7f8727e_4
+  - xz=5.2.5=h7f8727e_1
+  - zeromq=4.3.4=h2531618_0
+  - zlib=1.2.12=h7f8727e_2
   - pip:
     - absl-py==1.0.0
+    - aiofiles==0.8.0
     - anyio==3.5.0
     - asgiref==3.5.0
     - astunparse==1.6.3
+    - attrs==21.4.0
     - beautifulsoup4==4.10.0
     - cachetools==5.0.0
     - charset-normalizer==2.0.12
     - click==8.0.3
     - cycler==0.11.0
-    - deepface==0.0.72
+    - deepface==0.0.74
     - defusedxml==0.7.1
     - dnspython==2.2.0
     - email-validator==1.1.3
-    - fastapi==0.73.0
+    - fastapi==0.75.2
     - filelock==3.4.2
     - flask==2.0.2
     - flatbuffers==2.0
@@ -90,15 +90,19 @@ dependencies:
     - google-auth==2.6.0
     - google-auth-oauthlib==0.4.6
     - google-pasta==0.2.0
+    - greenlet==1.1.2
     - grpcio==1.43.0
     - h11==0.13.0
     - h5py==3.6.0
     - httpie==3.0.2
     - httptools==0.3.0
     - idna==3.3
+    - imagesize==1.3.0
     - importlib-metadata==4.11.0
+    - iniconfig==1.1.1
     - itsdangerous==2.0.1
     - jinja2==3.0.3
+    - joblib==1.1.0
     - keras==2.8.0
     - keras-preprocessing==1.1.2
     - kiwisolver==1.3.2
@@ -115,12 +119,15 @@ dependencies:
     - packaging==21.3
     - pandas==1.4.1
     - pillow==9.0.1
+    - pluggy==1.0.0
     - protobuf==3.19.4
+    - py==1.11.0
     - pyasn1==0.4.8
     - pyasn1-modules==0.2.8
     - pydantic==1.9.0
     - pyparsing==3.0.7
     - pysocks==1.7.1
+    - pytest==7.1.1
     - python-dotenv==0.19.2
     - python-multipart==0.0.5
     - pytz==2021.3
@@ -128,11 +135,14 @@ dependencies:
     - requests==2.27.1
     - requests-oauthlib==1.3.1
     - requests-toolbelt==0.9.1
-    - retina-face==0.0.9
+    - retina-face==0.0.10
     - rsa==4.8
+    - scikit-learn==1.0.2
+    - scipy==1.8.0
     - shelves==0.3.8
     - sniffio==1.2.0
     - soupsieve==2.3.1
+    - sqlalchemy==1.4.35
     - starlette==0.17.1
     - tensorboard==2.8.0
     - tensorboard-data-server==0.6.1
@@ -141,11 +151,13 @@ dependencies:
     - tensorflow-io-gcs-filesystem==0.24.0
     - termcolor==1.1.0
     - tf-estimator-nightly==2.8.0.dev2021122109
+    - threadpoolctl==3.1.0
+    - tomli==2.0.1
     - tqdm==4.62.3
     - typing-extensions==4.1.1
     - urllib3==1.26.8
     - uuid==1.30
-    - uvicorn==0.17.5
+    - uvicorn==0.17.6
     - uvloop==0.16.0
     - watchgod==0.7
     - websockets==10.1
