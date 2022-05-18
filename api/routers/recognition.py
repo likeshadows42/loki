@@ -362,7 +362,6 @@ async def people_list():
 
 # ------------------------------------------------------------------------------
 
-
 @fr_router.post("/people/get_front_image")
 async def people_list():
     '''
@@ -376,9 +375,6 @@ async def people_list():
     query = select(Person.id, Person.name, Person.note).where(front_img = True)
     result = glb.sqla_session.execute(query)
     return result.fetchall()
-
-
-
 
 # ------------------------------------------------------------------------------
 
@@ -512,7 +508,6 @@ async def facerep_get_ungrouped():
 
     return return_value
 
-
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/facerep/get_person")
@@ -525,7 +520,6 @@ async def facerep_get_person(facerep_id: int = Query(None, description="ID prima
     # glb.sqla_session.commit()
 
     return result.fetchall()
-
 
 # ------------------------------------------------------------------------------
 
@@ -688,8 +682,10 @@ async def faces_import_from_directory(params: CreateDatabaseParams,
 
 @fr_router.post("/faces/import_from_zip")
 async def faces_import_from_zip(myfile: UploadFile,
-    params      : CreateDatabaseParams = Depends(),
-    image_dir   : Optional[str]  = Query(glb.IMG_DIR, description="Full path to directory containing images (string)")):
+    params    : CreateDatabaseParams = Depends(),
+    image_dir : Optional[str]  = Query(glb.IMG_DIR, description="Full path to directory containing images (string)"),
+    t_check   : Optional[bool] = Query(True, description="Toggles transpose check to ensure image is uncorrupted (boolean)"),
+    n_token   : Optional[int]  = Query(2, description="Number of hexadecimal tokens to be used during renaming (integer)")):
     """
     API endpoint: create_database_from_zip()
 
@@ -814,7 +810,8 @@ async def faces_import_from_zip(myfile: UploadFile,
         try:
             # Process the zip file containing the image files
             skipped_files = process_image_zip_file(myfile, image_dir,
-                                                    valid_exts=valid_exts)
+                                            t_check=t_check, n_token=n_token,
+                                            valid_exts=valid_exts)
             output_msg += ' success! '
 
         except Exception as excpt:
