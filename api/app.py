@@ -10,7 +10,8 @@ from fastapi.middleware.cors  import CORSMiddleware
 from IFR.api                  import load_database, init_load_detectors,\
                                     init_load_verifiers, save_built_detectors,\
                                     save_built_verifiers, start_session
-from IFR.functions            import ensure_dirs_exist
+from IFR.functions            import ensure_dirs_exist,\
+                                    remove_img_file_duplicates
 from api.routers.recognition  import fr_router
 
 # ______________________________________________________________________________
@@ -77,6 +78,16 @@ async def initialization():
         print('  -> Loading / creating face detectors:')
     glb.models = init_load_detectors(glb.detector_names, glb.SVD_VRF_DIR,
                                      models=glb.models)
+
+    # Ensures no duplicate image files exists in the server's image directory
+    if glb.DEBUG:
+        print('  -> Ensuring no duplicate image files exist:')
+    dup_file_names = remove_img_file_duplicates(glb.IMG_DIR, dont_delete=False)
+    if glb.DEBUG:
+        for name in dup_file_names:
+            print(f' > Deleted duplicate file: {name}')
+        print('')
+
     if glb.DEBUG:
         print('\n -------- End of initialization process -------- \n')
 
@@ -87,17 +98,21 @@ async def finish_processes():
     if glb.DEBUG:
         print('\n ======== Performing finishing processes ======== \n')
 
-    # Saves (built) face detectors (if needed)
-    if glb.DEBUG:
-        print('  -> Saving face detectors (if needed):')
-    save_built_detectors(glb.detector_names, glb.SVD_DTC_DIR, overwrite=False,
-                         verbose=True)
+    if not glb.skip_model_save: # this is just to speed up my (Rodrigo's)
+                                # development but will be removed later in
+                                # production
+        # Saves (built) face detectors (if needed)
+        if glb.DEBUG:
+            print('  -> Saving face detectors (if needed):')
+        save_built_detectors(glb.detector_names, glb.SVD_DTC_DIR,
+                             overwrite=False, verbose=True)
 
-    # Saves (built) face verifiers (if needed)
-    if glb.DEBUG:
-        print('  -> Saving face verifiers (if needed):')
-    save_built_verifiers(glb.verifier_names, glb.SVD_VRF_DIR, overwrite=False,
-                         verbose=False)
+        # Saves (built) face verifiers (if needed)
+        if glb.DEBUG:
+            print('  -> Saving face verifiers (if needed):')
+        save_built_verifiers(glb.verifier_names, glb.SVD_VRF_DIR,
+                             overwrite=False, verbose=False)
+    
     if glb.DEBUG:
         print('\n -------- Exitting program: goodbye! -------- \n')
 

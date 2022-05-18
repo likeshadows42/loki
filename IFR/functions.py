@@ -7,11 +7,13 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import re
 import cv2
+import secrets
 import imagesize
 
 import numpy                 as np
 
 from tqdm                    import tqdm
+from filecmp                 import cmp
 from deepface                import DeepFace
 from deepface.basemodels     import Boosting
 from deepface.detectors      import FaceDetector
@@ -123,48 +125,178 @@ def ensure_dirs_exist(directory_list, verbose=False):
 
 # ------------------------------------------------------------------------------
 
-def string_is_valid_uuid4(uuid_string):
+def remove_img_file_duplicates(trgt_dir, dont_delete=False):
     """
-    Checks if the string provided 'uuid_string' is a valid uuid4 or not.
+    Detects and removes (if dont_delete=False) all duplicate image files in a
+    target directory 'trgt_dir'. Also returns a list with the name of all
+    duplicate files, regardless if they were deleted or not. The algorithm works
+    in the following way:
 
-    Input:
-        1. uuid_string - string representation of uuid including dashes ('-')
-             [string].
-    
+        1. The full path and file size of all files (in the directory) are
+            obtained. A list with all unique file sizes is calculated.
+
+        2. For each file size in the unique file size list:
+            2.1. The indicies of all files with a matching file size are
+                  obtained.
+
+            2.2. If there are multiple matches, the first file (corresponding to
+                  the first index) is set as the reference file for comparison.
+                  Its width and height are calculated without loading the entire
+                  image to memory.
+
+            2.3. Every other match is compared to the reference file. The
+                  comparison is made by using filecmp.cmp() (with
+                  shallow=False). Their widths and heights are also calculated
+                  and compared to the reference image's width and height.
+
+            2.4. If any match is deemed the same (filecmp.cmp() results in True
+                  and has the same width and height), the matching file is
+                  considered a duplicate and is deleted (unless
+                  dont_delete=True). The file's name is also stored in the
+                  duplicate file names' list.
+
+        3. Returns a list with the names of all duplicate files (regardless if
+            they were deleted or not).
+
+    Inputs:
+        1. trgt_dir    - path to target directory [string].
+
+        2. dont_delete - toggles if the function should delete the duplicate
+                          files or not [boolean, default=False].
+
     Output:
-        1. boolean indicating if the string is a valid uuid4 or not.
+        1. Returns the names of all duplicate files (regardless if they were
+            deleted or not) [list of strings].
 
     Signature:
-        is_valid = string_is_valid_uuid4(uuid_string)
+        dup_file_names = remove_img_file_duplicates(trgt_dir, dont_delete=False)
     """
-    # Creates the regular expression pattern
-    uuid4hex = re.compile('^[a-f0-9]{8}-?[a-f0-9]{4}-?4[a-f0-9]{3}-?[89ab]'
-                        + '[a-f0-9]{3}-?[a-f0-9]{12}\Z', re.I)
+    # Initialize duplicate files' name list
+    dup_files = []
 
-    # Tries to find a match
-    match = uuid4hex.match(uuid_string)
+    # Obtains all file full paths ('all_files'), their file sizes ('all_sizes')
+    # and a list of all unique file sizes ('unq_sizes')
+    all_files = [os.path.join(trgt_dir, pth) for pth in os.listdir(trgt_dir)]
+    all_sizes = np.array([os.path.getsize(pth) for pth in all_files])
+    unq_sizes = np.unique(all_sizes)
 
-    # Returns a boolean indicating if a match was found or not (i.e. a valid
-    # uuid4 exists or not)
-    return bool(match)
+    # Loops through all unique file sizes
+    for sze in unq_sizes:
+        # Gets the indices of all files with the same current file size
+        ii = np.where(all_sizes == sze)[0]
+
+        # If there are multiple matches, compare them to see if there are
+        # duplicates. Otherwise, just continue
+        if len(ii) > 1:
+            # Sets the first index (file) as a reference file (for comparison)
+            # and obtains their width and height
+            refw, refh = imagesize.get(all_files[ii[0]])
+
+            # Loops through each remaining file index
+            for i in ii[1:]:
+                # Calculates the current matched file's width and height
+                wi, hi = imagesize.get(all_files[i])
+
+                # Files have the same size, content and image size
+                if cmp(all_files[ii[0]], all_files[i], shallow=False)\
+                    and refw == wi and refh == hi:
+                    # Appends the duplicate file's name
+                    dup_files.append(all_files[i])
+
+                    # Removes the duplicate file if dont_delete=False
+                    if not dont_delete:
+                        os.remove(all_files[i])
+
+    return dup_files
 
 # ------------------------------------------------------------------------------
 
-def has_same_img_size(fpath1, fpath2):
+def ext_is_valid(fpath, valid_exts=['.jpg', '.png', '.npy']):
     """
-    Determines if the 2 files with paths 'fpath1' and 'fpath2' have the same
-    image size (i.e. the same width and height). If any of the 2 files are not a
-    valid image file, returns False. On any error, also returns False.
+    Checks if 'fpath' extension is contained in the 'valid_exts' list, returning
+    True if so and False otherwise. Note that 'fpath' can be a full or relative
+    path or a file name.
 
-    TODO: Finish doc
+    Inputs:
+        1. fpath      - full / relative file path or file name [string].
+
+        2. valid_exts - list of valid file extensions [list of strings].
+
+    Output:
+        1. returns a boolean indicating if 'fpath' extension is in the
+            'valid_exts' list
+
+    Signature:
+        flag = ext_is_valid(fpath, valid_exts=['.jpg', '.png', '.npy'])
     """
-    try:
-        w1, h1 = imagesize.get(fpath1)
-        w2, h2 = imagesize.get(fpath2)
+    return fpath[fpath.rindex('.'):].lower() in valid_exts
 
-        return True if w1 == w2 and h1 == h2 else False
-    except:
-        return False
+# ------------------------------------------------------------------------------
+
+def filter_files_by_ext(fpaths, valid_exts=['.jpg', '.png', '.npy']):
+    """
+    Filters file paths / names in 'fpaths' list if they have a valid extension.
+    A valid extension is any extension in the 'valid_exts' list.
+
+    Inputs:
+        1. fpaths     - list of file paths / names [list of strings].
+
+        2. valid_exts - list of valid file extensions [list of strings].
+
+    Output:
+        1. returns a filtered list of file paths / names, where each element has
+            an extension contained in 'valid_exts' list.
+
+    Signature:
+        filtered_fpaths = filter_files_by_ext(fpaths,
+                                            valid_exts=['.jpg', '.png', '.npy'])
+    """
+    # Initializes the valid file paths / names list
+    valid_fpaths = []
+    
+    # Loops through each file path / name in the 'fpaths' list
+    for fpath in fpaths:
+        # Adds the current path / name to the 'valid_fpaths' list if it has a
+        # valid extension
+
+        if os.path.isdir(fpath) == False:
+            if fpath.lower().endswith(tuple(valid_exts)):
+                valid_fpaths.append(fpath)
+
+    return valid_fpaths
+
+# ------------------------------------------------------------------------------
+
+def rename_file_w_hex_token(fname, n_token=2):
+    """
+    Renames a file name (or path) using 'n_token' hexadecimal tokens. A
+    hexadecimal token is composed of TWO hexadecimal caracters (e.g. FF). The
+    resulting file name is:
+                new name = name + _ + 'n_token' random tokens + ext
+
+    Examples:
+        1. old name: img_001.jpg
+           new name: img_001_a2be.jpg
+
+        2. old full path: user/images/img_100.png
+           new full path: user/images/img_100_fe43.png
+
+    Inputs:
+        1. fname   - file name or full path [string].
+
+        2. n_token - number of hex tokens (each token is composed of 2
+                      hexadecimal digits) [integer].
+
+    Output:
+        1. new file name or full path [string].
+
+    Signature:
+        new_fname = rename_file_w_hex_token(fname, n_token=2)
+    """
+    name = fname[:fname.rindex('.')]
+    ext  = fname[fname.rindex('.'):]
+
+    return name + '_' + secrets.token_hex(n_token) + ext
 
 # ______________________________________________________________________________
 #                    FACE DETECTION / VERIFICATION RELATED
