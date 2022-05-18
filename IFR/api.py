@@ -946,7 +946,6 @@ def process_image_zip_file(myfile, image_dir, t_check=True, n_token=2,
                 # Obtains the file name and renames it
                 filename         = row.filename
                 filename_renamed = rename_file_w_hex_token(filename)
-                print(filename_renamed, filename)
 
                 # Moves the file to the appropriate location
                 sh_move(os.path.join(tempdir, filename),
