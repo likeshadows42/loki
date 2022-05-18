@@ -12,6 +12,7 @@ import imagesize
 
 import numpy                 as np
 
+from PIL                     import Image
 from tqdm                    import tqdm
 from shutil                  import move, rmtree
 from filecmp                 import cmp
@@ -405,6 +406,88 @@ def flatten_dir_structure(destination, valid_exts=['.jpg', '.png', '.npy'],
         rmtree(cur_dir)
 
     return None
+
+# ------------------------------------------------------------------------------
+
+def image_is_uncorrupted(filename, transpose_check=True, verbose=False):
+    """
+    Checks if an image file is uncorrupted (valid) regardless of its extension.
+    This function was inspired by the algorithm presented by Tiago Martins Peres
+    & Fabiano Tarlao on the following stackoverflow thread (do not forget to
+    include the 'https://stackoverflow.com/' url before the one below):
+
+        questions/889333/how-to-check-if-a-file-is-a-valid-image-file
+
+    First, the file's size is obtained and if it lower than 50 bytes its
+    considered corrupted. Most image file formats will have at least 100 bytes
+    for a single color (even if monochrome) pixel, so a file with 50 bytes or
+    less if definetly corrupted.
+
+    The next check is loading up the image using the PIL library and performing
+    the verify() method. If that fails, the image is corrupted.
+
+    Finally, if transpose_check=True, the image is reloaded using PIL and the
+    function tries to transpose the image. If that fails, once more it is
+    considered corrupted.
+
+    The function prints the specific error (which caused a check to fail) to the
+    console if verbose=True.
+
+    Inputs:
+        1. filename        - path to the image file [string].
+
+        2. transpose_check - toggles if the image's tranpose should be
+                                calculated as an extra check [boolean,
+                                default=True].
+
+        3. verbose         - toggles if the function should print the specific
+                                error (which caused a check to fail) to the
+                                console [boolean, default=False].
+
+    Output:
+        1. boolean indicating if the image file is corrupted (True) or not
+            (False) [boolean].
+
+    Signature:
+        uncorrupted = image_is_uncorrupted(filename, transpose_check=True,
+                                            verbose=False)
+    """
+    # Obtains the file size
+    statfile = os.stat(filename)
+    filesize = statfile.st_size
+
+    # Returns False (corrupted) if the file size is lower than 50 bytes (most
+    # image formats will be larger than 50 bytes even for a single colored
+    # pixel)
+    if filesize <= 50:
+        if verbose:
+            print(f'Checks failed (reason: file has less than 50 bytes)')
+        uncorrupted = False
+        return uncorrupted
+
+    try:
+        # Loads the image using PIL and calls the verify() method
+        with Image.open(filename) as im:
+            im.verify()
+        
+        # A reload is necessary according to Tiago Martins Peres & Fabiano
+        # Tarlao before this step. If transpose_check=True, then the image is
+        # loaded using PIL and its transpose is calculated
+        if transpose_check:
+            with Image.open(filename) as im:
+                im.transpose(Image.FLIP_LEFT_RIGHT)
+
+        # If no errors occured, then the image is uncorrupted
+        uncorrupted = True
+
+    except Exception as excpt:
+        # If any error occured, then the image is corrupted. The specific error
+        # is printed to the console if verbose=True
+        if verbose:
+            print(f'Checks failed (reason: {excpt})')
+        uncorrupted = False
+
+    return uncorrupted
 
 # ______________________________________________________________________________
 #                    FACE DETECTION / VERIFICATION RELATED
