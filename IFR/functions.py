@@ -13,6 +13,7 @@ import imagesize
 import numpy                 as np
 
 from tqdm                    import tqdm
+from shutil                  import move, rmtree
 from filecmp                 import cmp
 from deepface                import DeepFace
 from deepface.basemodels     import Boosting
@@ -297,6 +298,113 @@ def rename_file_w_hex_token(fname, n_token=2):
     ext  = fname[fname.rindex('.'):]
 
     return name + '_' + secrets.token_hex(n_token) + ext
+
+# ------------------------------------------------------------------------------
+
+def flatten_dir_structure(destination, valid_exts=['.jpg', '.png', '.npy'],
+                          n_token=2):
+    """
+    Flattens the structure of the 'destination' directory, removing all
+    directories and subdirectories and leaving only the files behind.
+    Effectively, this results in a list of files in the 'destination' directory.
+    
+    Files are renamed using 'n_token' hexadecimal tokens (2 * 'n_token'
+    hexadecimals caracters) if they have the same name as an existing file in
+    the 'destination' directory (see help(rename_file_w_hex_token) for more
+    information about the renaming strategy).
+
+    A list of valid extensions can be provided in order to filter files, leaving
+    only the ones with those extensions. Alternatively, the file extension
+    filtering functionality can be turned OFF by providing 'None' (i.e.
+    valid_exts=None).
+
+    Finally, if the 'destination' directory provided does not exist (or is not a
+    directory), an OSError is raised.
+
+    Inputs:
+        1. destination - path to directory [string].
+
+        2. valid_exts  - None or list of valid file extensions [None or list of
+                          strings, default=['.jpg', '.png', '.npy']]
+
+        3. n_token     - Number of hexadecimal tokens to be used during renaming
+                          process [positive integer, default=2]
+
+    Output:
+        None
+
+    Signature:
+        flatten_dir_structure(destination, valid_exts=['.jpg', '.png', '.npy'],
+                                n_token=2)
+    """
+    # Raises an OSError is the destination directory does not exist
+    if not os.path.isdir(destination):
+        raise OSError("Directory 'destination' does not exist!")
+
+    # Initializes the all_files list and the first_loop_pass
+    all_files       = []
+    first_loop_pass = True
+
+    # Loops through the files in the destination directory, skipping the top
+    # level ones (as these do not need to be moved)
+    for root, _dirs, files in os.walk(destination):
+        # Skips the first loop pass to prevent scanning files at the top of the
+        # directory by ignoring the first element of the iteration of os.walk
+        if first_loop_pass:
+            first_loop_pass = False
+            continue
+        
+        # Stores the filename (paths actually) in the 'all_files' list
+        for filename in files:
+            all_files.append(os.path.join(root, filename))
+
+    # Determines if the file extension filtering functionality will be on or
+    # off. If it is on, determines the names of the valid files based on their
+    # file extension
+    if valid_exts is not None:
+        filter_files = True
+        valid_files  = filter_files_by_ext(all_files, valid_exts=valid_exts)
+    else:
+        filter_files = False
+
+    # Loops through each filename in all_files list
+    for filename in all_files:
+        # First, if file extension filtering is turned on, determines if the
+        # current filename is not valid, deleting it if that is the case
+        if filter_files:
+            if not (filename in valid_files):
+                # Deletes invalid file and continues
+                os.remove(filename)
+                continue
+
+        # Creates a path using the destination directory and the current file's
+        # name
+        base_path = os.path.join(destination, filename[filename.rindex('/')+1:])
+
+        # Checks if the 'base_path' file exists
+        if os.path.exists(base_path):
+            # If so, this means a file already exists with the same name, so
+            # rename the current file and move it
+            new_filename = rename_file_w_hex_token(filename, n_token=n_token)
+            os.rename(filename, new_filename)
+            move(new_filename, destination)
+        else:
+            # Otherwise, there is no file with the same name so just move this
+            # one
+            move(filename, destination)
+
+    # After the previous steps, all of the remaining directories are empty, so
+    # get their names
+    empty_dirs = [os.path.join(destination, name) for name\
+                  in os.listdir(destination)\
+                  if os.path.isdir(os.path.join(destination, name))]
+
+    # Delete each empty directory (recurisvely - these directories at most
+    # contain other empty directories)
+    for cur_dir in empty_dirs:
+        rmtree(cur_dir)
+
+    return None
 
 # ______________________________________________________________________________
 #                    FACE DETECTION / VERIFICATION RELATED
