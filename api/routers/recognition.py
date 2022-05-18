@@ -353,60 +353,32 @@ async def database_clear_api():
 
 @fr_router.post("/people/list")
 async def people_list():
-    """
-    TODO: Update documentation
-    """
-    # attributes = glb.rep_db.get_attribute('group_no')
-    # attributes = np.unique(attributes)  # only keep unique groups
-    # attributes = sorted(attributes, key=lambda x: int(x))   # and sort them
+    '''
+    API endpoint: return ID, name and note of ALL people of Person table
+    '''
     query = select(Person.id, Person.name, Person.note)
     result = glb.sqla_session.execute(query)
     return result.fetchall()
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/reload_database")
-async def reload_database(
-    rdb_dir: str  = Query(glb.RDB_DIR, description="Full path to Representation database directory (string)"),
-    verbose: bool = Query(False, description="Controls the amount of text that is printed to the server's console (boolean)")):
-    """
-    TODO: FIX THIS ENDPOINT!
 
-    API endpoint: reload_database()
+@fr_router.post("/people/get_front_image")
+async def people_list():
+    '''
+    API endpoint: return ID, name and note of the front image for each person
+    
+    IN DEVELOPMENT
+    NOT WORKING AT THE MOMENT!!!
 
-    Allows the user to reload the database. Sets the global 'database has been
-    modified' flag to True (i.e. database has been modified).
+    '''
+    
+    query = select(Person.id, Person.name, Person.note).where(front_img = True)
+    result = glb.sqla_session.execute(query)
+    return result.fetchall()
 
-    Parameters:
-    - rdb_dir: full path to Representation database directory (string)
 
-    - verbose: controls the amount of text that is printed to the server's
-                console (boolean)
 
-    Output:\n
-        JSON-encoded dictionary with the following attributes:
-            1. message: message stating the database has been reloaded (string)
-            2. status : indicates if an error occurred (status=1) or not
-                        (status=0) (boolean)
-    """
-    # 
-    try:
-        # Attempts to load the database
-        #glb.rep_db = load_representation_db(os.path.join(rdb_dir,
-        #                                'rep_database.pickle'), verbose=verbose)
-
-        # Sets the 'database has been modified' flag to True, creates output
-        # message and sets the status as 0
-        glb.db_changed = True
-        output_msg     = "Databased reloaded!"
-        status         = False
-    except Exception as excpt:
-        # On exception, create output message (with exception) and set the
-        # status as 1 (something went wrong)
-        output_msg = f"Unable to save database. Reason: {excpt}"
-        status     = True
-
-    return {"message":output_msg, "status":status}
 
 # ------------------------------------------------------------------------------
 
@@ -590,8 +562,8 @@ async def edit_tag_by_group_no(target_group_no: int = Query(None, description="T
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/populate_faces/from_dir")
-async def populate_faces_from_dir(params: CreateDatabaseParams,
+@fr_router.post("/database/create_from_directory")
+async def database_create_from_directory(params: CreateDatabaseParams,
     image_dir   : Optional[str]  = Query(glb_img_dir, description="Full path to directory containing images (string)")):
     """
     API endpoint: create_database_from_directory()
@@ -714,8 +686,8 @@ async def populate_faces_from_dir(params: CreateDatabaseParams,
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/populate_faces/from_zip")
-async def populate_faces_from_zip(myfile: UploadFile,
+@fr_router.post("/database/create_from_zip")
+async def database_create_from_zip(myfile: UploadFile,
     params      : CreateDatabaseParams = Depends(),
     image_dir   : Optional[str]  = Query(glb.IMG_DIR, description="Full path to directory containing images (string)")):
     """
@@ -875,6 +847,31 @@ async def populate_faces_from_zip(myfile: UploadFile,
 
     return {'n_records':len(records), 'n_skipped':len(skipped_files),
             'skipped_files':skipped_files, 'message':output_msg}
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/database/clear")
+async def database_clear_api():
+    """
+    API endpoint: clear_database()
+
+    Clears the database. This is equivalent to setting the database to an empty
+    one.
+
+    Parameters:
+    - None
+
+    Output:\n
+        JSON-encoded dictionary with the following attributes:
+            1. message: message stating the database has been cleard [string]
+    """
+    # Remove SQlite file and recreate again
+    os.remove(glb.SQLITE_DB_FP)
+    glb.sqla_engine  = load_database(glb.SQLITE_DB_FP)
+    glb.sqla_session = start_session(glb.sqla_engine)
+    glb.sqla_session.commit()
+
+    return {"message": "Database has been cleared."}
 
 # ------------------------------------------------------------------------------
 
@@ -1041,8 +1038,8 @@ async def verify_with_upload(files: List[UploadFile],
         img   = img[:, :, ::-1]
 
         # Obtains the file's image name and creates the full path
-        img_name = f.filename.split('.')[0]
-        img_fp   = os.path.join(img_dir, img_name + '.' + save_as)
+        img_name = f.filename
+        img_fp   = os.path.join(img_dir, f.filename[:f.filename.rindex('.')] + '.' + save_as)
 
         # ----------------------------- File Check -----------------------------
         # Only performs the file check if overwrite is False. If overwrite is
@@ -1116,23 +1113,31 @@ async def verify_with_upload(files: List[UploadFile],
             result = get_matches_from_similarity(similarity_obj)
             cur_img_results.append(result)
 
+            
+
             # Automatically determines the image's group based on the best match
             # if it has a distance / similarity of <=threshold_per*threshold and if
             # 'auto_group' is True
+            # print('similarity_obj distance', similarity_obj['distances'][0])
+            # print("threshold_per * similarity_obj['threshold']", threshold_per * similarity_obj['threshold'])
+            # print("result[0].person_id", result[0].person_id)
             if auto_group and len(result) > 0:
                 if similarity_obj['distances'][0]\
                     <= threshold_per * similarity_obj['threshold']:
-                    group_no = result[0].group_no
+                    person_id = result[0].person_id
+                    group_no = -2
                 else:
                     group_no = -1
+                    person_id = None
             else:
                 group_no = -1
+                person_id = None
 
             # Creates a FaceRep for each detected face
             rep = FaceRep(image_name_orig=img_name, image_name='',
                              image_fp_orig=img_fp, image_fp='',
                              group_no=group_no, region=region,
-                             embeddings=cur_embd)
+                             person_id=person_id,embeddings=cur_embd)
 
             # Adds each FaceRep to the global session
             glb.sqla_session.add(rep)
