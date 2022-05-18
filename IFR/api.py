@@ -885,10 +885,11 @@ def process_image_zip_file(myfile, image_dir,
 
             # Obtains all file names, temporary file names and temporary file
             # paths. Also initializes skipped_files list
-            skipped_files = []
-
-            tfiles_path = [os.path.join(tempdir, file) for file in os.listdir(tempdir)]
-            tfiles_path_filtered = filter_files_by_ext(tfiles_path, valid_exts=valid_exts)
+            skipped_files        = []
+            tfiles_path          = [os.path.join(tempdir, file) for file\
+                                    in os.listdir(tempdir)]
+            tfiles_path_filtered = filter_files_by_ext(tfiles_path,
+                                                        valid_exts=valid_exts)
 
             # Repopulates the 'proc_files_temp' table
             if repopulate_temp_file_table(tfiles_path_filtered):
@@ -902,38 +903,55 @@ def process_image_zip_file(myfile, image_dir,
                             ProcessedFilesTemp.filesize)
             result = glb.sqla_session.execute(query)
 
+            # Loops through each matched & temporary file pairs in the query's
+            # result
             for fname, tname in result:
+                # Obtains the full path of the matched & temporary files
                 fname_fullpath = os.path.join(image_dir, fname)
                 tname_fullpath = os.path.join(tempdir, tname)
                 
-                if not cmp(fname_fullpath, tname_fullpath): # file is different!
-                    if fname == tname: # let's rename it
-                        filename_no_ext, ext_only = tname.split('/')[-1].split('.')
-                        rnd_add = token_hex(2)
-                        tname = filename_no_ext + '-' + rnd_add + '.' + ext_only
-                    tname_fullpath_dest = os.path.join(image_dir, tname) # new fullpath for tname
+                # Checks if the files are different or not
+                if not cmp(fname_fullpath, tname_fullpath):
+                    # Files are different, so check if they have the same name
+                    if fname == tname:
+                        # Names are the same, so rename them
+                        tname = rename_file_w_hex_token(tname)
+                    
+                    # Determines the new full path for tname and moves the file
+                    tname_fullpath_dest = os.path.join(image_dir, tname)
                     sh_move(tname_fullpath, tname_fullpath_dest)
-                else: # file is egual, so we remove from tempdir
+
+                else:
+                    # Files are the same, so remove it from tempdir
                     os.remove(tname_fullpath)
                     skipped_files.append(tname)
 
-            # Queries for files that have SAME name and DIFFERENT size from the existing ones
-            # that have to be renamed
-            query = select(ProcessedFilesTemp.filename).join(ProcessedFiles, (ProcessedFilesTemp.filename == ProcessedFiles.filename) & (ProcessedFilesTemp.filesize != ProcessedFiles.filesize))
-            print(query)
+            # Queries for files that have SAME name and DIFFERENT size from the
+            # existing ones that have to be renamed
+            query = select(ProcessedFilesTemp.filename).join(ProcessedFiles,
+                    (ProcessedFilesTemp.filename == ProcessedFiles.filename)\
+                    & (ProcessedFilesTemp.filesize != ProcessedFiles.filesize))
             result = glb.sqla_session.execute(query)
-            for row in result:
-                filename = row.filename
-                filename_no_ext, ext_only = filename.split('/')[-1].split('.')
-                rnd_add = token_hex(2)
-                filename_renamed = filename_no_ext + '-' + rnd_add + '.' + ext_only
-                print(filename_renamed, filename)
-                sh_move(os.path.join(tempdir, filename), os.path.join(tempdir, filename_renamed))
 
-            # now it's safe to move the remaining files in tempdir directly to img_dir
+            # Loops through each row in result
+            for row in result:
+                # Obtains the file name and renames it
+                filename         = row.filename
+                filename_renamed = rename_file_w_hex_token(filename)
+                print(filename_renamed, filename)
+
+                # Moves the file to the appropriate location
+                sh_move(os.path.join(tempdir, filename),
+                        os.path.join(tempdir, filename_renamed))
+
+            # Now it's safe to move the remaining files in tempdir directly to
+            # img_dir
             for file in os.listdir(tempdir):
+                # Moves each file to the appropriate location (ensuring it is
+                # not a directory)
                 if not os.path.isdir(os.path.join(tempdir, file)):
-                    sh_move(os.path.join(tempdir,file), os.path.join(image_dir, file))
+                    sh_move(os.path.join(tempdir,file),
+                            os.path.join(image_dir, file))
 
     return skipped_files
 
