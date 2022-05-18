@@ -405,6 +405,18 @@ def flatten_dir_structure(destination, valid_exts=['.jpg', '.png', '.npy'],
     for cur_dir in empty_dirs:
         rmtree(cur_dir)
 
+    # Note that the previous filtering step does not include files in the top
+    # level of the directory, so these have to be dealt with now. Loops through
+    # each file (in the top level directory) and removes them if the extension
+    # does not match any of the valid extensions
+    for i, fname in enumerate(os.listdir(destination)):
+        if not fname[fname.rindex('.'):].lower() in valid_exts:
+            os.remove(os.path.join(destination, fname))
+
+    # As a final step, removes any duplicate files - these may arise if the same
+    # file is copied and spread over multiple directories
+    remove_img_file_duplicates(destination)
+
     return None
 
 # ------------------------------------------------------------------------------
