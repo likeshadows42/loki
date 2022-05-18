@@ -282,10 +282,10 @@ class Person(Base):
     __tablename__ = 'person'
 
     # Object attributes (as database columns)
-    id   = Column(Integer, primary_key=True)
-    name = Column(String, default=None)
-    group_no = Column(Integer, default=None)
-    note = Column(String, default=None)
+    id        = Column(Integer, primary_key=True)
+    name      = Column(String, default=None)
+    group_no  = Column(Integer, default=None)
+    note      = Column(String, default=None)
     front_img = Column(Integer, default=None)
 
     # Establishes connection to associated Face Representations
@@ -332,7 +332,6 @@ class ProcessedFiles(Base):
     # Object attributes (as database columns)
     id       = Column(Integer, primary_key=True)
     filename = Column(String, default=None)
-    # filepath = Column(String, default=None)
     filesize = Column(INTEGER(unsigned=True), default=None)
 
     # Standard repr for the class
