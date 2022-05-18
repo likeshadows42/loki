@@ -562,8 +562,8 @@ async def edit_tag_by_group_no(target_group_no: int = Query(None, description="T
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/database/create_from_directory")
-async def database_create_from_directory(params: CreateDatabaseParams,
+@fr_router.post("/faces/import_from_directory")
+async def faces_import_from_directory(params: CreateDatabaseParams,
     image_dir   : Optional[str]  = Query(glb_img_dir, description="Full path to directory containing images (string)")):
     """
     API endpoint: create_database_from_directory()
@@ -686,8 +686,8 @@ async def database_create_from_directory(params: CreateDatabaseParams,
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/database/create_from_zip")
-async def database_create_from_zip(myfile: UploadFile,
+@fr_router.post("/faces/import_from_zip")
+async def faces_import_from_zip(myfile: UploadFile,
     params      : CreateDatabaseParams = Depends(),
     image_dir   : Optional[str]  = Query(glb.IMG_DIR, description="Full path to directory containing images (string)")):
     """

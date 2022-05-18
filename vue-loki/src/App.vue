@@ -69,7 +69,7 @@ export default {
     async dbLoadFromDir() {
       console.log("Loading database from directory")
       const params = {"force_create": true}
-      this.MainContent = await this.axiosPost('http://localhost:8000/fr/database/create_from_directory', params)
+      this.MainContent = await this.axiosPost('http://localhost:8000/fr/faces/import_from_directory', params)
     },
 
     async dbClear() {

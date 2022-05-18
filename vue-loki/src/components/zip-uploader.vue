@@ -14,7 +14,7 @@ export default {
                     'Content-Type': 'multipart/form-data'
                 } 
             }
-            const response = await axios.post(`http://127.0.0.1:8000/fr/database/create_from_zip`, formData, params)
+            const response = await axios.post(`http://127.0.0.1:8000/fr/faces/import_from_zip`, formData, params)
             // return response.json()
             return response.data
             
