@@ -24,7 +24,7 @@ from IFR.functions           import ensure_dirs_exist, calc_embeddings,\
                                     calc_similarity, do_face_detection,\
                                     discard_small_regions
 
-from matplotlib                      import image          as mpimg
+from matplotlib              import image          as mpimg
 
 from sqlalchemy import select, update, insert
 
@@ -362,51 +362,6 @@ async def people_list():
     query = select(Person.id, Person.name, Person.note)
     result = glb.sqla_session.execute(query)
     return result.fetchall()
-
-# ------------------------------------------------------------------------------
-
-@fr_router.post("/utility/reload_database")
-async def reload_database(
-    rdb_dir: str  = Query(glb.RDB_DIR, description="Full path to Representation database directory (string)"),
-    verbose: bool = Query(False, description="Controls the amount of text that is printed to the server's console (boolean)")):
-    """
-    TODO: FIX THIS ENDPOINT!
-
-    API endpoint: reload_database()
-
-    Allows the user to reload the database. Sets the global 'database has been
-    modified' flag to True (i.e. database has been modified).
-
-    Parameters:
-    - rdb_dir: full path to Representation database directory (string)
-
-    - verbose: controls the amount of text that is printed to the server's
-                console (boolean)
-
-    Output:\n
-        JSON-encoded dictionary with the following attributes:
-            1. message: message stating the database has been reloaded (string)
-            2. status : indicates if an error occurred (status=1) or not
-                        (status=0) (boolean)
-    """
-    # 
-    try:
-        # Attempts to load the database
-        #glb.rep_db = load_representation_db(os.path.join(rdb_dir,
-        #                                'rep_database.pickle'), verbose=verbose)
-
-        # Sets the 'database has been modified' flag to True, creates output
-        # message and sets the status as 0
-        glb.db_changed = True
-        output_msg     = "Databased reloaded!"
-        status         = False
-    except Exception as excpt:
-        # On exception, create output message (with exception) and set the
-        # status as 1 (something went wrong)
-        output_msg = f"Unable to save database. Reason: {excpt}"
-        status     = True
-
-    return {"message":output_msg, "status":status}
 
 # ------------------------------------------------------------------------------
 
