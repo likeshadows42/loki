@@ -19,7 +19,7 @@ from api.routers.recognition  import fr_router
 # ------------------------------------------------------------------------------
 
 app     = FastAPI(name='Face Recognition API')
-origins = ['http://localhost:8080']
+origins = ['http://localhost:8000, http://localhost:8080']
 
 app.add_middleware(
     CORSMiddleware,
