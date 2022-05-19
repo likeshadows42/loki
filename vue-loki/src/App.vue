@@ -74,7 +74,7 @@ export default {
 
     async dbClear() {
       console.log("Clearing database")
-      this.MainContent = await this.axiosPost('http://localhost:8000/fr/database/clear')
+      this.MainContent = await this.axiosPost('/fr/database/clear')
     },
 
     async dbReload() {
