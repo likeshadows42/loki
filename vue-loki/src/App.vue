@@ -85,7 +85,7 @@ export default {
     async serverReset(){
       console.log("Reset server&restart")
       const params = {"no_database": true}
-      this.MainContent = await this.axiosPost('http://localhost:8000/fr/debug/reset_server', params)
+      this.MainContent = await this.axiosPost('/fr/debug/reset_server', params)
     },
 
     mainClear() {
