@@ -11,18 +11,19 @@ import api.global_variables  as glb
 
 from uuid                    import uuid4
 from typing                  import List, Optional
+from filecmp                 import cmp
 from fastapi                 import APIRouter, UploadFile, Depends, Query
 from IFR.api                 import init_load_verifiers, init_load_detectors,\
                                get_embeddings_as_array, process_image_zip_file,\
                                database_is_empty, get_matches_from_similarity,\
                                all_tables_exist, process_faces_from_dir,\
                                load_database, facerep_set_groupno_done,\
-                               start_session, people_clean_without_repps,\
-                               file_is_not_unique
+                               start_session, people_clean_without_repps
 from IFR.classes             import *
 from IFR.functions           import ensure_dirs_exist, calc_embeddings,\
-                                    calc_similarity, do_face_detection,\
-                                    discard_small_regions
+                                calc_similarity, do_face_detection,\
+                                discard_small_regions, image_is_uncorrupted,\
+                                rename_file_w_hex_token
 
 from matplotlib              import image          as mpimg
 
@@ -966,9 +967,10 @@ async def verify_with_upload(files: List[UploadFile],
     img_dir         : str                = Query(glb_img_dir, description="Full path to image directory (string)"),
     save_as         : ImageSaveTypes     = Query(default_image_save_type, description="File type which uploaded images should be saved as (string)"),
     overwrite       : bool               = Query(False, description="Flag to indicate if an uploaded image with the same name as an existing one in the server should be saved and replace it (boolean)"),
-    auto_rename     : bool               = Query(True, description="Flag to force auto renaming of images in the zip file with (boolean)"),
+    n_token         : int                = Query(2, description="Number of hexadecimal tokens used during renaming (positive integer)"),
     auto_group      : bool               = Query(True, description="Flag to automatically group image based on verification results (boolean)"),
-    threshold_per   : float              = Query(.75, description="Threshold percentage below which the autogroup algorythm automatically assign the images to the best matching person")):
+    threshold_per   : float              = Query(.75, description="Threshold percentage below which the autogroup algorithm automatically assign the images to the best matching person"),
+    t_check         : bool               = Query(True, description="Toggles the transpose check during image integrity check (boolean)")):
     """
     API endpoint: verify_with_upload()
 
@@ -1029,20 +1031,45 @@ async def verify_with_upload(files: List[UploadFile],
 
     # Loops through each file
     for f in files:
+        # Obtains the file's image name and creates the full path
+        img_name = f.filename
+        img_fp   = os.path.join(img_dir, f.filename[:f.filename.rindex('.')]\
+                 + '.' + save_as)
+
+        # Checks if the current file is uncorrupted, continuing if it is
+        # corrupted
+        if not image_is_uncorrupted(img_fp, transpose_check=t_check):
+            print(f'File skipped (image is corrupted): {img_fp}')
+            skipped_files.append(img_fp)
+            continue
+
         # Obtains contents of the file & transforms it into an image
         data  = np.fromfile(f.file, dtype=np.uint8)
         img   = cv2.imdecode(data, cv2.IMREAD_UNCHANGED)
         img   = img[:, :, ::-1]
 
-        # Obtains the file's image name and creates the full path
-        img_name = f.filename
-        img_fp   = os.path.join(img_dir, f.filename[:f.filename.rindex('.')] + '.' + save_as)
-
         # ----------------------------- File Check -----------------------------
         # Only performs the file check if overwrite is False. If overwrite is
         # True, then this check is skipped as it does not matter
         if not overwrite:
-            skip_this_file = file_is_not_unique(img_fp, proc_qry=proc_files)
+            # Initializes the 'skip_this_file' flag as False
+            skip_this_file = False
+
+            # Queries the database to figure out which files have the SAME size
+            query  = select(ProcessedFiles.filename).where(\
+                            ProcessedFiles.filesize == os.path.getsize(img_fp))
+            result = glb.sqla_session.execute(query)
+            fpaths = [os.path.join(img_dir, fname[0]) for fname in result]
+
+            # Loops through each matched file path in the query's result
+            for fpath in fpaths:                
+                # Checks if the files are different and if they are, set the
+                # 'skip_this_file' flag to True (and break the loop)
+                if cmp(img_fp, fpath):
+                    skip_this_file = True
+                
+                if skip_this_file:
+                    break
 
             # Skips the current file if skip_this_file=True
             if skip_this_file:
@@ -1053,30 +1080,26 @@ async def verify_with_upload(files: List[UploadFile],
         # ------------------------- File save / upload -------------------------
         # Saves the image if it does not exist or if overwrite is True.
         # Alternatively, if auto_rename is True, then automatically renames the
-        # file (if the file name already exists) using its unique id and saves
-        # it. Otherwise skips verification in this file.
+        # file (if the file name already exists) using hexadecimal tokens and
+        # saves it. Otherwise skips verification in this file.
         if not (img_name in all_files) or overwrite:
             if save_as == ImageSaveTypes.NPY:
                 np.save(img_fp, img, allow_pickle=False, fix_imports=False)
             else:
                 mpimg.imsave(img_fp, img)
-        elif auto_rename:
-            # Creates a new unique object identifier using uuid4, converts it
-            # into a string, sets it as the file name, creates the file's full
+        else:
+            # Renames the file using hexadecimal tokens, creates the file's full
             # path and saves it
-            img_name = str(uuid4())
+            img_name = rename_file_w_hex_token(
+                        f.filename[:f.filename.rindex('.')], n_token=n_token)
             img_fp   = os.path.join(img_dir, img_name + '.' + save_as)
 
             if save_as == ImageSaveTypes.NPY:
                 np.save(img_fp, img, allow_pickle=False, fix_imports=False)
             else:
                 mpimg.imsave(img_fp, img)
-        else:
-            print(f'File skipped (file exists + no auto rename): {img_fp}')
-            skipped_files.append(img_fp)
-            continue  # skips verification using this file
 
-        # -------------------- 
+        # ------------------- Face detection & verification --------------------
         # Detects faces
         output = do_face_detection(img, detector_models=glb.models,
                                     detector_name=params.detector_name,
@@ -1109,8 +1132,6 @@ async def verify_with_upload(files: List[UploadFile],
             # result to the current image results list
             result = get_matches_from_similarity(similarity_obj)
             cur_img_results.append(result)
-
-            
 
             # Automatically determines the image's group based on the best match
             # if it has a distance / similarity of <=threshold_per*threshold and if
