@@ -115,30 +115,30 @@ def show_cluster_results(group_no, db, ncols=4, figsize=(15, 15), color='black',
 
 # ------------------------------------------------------------------------------
 
-def file_is_not_unique(fname, fdir, other_names, other_root_dir):
-    """
-    TODO: Update documentation
-    """
-    # Initializes 'is_not_unique' flag
-    is_not_unique = False
+# def file_is_not_unique(fname, fdir, other_names, other_root_dir):
+#     """
+#     TODO: Update documentation
+#     """
+#     # Initializes 'is_not_unique' flag
+#     is_not_unique = False
 
-    # Loops through each file name in invalid names
-    for i, inv_name in zip(range(0, len(fname)), other_names):
-        # Creates the full paths of each file
-        fpath1 = os.path.join(fdir, fname)
-        fpath2 = os.path.join(other_root_dir, inv_name)
+#     # Loops through each file name in invalid names
+#     for i, inv_name in zip(range(0, len(fname)), other_names):
+#         # Creates the full paths of each file
+#         fpath1 = os.path.join(fdir, fname)
+#         fpath2 = os.path.join(other_root_dir, inv_name)
 
-        #print(f'{i}: fpath1: ', fpath1, '  |  fpath2: ', fpath2, sep='')
+#         #print(f'{i}: fpath1: ', fpath1, '  |  fpath2: ', fpath2, sep='')
 
-        # Determines if the files are the same (and should be skipped)
-        is_not_unique = cmp(fpath1, fpath2, shallow=False)
+#         # Determines if the files are the same (and should be skipped)
+#         is_not_unique = cmp(fpath1, fpath2, shallow=False)
                                 
-        # Current file matches another one. It's not unique so no need to
-        # continue this loop
-        if is_not_unique:
-            break
+#         # Current file matches another one. It's not unique so no need to
+#         # continue this loop
+#         if is_not_unique:
+#             break
 
-    return is_not_unique
+#     return is_not_unique
 
 # ______________________________________________________________________________
 #                DETECTORS & VERIFIERS BUILDING, SAVING & LOADING
