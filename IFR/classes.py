@@ -356,3 +356,13 @@ class ProcessedFilesTemp(Base):
         return "(id=%s)\nfile name: %s\nfile size: %s" % (self.id,
                     self.filename, self.filesize)
 
+class tempClustering(Base):
+    """
+    Initializes the object with appropriate attributes
+    """
+    # Table name
+    __tablename__ = 'temp_clustering'
+
+    # Object attributes (as database columns)
+    id       = Column(Integer, primary_key=True)
+    group_no = Column(Integer, default=None)
