@@ -63,23 +63,23 @@ export default {
 
     async getGlobaldata() {
       console.log("Getting global parameters")
-      this.MainContent = await this.axiosGet('http://localhost:8000/fr/debug/inspect_globals')
+      this.MainContent = await this.axiosGet('/api/debug/inspect_globals')
     },
     
     async dbLoadFromDir() {
       console.log("Loading database from directory")
       const params = {"force_create": true}
-      this.MainContent = await this.axiosPost('http://localhost:8000/fr/database/create_from_directory', params)
+      this.MainContent = await this.axiosPost('/api/database/create_from_directory', params)
     },
 
     async dbClear() {
       console.log("Clearing database")
-      this.MainContent = await this.axiosPost('/fr/database/clear')
+      this.MainContent = await this.axiosPost('/api/database/clear')
     },
 
     async dbReload() {
       console.log("Reload database")
-      this.MainContent = await this.axiosPost('http://localhost:8000/fr/database/reload')
+      this.MainContent = await this.axiosPost('/api/database/reload')
     },
 
     async serverReset(){

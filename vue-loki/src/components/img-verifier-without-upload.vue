@@ -18,7 +18,7 @@ export default {
         },
 
         async checkImage(file) {
-            const apiURL = 'http://localhost:8000/fr/verify/no_upload?threshold=.8'
+            const apiURL = '/api/verify/no_upload?threshold=.8'
             let formData = new FormData()
              formData.append('files', file)
 
@@ -31,7 +31,7 @@ export default {
         },
  
         async getPersonByID(id) {
-            const apiURL = `http://localhost:8000/fr/facerep/get_person?facerep_id=${id}`
+            const apiURL = `/api/facerep/get_person?facerep_id=${id}`
             try {
                 const res = await axios.post(apiURL)
                 return res.data
