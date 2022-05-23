@@ -9,5 +9,8 @@ module.exports = defineConfig({
 		}
   },
 
- v
+  // publicPath: 
+  //   process.env.NODE_ENV === 'build'
+  //     ? './'
+  //     : 'http://localhost:8080/'
 })
