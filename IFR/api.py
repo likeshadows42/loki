@@ -769,11 +769,6 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
         print('Commits processed files')
     glb.sqla_session.commit()
 
-    # Clusters Representations together using the DBSCAN algorithm
-    if auto_grouping and len(embds) > 0:
-        group_facereps(verifier_names[0], eps=eps, min_samples=min_samples,
-                        metric=metric, verbose=verbose)
-
     # Loops through each record and add them to the global session
     if glb.DEBUG:
         print('add representation to FaceRep table')
@@ -811,6 +806,11 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
     query = update(Person).values(group_no = -2).where(Person.group_no > -1)
     glb.sqla_session.execute(query)
     glb.sqla_session.commit()
+
+    # Clusters Representations together using the DBSCAN algorithm
+    if auto_grouping and len(embds) > 0:
+        group_facereps(verifier_names[0], eps=eps, min_samples=min_samples,
+                        metric=metric, verbose=verbose)
 
     # Return representation database
     return records
