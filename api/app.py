@@ -29,7 +29,7 @@ app.add_middleware(
     allow_headers     = ["*"],
 )
 
-app.include_router(fr_router, prefix="/api", tags=["Face Recognition"])
+app.include_router(fr_router, prefix="/api/fr", tags=["Face Recognition"])
 
 
 # ______________________________________________________________________________

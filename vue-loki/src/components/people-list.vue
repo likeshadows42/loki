@@ -18,7 +18,7 @@ export default {
       const requestOptions = {
         method: "POST",
       };
-      const res = await fetch(`/api/people/list`,requestOptions)
+      const res = await fetch(`/api/fr/people/list`,requestOptions)
       this.people = await res.json()
       // console.log(this.groups)
       //console.log(this.imgs)

@@ -22,7 +22,7 @@ export default {
       const requestOptions = {
         method: "POST",
       };
-      const res = await fetch(`/api/facerep/get_ungrouped`,requestOptions)
+      const res = await fetch(`/api/fr/facerep/get_ungrouped`,requestOptions)
       this.imgs = await res.json()
     },
 
@@ -30,7 +30,7 @@ export default {
       const requestOptions = {
         method: "POST",
       };
-      const res = await fetch(`/api/people/list`,requestOptions)
+      const res = await fetch(`/api/fr/people/list`,requestOptions)
       const json = await res.json()
       return json      
     },
@@ -76,7 +76,7 @@ export default {
             const requestOptions = {
               method: "POST",
             }
-            const res = await fetch(`/api/people/add_new?person_name=${this.people_list_hidden}`,requestOptions)
+            const res = await fetch(`/api/fr/people/add_new?person_name=${this.people_list_hidden}`,requestOptions)
             const result = await res.json()
             console.log(result.id)
             person_value = result.id
@@ -87,7 +87,7 @@ export default {
           const requestOptions = {
             method: "POST",
           }
-          const res = await fetch(`/api/people/assign_facerep?person_id=${person_value}&facerep_id=${this.item_id_selected}`,requestOptions)
+          const res = await fetch(`/api/fr/people/assign_facerep?person_id=${person_value}&facerep_id=${this.item_id_selected}`,requestOptions)
           const json = await res.json()
           if(json != 'ok') {
             throw 'Error!'
