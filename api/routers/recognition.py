@@ -11,20 +11,21 @@ import api.global_variables  as glb
 
 from uuid                    import uuid4
 from typing                  import List, Optional
+from filecmp                 import cmp
 from fastapi                 import APIRouter, UploadFile, Depends, Query
 from IFR.api                 import init_load_verifiers, init_load_detectors,\
                                get_embeddings_as_array, process_image_zip_file,\
                                database_is_empty, get_matches_from_similarity,\
                                all_tables_exist, process_faces_from_dir,\
                                load_database, facerep_set_groupno_done,\
-                               start_session, people_clean_without_repps,\
-                               file_is_not_unique
+                               start_session, people_clean_without_repps
 from IFR.classes             import *
 from IFR.functions           import ensure_dirs_exist, calc_embeddings,\
-                                    calc_similarity, do_face_detection,\
-                                    discard_small_regions
+                                calc_similarity, do_face_detection,\
+                                discard_small_regions, image_is_uncorrupted,\
+                                rename_file_w_hex_token
 
-from matplotlib                      import image          as mpimg
+from matplotlib              import image          as mpimg
 
 from sqlalchemy import select, update, insert
 
@@ -44,7 +45,28 @@ fr_router = APIRouter()
 
 @fr_router.post("/debug/inspect_globals")
 async def inspect_globals(print2console: bool = Query(True, description="Toggles if global variables should be printed to the server's console [boolean]")):
-    
+    """
+    API endpoint: inspect_globals()
+
+    Allows the user to inspect the values of all global variables. Mainly used
+    for debugging.
+
+    Input:
+        1. print2console - toggles if the function should also print the values
+                            of the global variable to the console [boolean,
+                            default=True].
+
+    Output:\n
+        JSON-encoded dictionary with the following attributes:
+            1. dirs: set up directories                      [list of strings]
+            2. dir_names: names of each set up directory     [list of strings]
+            3. detector_names: names of face detectors       [list of strings]
+            4. verifier_names: names of face verifiers       [list of strings]
+            5. model_names   : names of loaded models        [list of strings]
+            6. sqlite_db_name: name of SQLite database       [string]
+            7. sqlite_db_fp  : full path of SQLite database  [string]
+            8. sqla_engine   : SQLAlchemy engine object      [engine object]
+    """
     # Obtains all current directory paths
     directories = [glb.API_DIR    , glb.DATA_DIR   , glb.IMG_DIR, glb.RDB_DIR,
                    glb.SVD_MDL_DIR, glb.SVD_VRF_DIR, glb.SVD_DTC_DIR]
@@ -96,8 +118,6 @@ async def inspect_globals(print2console: bool = Query(True, description="Toggles
     if print2console:
         print("  > Other variables:")
         print("Models".ljust(21)                + ':', glb.models)
-        print("Rep. database".ljust(21)         + ':', glb.rep_db)
-        print("Database changed".ljust(21)      + ':', glb.db_changed)
         print("SQLite database:".ljust(21)      + ':', glb.SQLITE_DB)
         print("SQLite database path:".ljust(21) + ':', glb.SQLITE_DB_FP)
         print("SQL alchemy engine:".ljust(21)   + ':', glb.sqla_engine)
@@ -105,9 +125,10 @@ async def inspect_globals(print2console: bool = Query(True, description="Toggles
     return {'dirs':directories, 'dir_names':dir_names,
             'detector_names':glb.detector_names,
             'verifier_names':glb.verifier_names,
-            'model_names':list(glb.models.keys()), 'rep_db':glb.rep_db,
-            'db_changed':glb.db_changed, 'sqlite_db_name':glb.SQLITE_DB,
-            'sqlite_db_fp':glb.SQLITE_DB_FP, 'sqla_engine':glb.sqla_engine}
+            'model_names':list(glb.models.keys()),
+            'sqlite_db_name':glb.SQLITE_DB,
+            'sqlite_db_fp':glb.SQLITE_DB_FP,
+            'sqla_engine':glb.sqla_engine}
 
 # ------------------------------------------------------------------------------
 
@@ -121,7 +142,7 @@ async def reset_server():
 
     Output:\n
         JSON-encoded dictionary with the following attributes:
-            1. message: message stating the server has been restarted (string)
+            1. message: message stating the server has been restarted [string]
     """
     print('\n!!!!!!!!!!!!!!!! RESTARTING THE SERVER !!!!!!!!!!!!!!!!')
     print('\n ======== Starting initialization process ======== \n')
@@ -216,7 +237,7 @@ async def reset_server():
 
 @fr_router.post("/utility/edit_default_directories")
 async def edit_default_directories(img_dir: str = Query(glb.IMG_DIR, description="Full path to image directory (string)"),
-                                   rdb_dir: str = Query(glb.RDB_DIR, description="Full path to Representation database directory (string)")):
+                                   sql_dir: str = Query(glb.RDB_DIR, description="Full path to Representation database directory (string)")):
     """
     API endpoint: edit_default_directories()
 
@@ -225,9 +246,9 @@ async def edit_default_directories(img_dir: str = Query(glb.IMG_DIR, description
     persistent across server restarts.
 
     Parameters:
-    - img_dir: full path to image directory (string)
+    - img_dir: full path to image directory [string]
 
-    - rdb_dir: full path to Representation database directory (string)
+    - sql_dir: full path to SQLite database (including file name!) [string]
 
     Output:\n
         JSON-encoded dictionary with the following key/value pairs is returned:
@@ -248,12 +269,12 @@ async def edit_default_directories(img_dir: str = Query(glb.IMG_DIR, description
         output_msg += f'Path provided is not a valid directory ({img_dir})\n'
         status      = True
 
-    # Sets the RDB_DIR path to the one provided IF it is a valid directory
-    if os.path.isdir(rdb_dir):
-        glb.RDB_DIR = rdb_dir
-        output_msg += f'RDB_DIR set to {rdb_dir}\n'
+    # Sets the SQLITE_DB_FP path to the one provided IF it is a valid directory
+    if os.path.isfile(sql_dir):
+        glb.SQLITE_DB_FP = sql_dir
+        output_msg += f'SQLITE_DB_FP set to {sql_dir}\n'
     else:
-        output_msg += f'Path provided is not a valid directory ({rdb_dir})\n'
+        output_msg += f'Full path provided is not a valid file ({sql_dir})\n'
         status      = True
 
     return {'status':status, 'message':output_msg}
@@ -327,12 +348,12 @@ async def view_tables(
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/database/clear")
-async def database_clear_api():
+async def database_clear():
     """
-    API endpoint: clear_database()
+    API endpoint: database_clear()
 
-    Clears the database. This is equivalent to setting the database to an empty
-    one.
+    Clears the SQLite database. The new database contains the necessary tables,
+    but each and every table is empty (i.e. has no content).
 
     Parameters:
     - None
@@ -353,32 +374,43 @@ async def database_clear_api():
 
 @fr_router.post("/people/list")
 async def people_list():
-    '''
-    API endpoint: return ID, name and note of ALL people of Person table
-    '''
+    """
+    API endpoint: people_list()
+    
+    Returns the id, name and note of ALL people in the Person table.
+
+    Parameters:
+    - None
+
+    Output:\n
+        JSON-encoded ...
+    """
     query = select(Person.id, Person.name, Person.note)
     result = glb.sqla_session.execute(query)
     return result.fetchall()
 
 # ------------------------------------------------------------------------------
 
-
 @fr_router.post("/people/get_front_image")
 async def people_list():
-    '''
-    API endpoint: return ID, name and note of the front image for each person
+    """
+    API endpoint: people_list()
+    
+    Returns the id, name and note of the front image for each person.
+
+    Parameters:
+    - None
+
+    Output:\n
+        JSON-encoded ...
     
     IN DEVELOPMENT
     NOT WORKING AT THE MOMENT!!!
-
-    '''
+    """
     
     query = select(Person.id, Person.name, Person.note).where(front_img = True)
     result = glb.sqla_session.execute(query)
     return result.fetchall()
-
-
-
 
 # ------------------------------------------------------------------------------
 
@@ -397,12 +429,17 @@ async def people_get_faces(person_id: int = Query(None, description="'person_id 
     Output:\n
             JSON-encoded FaceRep result for a specific person_id
     """
-    query = select(FaceRep.id, FaceRep.person_id, FaceRep.image_name_orig, FaceRep.image_fp_orig, FaceRep.region).where(FaceRep.person_id == person_id)
+    query = select(FaceRep.id, FaceRep.person_id, FaceRep.image_name_orig,
+                    FaceRep.image_fp_orig, FaceRep.region).where(\
+                    FaceRep.person_id == person_id)
     result = glb.sqla_session.execute(query)
 
     return_value = []
     for item in result:
-        return_value.append({'id': item.id, 'person_id': item.person_id, 'image_name_orig': item.image_name_orig, 'image_fp_orig': item.image_fp_orig, 'region': [int(x) for x in item.region] })
+        return_value.append({'id': item.id, 'person_id': item.person_id,
+                             'image_name_orig': item.image_name_orig,
+                             'image_fp_orig': item.image_fp_orig,
+                             'region': [int(x) for x in item.region] })
 
     return return_value
 
@@ -411,7 +448,15 @@ async def people_get_faces(person_id: int = Query(None, description="'person_id 
 @fr_router.post("/people/add_new")
 async def people_add_new(person_name: str = Query(None, description="new person name [string]")):
     """
-    API endpoiunt: add a new Person record and return its ID
+    API endpoint: people_add_new()
+    
+    Adds a new Person record and returns its id.
+
+    Parameters:
+        - person_name: name of new person [string].
+
+    Output:\n
+        Id of new record added to Person table
     """
     query = insert(Person).values(name=person_name)
     result = glb.sqla_session.execute(query)
@@ -425,7 +470,17 @@ async def people_add_new(person_name: str = Query(None, description="new person 
 async def people_set_name(person_id  : int = Query(None, description="'person_id key' in Person table [integer]"),
                           person_name: str = Query(None, description="new person name [string]")):
     """
-    API endpoint: set the name of one person in Person table given its ID
+    API endpoint: people_set_name()
+
+    Sets the name of one person in Person table given its id.
+
+    Parameters:
+        - person_id  : person record's id [integer].
+
+        - person_name: name of new person [string].
+
+    Output:\n
+        Returns an 'ok' message [string].
     """
     query = update(Person).values(name = person_name).where(Person.id == person_id)
     glb.sqla_session.execute(query)
@@ -439,7 +494,17 @@ async def people_set_name(person_id  : int = Query(None, description="'person_id
 async def people_set_note(person_id: int = Query(None, description="'person_id key' in Person table [integer]"),
                           new_note : str = Query(None, description="new person note [string]")):
     """
-    API endpoint: set the note of one person in Person table given its ID
+    API endpoint: people_set_note()
+    
+    Sets the note of one person in Person table given its id.
+
+    Parameters:
+        - person_id: person record's id [integer].
+
+        - new_note : note [string].
+
+    Output:\n
+        Returns an 'ok' message [string].
     """
     query = update(Person).values(note = new_note).where(Person.id == person_id)
     glb.sqla_session.execute(query)
@@ -450,12 +515,24 @@ async def people_set_note(person_id: int = Query(None, description="'person_id k
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/people/assign_facerep")
-async def people_assing_facerep(person_id : int = Query(None, description="'ID primary key in Person table [integer]"),
+async def people_assign_facerep(person_id : int = Query(None, description="'ID primary key in Person table [integer]"),
                                 facerep_id: int = Query(None, description="ID primary key in FaceRep table [integer")):
     """
-    API endpoiunt: join a FaceRep record to one Person record through the primary join Person.id -> FaceRep.person_id
+    API endpoint: people_assign_facerep()
+    
+    Joins a FaceRep record to one Person record through the primary join
+    Person.id -> FaceRep.person_id.
+
+    Parameters:
+        - person_id : person record's id [integer].
+
+        - facerep_id: face representation record's id [integer].
+
+    Output:\n
+        Returns an 'ok' message [string].
     """
-    query = update(FaceRep).values(person_id = person_id, group_no = -2).where(FaceRep.id == facerep_id)
+    query = update(FaceRep).values(person_id = person_id,
+                                  group_no = -2).where(FaceRep.id == facerep_id)
     glb.sqla_session.execute(query)
     glb.sqla_session.commit()
 
@@ -466,17 +543,17 @@ async def people_assing_facerep(person_id : int = Query(None, description="'ID p
 @fr_router.post("/facerep/unjoin")
 async def facerep_unjoin(face_id  : int = Query(None, description="ID of FaceRep record")):
     """
-    API endpoint: unjoin a FaceRep record from a Person, setting its person_id to None and group_no to -1 
-
-    This API unlinked a FaceRep record from its Person and set its person_id to None and group_no to -1 
+    API endpoint: facerep_unjoin()
+    
+    Unjoins a FaceRep record from a Person, setting its person_id to None and
+    the group_no to -1. This API unlinks a FaceRep record from its corresponding
+    Person, sets its person_id to None and group_no to -1. 
 
     Parameters:
-    - ID:  the FaceRep ID of the record to unjoin [integer]
+        - face_id: the target FaceRep record's id to be unjoined [integer].
 
     Output:\n
-        JSON-encoded dictionary containing the following key/value pairs:
-            1. removed : number of files removed
-            2. skipped : number of files skipped
+        Returns an 'ok' message [string].
     """
 
     # Set group_no to -2 and person_id=None for a specific FaceRep record
@@ -486,15 +563,17 @@ async def facerep_unjoin(face_id  : int = Query(None, description="ID of FaceRep
     #corresponding record in FaceRep table
     people_clean_without_repps(glb.sqla_session)
 
-    return 'OK'
+    return 'ok'
 
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/facerep/get_ungrouped")
 async def facerep_get_ungrouped():
     """
-    API endpoint: get all records from FaceRep that are not linked wioth a Person
-                  I.E. the ones that has group_no field set to -1
+    API endpoint: facerep_get_ungrouped()
+    
+    Gets all records from FaceRep that are not linked with to a Person (i.e. the
+    ones that have a group_no equal to -1).
 
     Parameters:
         - None
@@ -502,23 +581,35 @@ async def facerep_get_ungrouped():
     Output:\n
         JSON-encoded list of FaceRep.id(s) that match the above condition
     """
-
-    query = select(FaceRep.id, FaceRep.person_id, FaceRep.image_name_orig, FaceRep.region).where(FaceRep.group_no == -1)
+    # 
+    query = select(FaceRep.id, FaceRep.person_id, FaceRep.image_name_orig,
+                   FaceRep.region).where(FaceRep.group_no == -1)
     result = glb.sqla_session.execute(query)
+
+    # 
     return_value = []
     for item in result:
         print([int(x) for x in item.region])
-        return_value.append({'id': item.id, 'person_id': item.person_id, 'image_name_orig': item.image_name_orig, 'region': [int(x) for x in item.region] })
+        return_value.append({'id': item.id, 'person_id': item.person_id,
+                             'image_name_orig': item.image_name_orig,
+                             'region': [int(x) for x in item.region] })
 
     return return_value
-
 
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/facerep/get_person")
 async def facerep_get_person(facerep_id: int = Query(None, description="ID primary key in FaceRep table [integer")):
     """
-    API endpoiunt: get the related Person record by using FaceRep.id reference key join
+    API endpoint: facerep_get_person()
+    
+    Gets the related Person record by using FaceRep.id reference key join.
+
+    Parameters:
+        - facerep_id: FaceRep record's id [integer].
+
+    Output:\n
+        JSON-encoded Person record that matches the above condition
     """
     query = select(Person).join(FaceRep).where(FaceRep.id == facerep_id)
     result = glb.sqla_session.execute(query)
@@ -526,50 +617,17 @@ async def facerep_get_person(facerep_id: int = Query(None, description="ID prima
 
     return result.fetchall()
 
-
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/edit_tag_by_group_no")
-async def edit_tag_by_group_no(target_group_no: int = Query(None, description="Target group number (>= -1) [integer]"),
-                               new_name_tag   : str = Query(None, description="New name tag [string]")):
-    """
-    API endpoint: edit_tag_by_group_no()
-
-    Allows the user to edit the name tag of all images (Representations)
-    belonging to a same group.
-
-    Parameters:
-    - target_group_no: desired group number [integer]
-
-    - new_name_tag: new name tag [string]
-
-    Output:\n
-        JSON-encoded Representation structure with the following attributes:
-            1. unique_id : unique identifier [UUID]
-            2. image_name: image name [string]
-            3. group_no  : group number [integer]
-            4. name_tag  : name tag [string]
-            5. image_fp  : image full path [string]
-            6. region    : the region is a 4 element list [list of integers]
-            7. embedding : list of face verifier names for which this
-                            Representation has embeddings for [list of strings]
-    """
-    # Edits the records and returns the number of edited records
-    num_records_edited = glb.rep_db.edit_tag_by_group_no(target_group_no,
-                                                         new_name_tag)
-
-    return {'num_records_edited':num_records_edited}
-
-# ------------------------------------------------------------------------------
-
-@fr_router.post("/database/create_from_directory")
-async def database_create_from_directory(params: CreateDatabaseParams,
+@fr_router.post("/faces/import_from_directory")
+async def faces_import_from_directory(params: CreateDatabaseParams,
     image_dir   : Optional[str]  = Query(glb_img_dir, description="Full path to directory containing images (string)")):
     """
-    API endpoint: create_database_from_directory()
+    API endpoint: faces_import_from_directory()
 
-    Creates an SQLite database from a directory containing images. The image
-    files are expected to have any of the following formats: .jpg, .png, .npy.
+    Adds face representation records to the FaceRep table. These records are
+    created from images contained in a directory. The image files are expected
+    to have any of the following formats: .jpg, .png, .npy.
 
     Parameters:
     - params: a structure with the following parameters:
@@ -686,21 +744,26 @@ async def database_create_from_directory(params: CreateDatabaseParams,
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/database/create_from_zip")
-async def database_create_from_zip(myfile: UploadFile,
-    params      : CreateDatabaseParams = Depends(),
-    image_dir   : Optional[str]  = Query(glb.IMG_DIR, description="Full path to directory containing images (string)")):
+@fr_router.post("/faces/import_from_zip")
+async def faces_import_from_zip(myfile: UploadFile,
+    params    : CreateDatabaseParams = Depends(),
+    image_dir : Optional[str]  = Query(glb.IMG_DIR, description="Full path to directory containing images (string)"),
+    t_check   : Optional[bool] = Query(True, description="Toggles transpose check to ensure image is uncorrupted (boolean)"),
+    n_token   : Optional[int]  = Query(2, description="Number of hexadecimal tokens to be used during renaming (integer)")):
     """
-    API endpoint: create_database_from_zip()
+    API endpoint: faces_import_from_zip()
 
-    Creates an SQLite database from a zip file. The zip file is expected to
-    contain image files in any of the following formats: .jpg, .png, .npy.
+    Adds face representation records to the FaceRep table. These records are
+    created from images contained in the uploaded zip file. The image files are
+    expected to have any of the following formats: .jpg, .png, .npy.
 
-    The images in the zip file are extracted to a temporary directory. Any image
-    with the same name of another image in the 'image directory' is either
-    renamed (auto_rename=True) or skipped (auto_rename=False). Renamed images
-    are renamed using a random unique object identifier obtained by uuid4() from
-    the uuid library.
+    The images in the zip file are extracted to a temporary directory. This
+    extraction process flattens and removes any directory structure inside the
+    zip file, leaving only a list of files. If files have the same name, they
+    are adequately renamed. This process also filters files with unsupported
+    extension, leaving only .jpg, .png and .npy files currently. Furthermore,
+    the image files are tested to ensure that they are not corrupted. Finally,
+    duplicate files (different names, same contents) are removed.
 
     Parameters:
     - myfile: a zip file
@@ -752,18 +815,20 @@ async def database_create_from_zip(myfile: UploadFile,
           "verbose": false
         }
 
-    - image_dir   : full path to directory containing images (string,
-                     default: <glb.IMG_DIR>)
+    - image_dir   : full path to directory containing images [string,
+                    default: <glb.IMG_DIR>].
 
-    - db_dir      : full path to directory containing saved database (string,
-                     default: <glb.RDB_DIR>)
+    - t_check     : toggles the transpose check during the process of ensuring
+                    image files are uncorrupted. This makes this check slightly
+                    slower, but is more robust again corrupted image files
+                    [boolean, default=True].
 
-    - auto_rename : flag to force auto renaming of images in the zip file with
-                     names that match images already in the image directory
-                     (boolean, default: True)
+    - n_token     : number of hexadecimal tokens used during file renaming (if
+                    any file is renamed). Each hexadecimal token is composed of
+                    2 random hexadecimal numbers [positive integer, default=2].
 
     - force_create: flag to force database creation even if one already exists,
-                     overwritting the old one (boolean, default: True)
+                     overwritting the old one [boolean, default=True].
 
     Output:\n
         JSON-encoded dictionary with the following key/value pairs is returned:
@@ -814,7 +879,8 @@ async def database_create_from_zip(myfile: UploadFile,
         try:
             # Process the zip file containing the image files
             skipped_files = process_image_zip_file(myfile, image_dir,
-                                                    valid_exts=valid_exts)
+                                            t_check=t_check, n_token=n_token,
+                                            valid_exts=valid_exts)
             output_msg += ' success! '
 
         except Exception as excpt:
@@ -969,9 +1035,10 @@ async def verify_with_upload(files: List[UploadFile],
     img_dir         : str                = Query(glb_img_dir, description="Full path to image directory (string)"),
     save_as         : ImageSaveTypes     = Query(default_image_save_type, description="File type which uploaded images should be saved as (string)"),
     overwrite       : bool               = Query(False, description="Flag to indicate if an uploaded image with the same name as an existing one in the server should be saved and replace it (boolean)"),
-    auto_rename     : bool               = Query(True, description="Flag to force auto renaming of images in the zip file with (boolean)"),
+    n_token         : int                = Query(2, description="Number of hexadecimal tokens used during renaming (positive integer)"),
     auto_group      : bool               = Query(True, description="Flag to automatically group image based on verification results (boolean)"),
-    threshold_per   : float              = Query(.75, description="Threshold percentage below which the autogroup algorythm automatically assign the images to the best matching person")):
+    threshold_per   : float              = Query(.75, description="Threshold percentage below which the autogroup algorithm automatically assign the images to the best matching person"),
+    t_check         : bool               = Query(True, description="Toggles the transpose check during image integrity check (boolean)")):
     """
     API endpoint: verify_with_upload()
 
@@ -1032,20 +1099,45 @@ async def verify_with_upload(files: List[UploadFile],
 
     # Loops through each file
     for f in files:
+        # Obtains the file's image name and creates the full path
+        img_name = f.filename
+        img_fp   = os.path.join(img_dir, f.filename[:f.filename.rindex('.')]\
+                 + '.' + save_as)
+
+        # Checks if the current file is uncorrupted, continuing if it is
+        # corrupted
+        if not image_is_uncorrupted(img_fp, transpose_check=t_check):
+            print(f'File skipped (image is corrupted): {img_fp}')
+            skipped_files.append(img_fp)
+            continue
+
         # Obtains contents of the file & transforms it into an image
         data  = np.fromfile(f.file, dtype=np.uint8)
         img   = cv2.imdecode(data, cv2.IMREAD_UNCHANGED)
         img   = img[:, :, ::-1]
 
-        # Obtains the file's image name and creates the full path
-        img_name = f.filename
-        img_fp   = os.path.join(img_dir, f.filename[:f.filename.rindex('.')] + '.' + save_as)
-
         # ----------------------------- File Check -----------------------------
         # Only performs the file check if overwrite is False. If overwrite is
         # True, then this check is skipped as it does not matter
         if not overwrite:
-            skip_this_file = file_is_not_unique(img_fp, proc_qry=proc_files)
+            # Initializes the 'skip_this_file' flag as False
+            skip_this_file = False
+
+            # Queries the database to figure out which files have the SAME size
+            query  = select(ProcessedFiles.filename).where(\
+                            ProcessedFiles.filesize == os.path.getsize(img_fp))
+            result = glb.sqla_session.execute(query)
+            fpaths = [os.path.join(img_dir, fname[0]) for fname in result]
+
+            # Loops through each matched file path in the query's result
+            for fpath in fpaths:                
+                # Checks if the files are different and if they are, set the
+                # 'skip_this_file' flag to True (and break the loop)
+                if cmp(img_fp, fpath):
+                    skip_this_file = True
+                
+                if skip_this_file:
+                    break
 
             # Skips the current file if skip_this_file=True
             if skip_this_file:
@@ -1056,30 +1148,26 @@ async def verify_with_upload(files: List[UploadFile],
         # ------------------------- File save / upload -------------------------
         # Saves the image if it does not exist or if overwrite is True.
         # Alternatively, if auto_rename is True, then automatically renames the
-        # file (if the file name already exists) using its unique id and saves
-        # it. Otherwise skips verification in this file.
+        # file (if the file name already exists) using hexadecimal tokens and
+        # saves it. Otherwise skips verification in this file.
         if not (img_name in all_files) or overwrite:
             if save_as == ImageSaveTypes.NPY:
                 np.save(img_fp, img, allow_pickle=False, fix_imports=False)
             else:
                 mpimg.imsave(img_fp, img)
-        elif auto_rename:
-            # Creates a new unique object identifier using uuid4, converts it
-            # into a string, sets it as the file name, creates the file's full
+        else:
+            # Renames the file using hexadecimal tokens, creates the file's full
             # path and saves it
-            img_name = str(uuid4())
+            img_name = rename_file_w_hex_token(
+                        f.filename[:f.filename.rindex('.')], n_token=n_token)
             img_fp   = os.path.join(img_dir, img_name + '.' + save_as)
 
             if save_as == ImageSaveTypes.NPY:
                 np.save(img_fp, img, allow_pickle=False, fix_imports=False)
             else:
                 mpimg.imsave(img_fp, img)
-        else:
-            print(f'File skipped (file exists + no auto rename): {img_fp}')
-            skipped_files.append(img_fp)
-            continue  # skips verification using this file
 
-        # -------------------- 
+        # ------------------- Face detection & verification --------------------
         # Detects faces
         output = do_face_detection(img, detector_models=glb.models,
                                     detector_name=params.detector_name,
@@ -1112,8 +1200,6 @@ async def verify_with_upload(files: List[UploadFile],
             # result to the current image results list
             result = get_matches_from_similarity(similarity_obj)
             cur_img_results.append(result)
-
-            
 
             # Automatically determines the image's group based on the best match
             # if it has a distance / similarity of <=threshold_per*threshold and if

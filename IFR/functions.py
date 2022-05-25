@@ -12,7 +12,9 @@ import imagesize
 
 import numpy                 as np
 
+from PIL                     import Image
 from tqdm                    import tqdm
+from shutil                  import move, rmtree
 from filecmp                 import cmp
 from deepface                import DeepFace
 from deepface.basemodels     import Boosting
@@ -297,6 +299,207 @@ def rename_file_w_hex_token(fname, n_token=2):
     ext  = fname[fname.rindex('.'):]
 
     return name + '_' + secrets.token_hex(n_token) + ext
+
+# ------------------------------------------------------------------------------
+
+def flatten_dir_structure(destination, valid_exts=['.jpg', '.png', '.npy'],
+                          n_token=2):
+    """
+    Flattens the structure of the 'destination' directory, removing all
+    directories and subdirectories and leaving only the files behind.
+    Effectively, this results in a list of files in the 'destination' directory.
+    
+    Files are renamed using 'n_token' hexadecimal tokens (2 * 'n_token'
+    hexadecimals caracters) if they have the same name as an existing file in
+    the 'destination' directory (see help(rename_file_w_hex_token) for more
+    information about the renaming strategy).
+
+    A list of valid extensions can be provided in order to filter files, leaving
+    only the ones with those extensions. Alternatively, the file extension
+    filtering functionality can be turned OFF by providing 'None' (i.e.
+    valid_exts=None).
+
+    Finally, if the 'destination' directory provided does not exist (or is not a
+    directory), an OSError is raised.
+
+    Inputs:
+        1. destination - path to directory [string].
+
+        2. valid_exts  - None or list of valid file extensions [None or list of
+                          strings, default=['.jpg', '.png', '.npy']]
+
+        3. n_token     - Number of hexadecimal tokens to be used during renaming
+                          process [positive integer, default=2]
+
+    Output:
+        None
+
+    Signature:
+        flatten_dir_structure(destination, valid_exts=['.jpg', '.png', '.npy'],
+                                n_token=2)
+    """
+    # Raises an OSError is the destination directory does not exist
+    if not os.path.isdir(destination):
+        raise OSError("Directory 'destination' does not exist!")
+
+    # Initializes the all_files list and the first_loop_pass
+    all_files       = []
+    first_loop_pass = True
+
+    # Loops through the files in the destination directory, skipping the top
+    # level ones (as these do not need to be moved)
+    for root, _dirs, files in os.walk(destination):
+        # Skips the first loop pass to prevent scanning files at the top of the
+        # directory by ignoring the first element of the iteration of os.walk
+        if first_loop_pass:
+            first_loop_pass = False
+            continue
+        
+        # Stores the filename (paths actually) in the 'all_files' list
+        for filename in files:
+            all_files.append(os.path.join(root, filename))
+
+    # Determines if the file extension filtering functionality will be on or
+    # off. If it is on, determines the names of the valid files based on their
+    # file extension
+    if valid_exts is not None:
+        filter_files = True
+        valid_files  = filter_files_by_ext(all_files, valid_exts=valid_exts)
+    else:
+        filter_files = False
+
+    # Loops through each filename in all_files list
+    for filename in all_files:
+        # First, if file extension filtering is turned on, determines if the
+        # current filename is not valid, deleting it if that is the case
+        if filter_files:
+            if not (filename in valid_files):
+                # Deletes invalid file and continues
+                os.remove(filename)
+                continue
+
+        # Creates a path using the destination directory and the current file's
+        # name
+        base_path = os.path.join(destination, filename[filename.rindex('/')+1:])
+
+        # Checks if the 'base_path' file exists
+        if os.path.exists(base_path):
+            # If so, this means a file already exists with the same name, so
+            # rename the current file and move it
+            new_filename = rename_file_w_hex_token(filename, n_token=n_token)
+            os.rename(filename, new_filename)
+            move(new_filename, destination)
+        else:
+            # Otherwise, there is no file with the same name so just move this
+            # one
+            move(filename, destination)
+
+    # After the previous steps, all of the remaining directories are empty, so
+    # get their names
+    empty_dirs = [os.path.join(destination, name) for name\
+                  in os.listdir(destination)\
+                  if os.path.isdir(os.path.join(destination, name))]
+
+    # Delete each empty directory (recurisvely - these directories at most
+    # contain other empty directories)
+    for cur_dir in empty_dirs:
+        rmtree(cur_dir)
+
+    # Note that the previous filtering step does not include files in the top
+    # level of the directory, so these have to be dealt with now. Loops through
+    # each file (in the top level directory) and removes them if the extension
+    # does not match any of the valid extensions
+    for i, fname in enumerate(os.listdir(destination)):
+        if not fname[fname.rindex('.'):].lower() in valid_exts:
+            os.remove(os.path.join(destination, fname))
+
+    # As a final step, removes any duplicate files - these may arise if the same
+    # file is copied and spread over multiple directories
+    remove_img_file_duplicates(destination)
+
+    return None
+
+# ------------------------------------------------------------------------------
+
+def image_is_uncorrupted(filename, transpose_check=True, verbose=False):
+    """
+    Checks if an image file is uncorrupted (valid) regardless of its extension.
+    This function was inspired by the algorithm presented by Tiago Martins Peres
+    & Fabiano Tarlao on the following stackoverflow thread (do not forget to
+    include the 'https://stackoverflow.com/' url before the one below):
+
+        questions/889333/how-to-check-if-a-file-is-a-valid-image-file
+
+    First, the file's size is obtained and if it lower than 50 bytes its
+    considered corrupted. Most image file formats will have at least 100 bytes
+    for a single color (even if monochrome) pixel, so a file with 50 bytes or
+    less if definetly corrupted.
+
+    The next check is loading up the image using the PIL library and performing
+    the verify() method. If that fails, the image is corrupted.
+
+    Finally, if transpose_check=True, the image is reloaded using PIL and the
+    function tries to transpose the image. If that fails, once more it is
+    considered corrupted.
+
+    The function prints the specific error (which caused a check to fail) to the
+    console if verbose=True.
+
+    Inputs:
+        1. filename        - path to the image file [string].
+
+        2. transpose_check - toggles if the image's tranpose should be
+                                calculated as an extra check [boolean,
+                                default=True].
+
+        3. verbose         - toggles if the function should print the specific
+                                error (which caused a check to fail) to the
+                                console [boolean, default=False].
+
+    Output:
+        1. boolean indicating if the image file is corrupted (True) or not
+            (False) [boolean].
+
+    Signature:
+        uncorrupted = image_is_uncorrupted(filename, transpose_check=True,
+                                            verbose=False)
+    """
+    # Obtains the file size
+    statfile = os.stat(filename)
+    filesize = statfile.st_size
+
+    # Returns False (corrupted) if the file size is lower than 50 bytes (most
+    # image formats will be larger than 50 bytes even for a single colored
+    # pixel)
+    if filesize <= 50:
+        if verbose:
+            print(f'Checks failed (reason: file has less than 50 bytes)')
+        uncorrupted = False
+        return uncorrupted
+
+    try:
+        # Loads the image using PIL and calls the verify() method
+        with Image.open(filename) as im:
+            im.verify()
+        
+        # A reload is necessary according to Tiago Martins Peres & Fabiano
+        # Tarlao before this step. If transpose_check=True, then the image is
+        # loaded using PIL and its transpose is calculated
+        if transpose_check:
+            with Image.open(filename) as im:
+                im.transpose(Image.FLIP_LEFT_RIGHT)
+
+        # If no errors occured, then the image is uncorrupted
+        uncorrupted = True
+
+    except Exception as excpt:
+        # If any error occured, then the image is corrupted. The specific error
+        # is printed to the console if verbose=True
+        if verbose:
+            print(f'Checks failed (reason: {excpt})')
+        uncorrupted = False
+
+    return uncorrupted
 
 # ______________________________________________________________________________
 #                    FACE DETECTION / VERIFICATION RELATED
