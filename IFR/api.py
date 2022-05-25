@@ -21,11 +21,12 @@ from sqlalchemy              import create_engine, inspect, MetaData, select,\
                                     insert, update, delete, text, update
 from sqlalchemy.orm          import sessionmaker
 from IFR.classes             import FaceRep, Person, VerificationMatch,\
-                                    ProcessedFilesTemp, ProcessedFiles, Base
+                                    ProcessedFilesTemp, ProcessedFiles, Base,\
+                                    tempClustering
 from IFR.functions           import get_image_paths, do_face_detection,\
                                     calc_embeddings, ensure_detectors_exists,\
                                     ensure_verifiers_exists,\
-                                    discard_small_regions, filter_files_by_ext,\
+                                    discard_small_regions,\
                                     rename_file_w_hex_token,\
                                     flatten_dir_structure, image_is_uncorrupted
 from sklearn.cluster         import DBSCAN
@@ -33,7 +34,6 @@ from sklearn.cluster         import DBSCAN
 from shutil                          import move           as sh_move
 from deepface.DeepFace               import build_model    as build_verifier
 from deepface.detectors.FaceDetector import build_model    as build_detector
-from secrets                 import token_hex
 
 # ______________________________________________________________________________
 #                       UTILITY & GENERAL USE FUNCTIONS
@@ -747,15 +747,7 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
         # Loops through each (region, embedding) pair and create a record
         # (FaceRep object)
         for region, cur_embds in zip(filtered_regions, embeddings):
-            # id        - handled by sqlalchemy
-            # person_id - dont now exactly how to handle this (sqlalchemy?)
-            # image_name_orig = img_path.split('/')[-1]
-            # image_fp_orig   = img_path
-            # image_name      = ''   # currently not being used in this approach
-            # image_fp        = ''   # currently not being used in this approach
-            # group_no        = -1
-            # region          = region
-            # embeddings      = cur_embds
+            # Create a FaceRep record
             record = FaceRep(image_name_orig=img_path.split('/')[-1],
                         image_name='', image_fp_orig=img_path,
                         image_fp='', group_no=-1, region=region,
@@ -779,18 +771,8 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
 
     # Clusters Representations together using the DBSCAN algorithm
     if auto_grouping and len(embds) > 0:
-        # Clusters embeddings using DBSCAN algorithm
-        results = DBSCAN(eps=eps, min_samples=min_samples,
-                         metric=metric).fit(embds)
-
-        # Loops through each label and updates the 'group_no' attribute of each
-        # record IF group_no != -1 (because -1 is already the default value and
-        # means "no group")
-        for i, lbl in enumerate(results.labels_):
-            if lbl == -1:
-                continue
-            else:
-                records[i].group_no = int(lbl)
+        group_facereps(verifier_names[0], eps=eps, min_samples=min_samples,
+                        metric=metric, verbose=verbose)
 
     # Loops through each record and add them to the global session
     if glb.DEBUG:
@@ -802,7 +784,8 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
     # Add how many person to Person table as the detected clusters
     if glb.DEBUG:
         print('add person to Person table')
-    subquery = select(FaceRep.group_no).where(FaceRep.group_no > -1).group_by(FaceRep.group_no).order_by(FaceRep.group_no)
+    subquery = select(FaceRep.group_no).where(FaceRep.group_no > -1).group_by(
+                    FaceRep.group_no).order_by(FaceRep.group_no)
     query = insert(Person).from_select(["group_no"], subquery)
     glb.sqla_session.execute(query)
     glb.sqla_session.commit()
@@ -810,8 +793,10 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
     # Populate the person_id field in FaceRep with the corresponding ID in Person table
     if glb.DEBUG:
         print('Create joins between Person and FaceRep tables')
-    subquery = select(Person.id).where(FaceRep.group_no == Person.group_no).where(FaceRep.group_no > -1)
-    query = update(FaceRep).values(person_id = subquery.scalar_subquery()).where(FaceRep.group_no > -1)
+    subquery = select(Person.id).where(FaceRep.group_no == 
+                Person.group_no).where(FaceRep.group_no > -1)
+    query = update(FaceRep).values(person_id =
+                subquery.scalar_subquery()).where(FaceRep.group_no > -1)
     if glb.DEBUG:
         print(query)
     glb.sqla_session.execute(query)
@@ -819,7 +804,8 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
     
     # Set group_no to -2 for the representation that have been linked with person
     if glb.DEBUG:
-        print('Set group_no to -2 for FaceRep and Person that have been already linked together')
+        print('Set group_no to -2 for FaceRep and Person that',
+              'have been already linked together')
     query = update(FaceRep).values(group_no = -2).where(FaceRep.group_no > -1)
     glb.sqla_session.execute(query)
     query = update(Person).values(group_no = -2).where(Person.group_no > -1)
@@ -1006,6 +992,134 @@ def get_matches_from_similarity(similarity_obj):
                             threshold=similarity_obj['threshold']))
     
     return matches
+
+# ------------------------------------------------------------------------------
+
+def group_facereps(verifier_name, eps=0.5, min_samples=2, metric='cosine',
+                    verbose=False):
+    """
+    Groups face representations. Each group is considered to be a unique person.
+    This functions raises an assertion error if it fails to get the embeddings
+    corresponding to the face verifier 'verifier_name' from the database.
+
+    Note that this functions uses the global session (glb.sqla_session) to read
+    and modify tables in the database.
+
+    Inputs:
+        1. verifier_name - face verifier name [string].
+        
+        2. eps           - the maximum distance between two samples for one to
+                           be considered as in the neighborhood of the other.
+                           This is the most important DBSCAN parameter to
+                           choose appropriately for the specific data set and
+                           distance function [float, default=0.5].
+
+        3. min_samples   - the number of samples (or total weight) in a
+                           neighborhood for a point to be considered as a core
+                           point. This includes the point itself [integer,
+                           min_samples=2].
+
+        4. metric        - the metric used when calculating distance between
+                           instances in a feature array. It must be one of the
+                           options allowed by sklearn.metrics.pairwise_distances
+                           [string, default='cosine'].
+
+        5. verbose       - controls if the function should output information to
+                           the console [boolean, default=False]
+
+    Output:
+        1. None
+
+    Signature:
+        group_facereps(verifier_name, eps=0.5, min_samples=2, metric='cosine')
+    """
+    # Attempts to get all embeddings stored in the database, given the chosen
+    # verifier model's name
+    try:
+        embds = get_embeddings_as_array(verifier_name)
+    except Exception as excpt:
+        raise AssertionError(f'Could not get embeddings (reason: {excpt})')
+
+    # Clusters embeddings using DBSCAN algorithm
+    result = DBSCAN(eps=eps, min_samples=min_samples, metric=metric).fit(embds)
+
+    # Deletes 'temp_clustering' table and repopulates it
+    glb.sqla_session.execute(delete(tempClustering))
+    glb.sqla_session.commit()
+
+    group_no = [{'group_no': int(no)} for no in result.labels_]
+    query    = insert(tempClustering).values(group_no)
+    
+    glb.sqla_session.execute(query)
+    glb.sqla_session.commit()
+
+    # Updates the group_no in FaceRep with the values taken from TempClustering
+    # table
+    query = text("UPDATE representation "                                +\
+                 "SET group_no = (SELECT group_no FROM temp_clustering " +\
+                 "WHERE representation.id = temp_clustering.id)")
+    glb.sqla_session.execute(query)
+    glb.sqla_session.commit()
+
+    # Gets the list of ids of the new clusters
+    query  = select(tempClustering.group_no).group_by(tempClustering.group_no)
+    result = glb.sqla_session.execute(query)
+    new_clusters = [item.group_no for item in result.all()]
+
+    # Gets the person id for each cluster
+    for cluster in new_clusters:
+        query  = select(FaceRep.person_id).where((FaceRep.group_no == cluster)\
+                        & (FaceRep.person_id != None)).limit(1)
+        result = glb.sqla_session.execute(query).first()
+
+        # Checks if a match exists for 'person_id' in this cluster
+        if result:
+            # Obtains the person id and prints the cluster-person association if
+            # verbose = True
+            person_id = result.person_id
+            if verbose:
+                print(f"Cluster {cluster} associated with person {person_id}")
+
+            # Sets the 'person_id' field for all the records of this cluster
+            query = update(FaceRep).values(person_id = person_id).where(
+                    (FaceRep.group_no == cluster) & (FaceRep.person_id == None))
+            glb.sqla_session.execute(query)
+
+            # Sets the 'group_no' for all records in this cluster to -2, meaning
+            # that they have been done
+            query = update(FaceRep).values(group_no = -2).where(
+                        FaceRep.group_no == cluster)
+            glb.sqla_session.execute(query)
+            glb.sqla_session.commit()
+
+        # Otherwise, the cluster is not associated with any person and new
+        # person needs to be created
+        else:
+            if verbose:
+                print(f"Cluster {cluster} is not associated with any person.")
+                print("A new person will be created and associated with all",
+                      "the relevant representations")
+
+            # Inserts a new record (person) into the Person table
+            query  = text("INSERT INTO person(name, group_no) VALUES(Null, -2)")
+            result = glb.sqla_session.execute(query)
+            glb.sqla_session.commit()
+
+            # Gets the id of the new inserted record / person
+            person_id = result.lastrowid
+
+            # Updates the 'person_id' value for all the records in
+            # Representation for this cluster
+            query = text("UPDATE representation SET person_id = "           +\
+                        str(person_id) + ", group_no = -2 WHERE "           +\
+                        "(representation.group_no == " + str(cluster)       +\
+                        ") & ((SELECT rep2.id FROM representation AS rep2 " +\
+                        "WHERE (rep2.group_no == " + str(cluster)           +\
+                        ") & (rep2.person_id IS NOT NULL)) IS NULL)")
+            glb.sqla_session.execute(query)
+            glb.sqla_session.commit()
+
+    return None
 
 # ______________________________________________________________________________
 #                           DATABASE RELATED FUNCTIONS 
