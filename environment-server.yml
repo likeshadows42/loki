@@ -22,6 +22,7 @@ dependencies:
   - expat=2.4.4
   - gh=2.10.1
   - glib=2.69.1
+  - gunicorn=20.1.0
   - html5lib=1.1
   - idna=3.3
   - importlib-metadata=4.11.3
@@ -97,7 +98,6 @@ dependencies:
     - google-pasta==0.2.0
     - greenlet==1.1.2
     - grpcio==1.46.1
-    - gunicorn==20.1.0
     - h11==0.13.0
     - h5py==3.6.0
     - httptools==0.4.0
