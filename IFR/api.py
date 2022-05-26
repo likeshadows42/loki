@@ -1037,7 +1037,7 @@ def group_facereps(verifier_name, eps=0.5, min_samples=2, metric='cosine',
     # Gets the list of ids of the new clusters
     query  = select(tempClustering.group_no).group_by(tempClustering.group_no)
     result = glb.sqla_session.execute(query)
-    new_clusters = [item.group_no for item in result.all()]
+    new_clusters = [item.group_no for item in result.all() if item.group_no >= 0]
 
     # Gets the person id for each cluster
     for cluster in new_clusters:
