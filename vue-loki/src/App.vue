@@ -36,7 +36,7 @@ export default {
       imgUploaderAdvToggler: false,
       zipUploaderToggler: false,
       compImgUngroupedToggler: false,
-      compGroupsToggler: false,
+      compGroupsToggler: true,
     }
   },
 
@@ -188,7 +188,6 @@ export default {
       
       <h3>Load images</h3>
       <p><a href="#" @click.prevent="sectionToggler('zipUploaderToggler')">Load images from zip</a></p>
-      <p><a href="#" @click.prevent="dbLoadFromDir">Load images from default directory</a></p>
       <!-- <p><a>Upload multiple images</a></p> -->
 
       <h3>Verify images</h3>
@@ -201,10 +200,10 @@ export default {
 
       
 
-      <h3>Database</h3>
+      <h3>Utility</h3>
       <!-- <p><a href="#" @click.prevent="">Load database</a></p>
       <p><a href="#" @click.prevent="">Save database</a></p> -->
-      
+      <p><a href="#" @click.prevent="dbLoadFromDir">Load images from default directory</a></p>
       <p><a href="#" @click.prevent="dbClear">Clear database</a></p>
       <p><a href="#" @click.prevent="imgdirClear">Clear image dir</a></p>
       <!-- <p><a href="#" @click.prevent="dbReload">Reload database</a></p> -->
