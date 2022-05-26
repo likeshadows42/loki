@@ -187,11 +187,11 @@ export default {
       <!-- <p><a href="#" @click.prevent="imgUploaderAdvToggle">Upload multiple images</a></p> -->
       
       <h3>Load images</h3>
-      <p><a href="#" @click.prevent="dbLoadFromDir">Load images from directory</a></p>
       <p><a href="#" @click.prevent="sectionToggler('zipUploaderToggler')">Load images from zip</a></p>
-
-
+      <p><a href="#" @click.prevent="dbLoadFromDir">Load images from default directory</a></p>
       <!-- <p><a>Upload multiple images</a></p> -->
+
+      <h3>Verify images</h3>
       <p><a href="#" @click.prevent="sectionToggler('imgUploaderWithoutUpToggler')">Verify image (without upload)</a></p>
       <!-- <p><a href="#" @click.prevent="imgVerWithUpToggle">Verify image (with upload)</a></p> -->
       
