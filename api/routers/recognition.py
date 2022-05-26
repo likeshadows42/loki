@@ -1137,13 +1137,6 @@ async def verify_with_upload(files: List[UploadFile],
     all_files            = os.listdir(img_dir)
     dtb_embs             = get_embeddings_as_array(params.verifier_name)
 
-    print('all_files:')
-    for f in all_files:
-        print(f'  > file: {f}')
-    print('')
-
-    print('file type:', type(files))
-
     # Creates a temporary directory
     with TemporaryDirectory(prefix="verify_with_upload-") as tempdir:
         # Loops through each file
@@ -1152,9 +1145,6 @@ async def verify_with_upload(files: List[UploadFile],
             img_name = f.filename
             img_fp   = os.path.join(tempdir, img_name[:img_name.rindex('.')]\
                         + '.' + save_as)
-
-            print('[BEFORE] img_name:', img_name)
-            print('[BEFORE] img_fp  :', img_fp)
 
             # Obtains contents of the file & transforms it into an image
             data  = np.fromfile(f.file, dtype=np.uint8)
@@ -1175,20 +1165,18 @@ async def verify_with_upload(files: List[UploadFile],
                 # Renames the file using hexadecimal tokens, creates the file's
                 # full path and saves it
                 img_name = rename_file_w_hex_token(
-                           f.filename[:f.filename.rindex('.')], n_token=n_token)
-                img_fp   = os.path.join(tempdir, img_name + '.' + save_as)
+                            img_name[:img_name.rindex('.')] + '.' + save_as,
+                            n_token=n_token)
+                img_fp   = os.path.join(tempdir, img_name)
 
                 if save_as == ImageSaveTypes.NPY:
                     np.save(img_fp, img, allow_pickle=False, fix_imports=False)
                 else:
                     mpimg.imsave(img_fp, img)
 
-            print('[AFTER] img_name:', img_name)
-            print('[AFTER] img_fp  :', img_fp)
-
             # --------------------------- File Check ---------------------------
             # Checks if the file extension is supported
-            if not (f.filename[f.filename.rindex('.'):].lower() in
+            if not (img_name[img_name.rindex('.'):].lower() in
                     glb.supported_exts):
                 print(f'File skipped (extension not supported): {img_fp}')
                 skipped_files.append(img_fp)
@@ -1215,11 +1203,9 @@ async def verify_with_upload(files: List[UploadFile],
                             ProcessedFiles.filesize == os.path.getsize(img_fp))
                 result = glb.sqla_session.execute(query)
                 fpaths = [os.path.join(img_dir, fname[0]) for fname in result]
-                print('fpaths:', fpaths)
 
                 # Loops through each matched file path in the query's result
                 for i, fpath in enumerate(fpaths):
-                    print(f'{i}: {img_fp} vs {fpath} | (decision: {cmp(img_fp, fpath, shallow=False)})')
                     # Checks if the files are different and if they are, set the
                     # 'skip_this_file' flag to True (and break the loop)
                     if cmp(img_fp, fpath, shallow=False):
@@ -1238,6 +1224,7 @@ async def verify_with_upload(files: List[UploadFile],
             # Finally, after all checks are cleared, move the file from the
             # temporary directory to the image one
             sh_move(img_fp, os.path.join(img_dir, img_name))
+            img_fp = os.path.join(img_dir, img_name)
         
             # ----------------- Face detection & verification ------------------
             # Detects faces
@@ -1303,6 +1290,10 @@ async def verify_with_upload(files: List[UploadFile],
 
             # Stores the verification result and commits the FaceReps
             verification_results.append(cur_img_results)
+
+            # After file has been processed, add it to the ProcessedFiles table
+            glb.sqla_session.add(ProcessedFiles(filename=img_name,
+                                            filesize=os.path.getsize(img_fp)))
             glb.sqla_session.commit()
 
     return verification_results
