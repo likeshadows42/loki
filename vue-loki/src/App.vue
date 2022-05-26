@@ -204,7 +204,7 @@ export default {
       <!-- <p><a href="#" @click.prevent="">Load database</a></p>
       <p><a href="#" @click.prevent="">Save database</a></p> -->
       <p><a href="#" @click.prevent="dbLoadFromDir">Load images from default directory</a></p>
-      <p><a href="/data">Show img_dir content</a></p>
+      <p><a href="/data/" target="_blank">Show img_dir content</a></p>
       <p><a href="#" @click.prevent="dbClear">Clear database</a></p>
       <p><a href="#" @click.prevent="imgdirClear">Clear image dir</a></p>
       <!-- <p><a href="#" @click.prevent="dbReload">Reload database</a></p> -->
