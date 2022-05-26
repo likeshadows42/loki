@@ -9,8 +9,8 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy                 as np
 import api.global_variables  as glb
 
-from uuid                    import uuid4
 from typing                  import List, Optional
+from tempfile                import TemporaryDirectory
 from filecmp                 import cmp
 from fastapi                 import APIRouter, UploadFile, Depends, Query
 from IFR.api                 import init_load_verifiers, init_load_detectors,\
@@ -25,6 +25,7 @@ from IFR.functions           import ensure_dirs_exist, calc_embeddings,\
                                 discard_small_regions, image_is_uncorrupted,\
                                 rename_file_w_hex_token
 
+from shutil                  import rmtree, move   as sh_move
 from matplotlib              import image          as mpimg
 
 from sqlalchemy import select, update, insert
@@ -347,7 +348,53 @@ async def view_tables(
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/database/clear")
+@fr_router.post("/utility/clear_image_dir")
+async def clear_image_dir():
+    """
+    API endpoint: clear_image_dir()
+
+    Clears the image directory and the SQLite database. Then, recreates the new
+    database with the necessary tables, but each and every table is empty (i.e.
+    has no content).
+
+    The image directory is cleared by removing the entire directory and
+    recreating an empty directory with the same path.
+
+    Parameters:
+        - None
+
+    Output:\n
+        JSON-encoded dictionary with the following attributes:
+            1. 'message': message stating that the directory was cleared OR with
+                the result of any eventual exception [string]
+
+            2. 'status' : flag indicating if every went smoothly without error
+                (False) or if there was an error (True) [boolean]
+    """
+    # Initializes message & status
+    msg    = ''
+    status = False
+
+    # Removes the image directory (and all of its content) then recreates it
+    try:
+        rmtree(glb.IMG_DIR)
+        ensure_dirs_exist([glb.IMG_DIR], verbose=False)
+        msg    = f'Image directory cleared'
+    except Exception as excpt:
+        msg    = f'Exception occured: {excpt}'
+        status = True
+
+    # Remove SQlite file and recreate again
+    os.remove(glb.SQLITE_DB_FP)
+    glb.sqla_engine  = load_database(glb.SQLITE_DB_FP)
+    glb.sqla_session = start_session(glb.sqla_engine)
+    glb.sqla_session.commit()
+
+    return {'message':msg, 'status':status}
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/utility/clear_database")
 async def database_clear():
     """
     API endpoint: database_clear()
@@ -838,10 +885,6 @@ async def faces_import_from_zip(myfile: UploadFile,
             
             2. message: informative message string
     """
-    # These are hard-codded constants for now
-    table_names = ['person', 'representation', 'proc_files', 'proc_files_temp']
-    valid_exts  = ['.jpg', '.png', '.npy']
-
     # Initialize output message and skipped_files list
     output_msg    = ''
     skipped_files = []
@@ -861,7 +904,7 @@ async def faces_import_from_zip(myfile: UploadFile,
                    +  'Please create one before using this endpoint.\n'
 
     # Face Representation table does not exist
-    elif not all_tables_exist(glb.sqla_engine, table_names):
+    elif not all_tables_exist(glb.sqla_engine, glb.sqla_table_names):
         # Do nothing, but set message
         output_msg += "Face representation table ('representation') "\
                    +  'does not exist! Please ensure that this table exists '\
@@ -880,7 +923,7 @@ async def faces_import_from_zip(myfile: UploadFile,
             # Process the zip file containing the image files
             skipped_files = process_image_zip_file(myfile, image_dir,
                                             t_check=t_check, n_token=n_token,
-                                            valid_exts=valid_exts)
+                                            valid_exts=glb.supported_exts)
             output_msg += ' success! '
 
         except Exception as excpt:
@@ -1091,146 +1134,167 @@ async def verify_with_upload(files: List[UploadFile],
     # appropriate embeddings as a 2D array
     verification_results = []
     skipped_files        = []
-    all_files            = [name.split('.')[0] for name in os.listdir(img_dir)]
+    all_files            = os.listdir(img_dir)
     dtb_embs             = get_embeddings_as_array(params.verifier_name)
 
-    # Obtains the processed files from the ProcessedFiles table
-    proc_files = glb.sqla_session.query(ProcessedFiles)
+    # Creates a temporary directory
+    with TemporaryDirectory(prefix="verify_with_upload-") as tempdir:
+        # Loops through each file
+        for f in files:
+            # Obtains the file's image name and creates the full path
+            img_name = f.filename
+            img_fp   = os.path.join(tempdir, img_name[:img_name.rindex('.')]\
+                        + '.' + save_as)
 
-    # Loops through each file
-    for f in files:
-        # Obtains the file's image name and creates the full path
-        img_name = f.filename
-        img_fp   = os.path.join(img_dir, f.filename[:f.filename.rindex('.')]\
-                 + '.' + save_as)
+            # Obtains contents of the file & transforms it into an image
+            data  = np.fromfile(f.file, dtype=np.uint8)
+            img   = cv2.imdecode(data, cv2.IMREAD_UNCHANGED)
+            img   = img[:, :, ::-1]
 
-        # Checks if the current file is uncorrupted, continuing if it is
-        # corrupted
-        if not image_is_uncorrupted(img_fp, transpose_check=t_check):
-            print(f'File skipped (image is corrupted): {img_fp}')
-            skipped_files.append(img_fp)
-            continue
+            # ----------------------- File save / upload -----------------------
+            # Saves the image to the temporary directory if it does not exist or
+            # if overwrite is True. Alternatively, if a file exists with the
+            # same name and overwrite is False, automatically renames it using
+            # hexadecimal tokens and then saves it
+            if not (img_name in all_files) or overwrite:
+                if save_as == ImageSaveTypes.NPY:
+                    np.save(img_fp, img, allow_pickle=False, fix_imports=False)
+                else:
+                    mpimg.imsave(img_fp, img)
+            else:
+                # Renames the file using hexadecimal tokens, creates the file's
+                # full path and saves it
+                img_name = rename_file_w_hex_token(
+                            img_name[:img_name.rindex('.')] + '.' + save_as,
+                            n_token=n_token)
+                img_fp   = os.path.join(tempdir, img_name)
 
-        # Obtains contents of the file & transforms it into an image
-        data  = np.fromfile(f.file, dtype=np.uint8)
-        img   = cv2.imdecode(data, cv2.IMREAD_UNCHANGED)
-        img   = img[:, :, ::-1]
+                if save_as == ImageSaveTypes.NPY:
+                    np.save(img_fp, img, allow_pickle=False, fix_imports=False)
+                else:
+                    mpimg.imsave(img_fp, img)
 
-        # ----------------------------- File Check -----------------------------
-        # Only performs the file check if overwrite is False. If overwrite is
-        # True, then this check is skipped as it does not matter
-        if not overwrite:
-            # Initializes the 'skip_this_file' flag as False
-            skip_this_file = False
-
-            # Queries the database to figure out which files have the SAME size
-            query  = select(ProcessedFiles.filename).where(\
-                            ProcessedFiles.filesize == os.path.getsize(img_fp))
-            result = glb.sqla_session.execute(query)
-            fpaths = [os.path.join(img_dir, fname[0]) for fname in result]
-
-            # Loops through each matched file path in the query's result
-            for fpath in fpaths:                
-                # Checks if the files are different and if they are, set the
-                # 'skip_this_file' flag to True (and break the loop)
-                if cmp(img_fp, fpath):
-                    skip_this_file = True
-                
-                if skip_this_file:
-                    break
-
-            # Skips the current file if skip_this_file=True
-            if skip_this_file:
-                print(f'File skipped (file check failed): {img_fp}')
+            # --------------------------- File Check ---------------------------
+            # Checks if the file extension is supported
+            if not (img_name[img_name.rindex('.'):].lower() in
+                    glb.supported_exts):
+                print(f'File skipped (extension not supported): {img_fp}')
                 skipped_files.append(img_fp)
+                os.remove(img_fp)
                 continue
+
+            # Checks if the current file is uncorrupted, continuing if it is
+            # corrupted
+            if not image_is_uncorrupted(img_fp, transpose_check=t_check):
+                print(f'File skipped (image is corrupted): {img_fp}')
+                skipped_files.append(img_fp)
+                os.remove(img_fp)
+                continue
+
+            # Only performs the file check if overwrite is False. If overwrite
+            # is True, then this check is skipped as it does not matter
+            if not overwrite:
+                # Initializes the 'skip_this_file' flag as False
+                skip_this_file = False
+
+                # Queries the database to figure out which files have the SAME
+                # size
+                query  = select(ProcessedFiles.filename).where(\
+                            ProcessedFiles.filesize == os.path.getsize(img_fp))
+                result = glb.sqla_session.execute(query)
+                fpaths = [os.path.join(img_dir, fname[0]) for fname in result]
+
+                # Loops through each matched file path in the query's result
+                for i, fpath in enumerate(fpaths):
+                    # Checks if the files are different and if they are, set the
+                    # 'skip_this_file' flag to True (and break the loop)
+                    if cmp(img_fp, fpath, shallow=False):
+                        skip_this_file = True
+                
+                    if skip_this_file:
+                        break
+
+                # Skips the current file if skip_this_file=True
+                if skip_this_file:
+                    print(f'File skipped (file check failed): {img_fp}')
+                    skipped_files.append(img_fp)
+                    os.remove(img_fp)
+                    continue
+
+            # Finally, after all checks are cleared, move the file from the
+            # temporary directory to the image one
+            sh_move(img_fp, os.path.join(img_dir, img_name))
+            img_fp = os.path.join(img_dir, img_name)
         
-        # ------------------------- File save / upload -------------------------
-        # Saves the image if it does not exist or if overwrite is True.
-        # Alternatively, if auto_rename is True, then automatically renames the
-        # file (if the file name already exists) using hexadecimal tokens and
-        # saves it. Otherwise skips verification in this file.
-        if not (img_name in all_files) or overwrite:
-            if save_as == ImageSaveTypes.NPY:
-                np.save(img_fp, img, allow_pickle=False, fix_imports=False)
-            else:
-                mpimg.imsave(img_fp, img)
-        else:
-            # Renames the file using hexadecimal tokens, creates the file's full
-            # path and saves it
-            img_name = rename_file_w_hex_token(
-                        f.filename[:f.filename.rindex('.')], n_token=n_token)
-            img_fp   = os.path.join(img_dir, img_name + '.' + save_as)
-
-            if save_as == ImageSaveTypes.NPY:
-                np.save(img_fp, img, allow_pickle=False, fix_imports=False)
-            else:
-                mpimg.imsave(img_fp, img)
-
-        # ------------------- Face detection & verification --------------------
-        # Detects faces
-        output = do_face_detection(img, detector_models=glb.models,
+            # ----------------- Face detection & verification ------------------
+            # Detects faces
+            output = do_face_detection(img, detector_models=glb.models,
                                     detector_name=params.detector_name,
                                     align=params.align, verbose=params.verbose)
 
-        # Filter regions & faces which are too small
-        filtered_regions, idxs = discard_small_regions(output['regions'],
+            # Filter regions & faces which are too small
+            filtered_regions, idxs = discard_small_regions(output['regions'],
                                                     img.shape, pct=params.pct)
-        filtered_faces         = [output['faces'][i] for i in idxs]
+            filtered_faces         = [output['faces'][i] for i in idxs]
 
-        # Calculates the deep neural embeddings for each face image in outputs
-        embeddings = calc_embeddings(filtered_faces, glb.models,
-                                     verifier_names=params.verifier_name,
-                                     normalization=params.normalization)
+            # Calculates the deep neural embeddings for each face image in
+            # outputs
+            embeddings = calc_embeddings(filtered_faces, glb.models,
+                                        verifier_names=params.verifier_name,
+                                        normalization=params.normalization)
 
-        # Initialize current image's result container
-        cur_img_results = []
+            # Initialize current image's result container
+            cur_img_results = []
 
-        # Loops through each face region and embedding and creates a FaceRep for
-        # each face
-        for region, cur_embd in zip(filtered_regions, embeddings):
-            # Calculates the similarity between the current embedding and all
-            # embeddings from the database
-            similarity_obj = calc_similarity(cur_embd[params.verifier_name],
+            # Loops through each face region and embedding and creates a FaceRep for
+            # each face
+            for region, cur_embd in zip(filtered_regions, embeddings):
+                # Calculates the similarity between the current embedding and all
+                # embeddings from the database
+                similarity_obj = calc_similarity(cur_embd[params.verifier_name],
                                              dtb_embs, metric=params.metric,
                                              face_verifier=params.verifier_name,
                                              threshold=params.threshold)
 
-            # Gets all matches based on the similarity object and appends the
-            # result to the current image results list
-            result = get_matches_from_similarity(similarity_obj)
-            cur_img_results.append(result)
+                # Gets all matches based on the similarity object and appends the
+                # result to the current image results list
+                result = get_matches_from_similarity(similarity_obj)
+                cur_img_results.append(result)
 
-            # Automatically determines the image's group based on the best match
-            # if it has a distance / similarity of <=threshold_per*threshold and if
-            # 'auto_group' is True
-            # print('similarity_obj distance', similarity_obj['distances'][0])
-            # print("threshold_per * similarity_obj['threshold']", threshold_per * similarity_obj['threshold'])
-            # print("result[0].person_id", result[0].person_id)
-            if auto_group and len(result) > 0:
-                if similarity_obj['distances'][0]\
-                    <= threshold_per * similarity_obj['threshold']:
-                    person_id = result[0].person_id
-                    group_no = -2
+                # Automatically determines the image's group based on the best match
+                # if it has a distance / similarity of <=threshold_per*threshold and if
+                # 'auto_group' is True
+                # print('similarity_obj distance', similarity_obj['distances'][0])
+                # print("threshold_per * similarity_obj['threshold']", threshold_per * similarity_obj['threshold'])
+                # print("result[0].person_id", result[0].person_id)
+                if auto_group and len(result) > 0:
+                    if similarity_obj['distances'][0]\
+                        <= threshold_per * similarity_obj['threshold']:
+                        person_id = result[0].person_id
+                        group_no = -2
+                    else:
+                        group_no = -1
+                        person_id = None
                 else:
                     group_no = -1
                     person_id = None
-            else:
-                group_no = -1
-                person_id = None
 
-            # Creates a FaceRep for each detected face
-            rep = FaceRep(image_name_orig=img_name, image_name='',
-                             image_fp_orig=img_fp, image_fp='',
-                             group_no=group_no, region=region,
-                             person_id=person_id,embeddings=cur_embd)
+                # Creates a FaceRep for each detected face
+                rep = FaceRep(image_name_orig=img_name, image_name='',
+                                image_fp_orig=img_fp, image_fp='',
+                                group_no=group_no, region=region,
+                                person_id=person_id,embeddings=cur_embd)
 
-            # Adds each FaceRep to the global session
-            glb.sqla_session.add(rep)
+                # Adds each FaceRep to the global session
+                glb.sqla_session.add(rep)
 
-        # Stores the verification result and commits the FaceReps
-        verification_results.append(cur_img_results)
-        glb.sqla_session.commit()
+            # Stores the verification result and commits the FaceReps
+            verification_results.append(cur_img_results)
+
+            # After file has been processed, add it to the ProcessedFiles table
+            glb.sqla_session.add(ProcessedFiles(filename=img_name,
+                                            filesize=os.path.getsize(img_fp)))
+            glb.sqla_session.commit()
 
     return verification_results
 

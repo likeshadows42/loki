@@ -113,33 +113,6 @@ def show_cluster_results(group_no, db, ncols=4, figsize=(15, 15), color='black',
 
     return img_file
 
-# ------------------------------------------------------------------------------
-
-# def file_is_not_unique(fname, fdir, other_names, other_root_dir):
-#     """
-#     TODO: Update documentation
-#     """
-#     # Initializes 'is_not_unique' flag
-#     is_not_unique = False
-
-#     # Loops through each file name in invalid names
-#     for i, inv_name in zip(range(0, len(fname)), other_names):
-#         # Creates the full paths of each file
-#         fpath1 = os.path.join(fdir, fname)
-#         fpath2 = os.path.join(other_root_dir, inv_name)
-
-#         #print(f'{i}: fpath1: ', fpath1, '  |  fpath2: ', fpath2, sep='')
-
-#         # Determines if the files are the same (and should be skipped)
-#         is_not_unique = cmp(fpath1, fpath2, shallow=False)
-                                
-#         # Current file matches another one. It's not unique so no need to
-#         # continue this loop
-#         if is_not_unique:
-#             break
-
-#     return is_not_unique
-
 # ______________________________________________________________________________
 #                DETECTORS & VERIFIERS BUILDING, SAVING & LOADING
 # ------------------------------------------------------------------------------
@@ -905,7 +878,7 @@ def process_image_zip_file(myfile, image_dir, t_check=True, n_token=2,
                 tname_fullpath = os.path.join(tempdir, tname)
                 
                 # Checks if the files are different or not
-                if not cmp(fname_fullpath, tname_fullpath):
+                if not cmp(fname_fullpath, tname_fullpath, shallow=False):
                     # Files are different, so check if they have the same name
                     if fname == tname:
                         # Names are the same, so rename them
@@ -1064,7 +1037,7 @@ def group_facereps(verifier_name, eps=0.5, min_samples=2, metric='cosine',
     # Gets the list of ids of the new clusters
     query  = select(tempClustering.group_no).group_by(tempClustering.group_no)
     result = glb.sqla_session.execute(query)
-    new_clusters = [item.group_no for item in result.all()]
+    new_clusters = [item.group_no for item in result.all() if item.group_no >= 0]
 
     # Gets the person id for each cluster
     for cluster in new_clusters:
