@@ -73,11 +73,11 @@ async def inspect_globals(print2console: bool = Query(True, description="Toggles
                    glb.SVD_MDL_DIR, glb.SVD_VRF_DIR, glb.SVD_DTC_DIR]
 
     # Prints the path variables along with their names
-    if print2console:
-        dir_names = ['API root dir', 'Data dir', 'Image dir',
-                     'Rep. database dir', 'Saved models dir',
-                     'Saved face verifiers dir', 'Saved face detectors dir']
+    dir_names = ['API root dir', 'Data dir', 'Image dir',
+                 'Rep. database dir', 'Saved models dir',
+                 'Saved face verifiers dir', 'Saved face detectors dir']
 
+    if print2console:
         print("  > Paths:")
         for dir, name in zip(directories, dir_names):
             print(name.ljust(24) + ':', dir)
@@ -87,7 +87,12 @@ async def inspect_globals(print2console: bool = Query(True, description="Toggles
     # from scratch) successfully
     if print2console:
         print("  > All face detectors:")
-        for i, name in enumerate(glb.detector_names):
+        if isinstance(glb.detector_names, list):
+            all_detectors = glb.detector_names
+        else:
+            all_detectors = [glb.detector_names]
+        
+        for i, name in enumerate(all_detectors):
             if name == '':
                 continue
             print(f'{i+1}'.ljust(2) + ':', name, end=' ')
@@ -103,7 +108,12 @@ async def inspect_globals(print2console: bool = Query(True, description="Toggles
     # from scratch) successfully
     if print2console:
         print("  > All face verifiers:")
-        for i, name in enumerate(glb.verifier_names):
+        if isinstance(glb.verifier_names, list):
+            all_verifiers = glb.verifier_names
+        else:
+            all_verifiers = [glb.verifier_names]
+        
+        for i, name in enumerate(all_verifiers):
             if name == '':
                 continue
             print(f'{i+1}'.ljust(2) + ':', name, end=' ')
@@ -128,8 +138,7 @@ async def inspect_globals(print2console: bool = Query(True, description="Toggles
             'verifier_names':glb.verifier_names,
             'model_names':list(glb.models.keys()),
             'sqlite_db_name':glb.SQLITE_DB,
-            'sqlite_db_fp':glb.SQLITE_DB_FP,
-            'sqla_engine':glb.sqla_engine}
+            'sqlite_db_fp':glb.SQLITE_DB_FP}
 
 # ------------------------------------------------------------------------------
 
@@ -307,13 +316,13 @@ async def view_tables(
         query = glb.sqla_session.query(FaceRep)
         for rep  in query.all():
             output_obj.append(FaceRepOutput(
-                id              = rep.id,
-                person_id       = rep.person_id,
-                image_name_orig = rep.image_name_orig,
-                image_fp_orig   = rep.image_fp_orig,
-                group_no        = rep.group_no,
-                region          = rep.region,
-                embeddings      = [name for name in rep.embeddings.keys()]
+                id         = rep.id,
+                person_id  = rep.person_id,
+                image_name = rep.image_name,
+                image_fp   = rep.image_fp,
+                group_no   = rep.group_no,
+                region     = rep.region,
+                embeddings = [name for name in rep.embeddings.keys()]
             ))
 
     # Prints the appropriate information if the selected table is 'person'
@@ -334,15 +343,13 @@ async def view_tables(
             output_obj.append(ProcessedFilesOutput(
                 id       = fprc.id,
                 filename = fprc.filename,
-                # filepath = fprc.filepath,
                 filesize = fprc.filesize
             ))
 
     # Raises an assertion error because the selected table does not exist in the
     # database
     else:
-        raise AssertionError("Table name should be either 'person', "
-                           + "'representation' or 'proc_files'!")
+        raise AssertionError("Invalid table selected!")
 
     return output_obj
 
@@ -476,16 +483,16 @@ async def people_get_faces(person_id: int = Query(None, description="'person_id 
     Output:\n
             JSON-encoded FaceRep result for a specific person_id
     """
-    query = select(FaceRep.id, FaceRep.person_id, FaceRep.image_name_orig,
-                    FaceRep.image_fp_orig, FaceRep.region).where(\
+    query = select(FaceRep.id, FaceRep.person_id, FaceRep.image_name,
+                    FaceRep.image_fp, FaceRep.region).where(\
                     FaceRep.person_id == person_id)
     result = glb.sqla_session.execute(query)
 
     return_value = []
     for item in result:
         return_value.append({'id': item.id, 'person_id': item.person_id,
-                             'image_name_orig': item.image_name_orig,
-                             'image_fp_orig': item.image_fp_orig,
+                             'image_name': item.image_name,
+                             'image_fp': item.image_fp,
                              'region': [int(x) for x in item.region] })
 
     return return_value
@@ -629,7 +636,7 @@ async def facerep_get_ungrouped():
         JSON-encoded list of FaceRep.id(s) that match the above condition
     """
     # 
-    query = select(FaceRep.id, FaceRep.person_id, FaceRep.image_name_orig,
+    query = select(FaceRep.id, FaceRep.person_id, FaceRep.image_name,
                    FaceRep.region).where(FaceRep.group_no == -1)
     result = glb.sqla_session.execute(query)
 
@@ -638,7 +645,7 @@ async def facerep_get_ungrouped():
     for item in result:
         print([int(x) for x in item.region])
         return_value.append({'id': item.id, 'person_id': item.person_id,
-                             'image_name_orig': item.image_name_orig,
+                             'image_name': item.image_name,
                              'region': [int(x) for x in item.region] })
 
     return return_value
@@ -959,31 +966,6 @@ async def faces_import_from_zip(myfile: UploadFile,
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/database/clear")
-async def database_clear_api():
-    """
-    API endpoint: clear_database()
-
-    Clears the database. This is equivalent to setting the database to an empty
-    one.
-
-    Parameters:
-    - None
-
-    Output:\n
-        JSON-encoded dictionary with the following attributes:
-            1. message: message stating the database has been cleard [string]
-    """
-    # Remove SQlite file and recreate again
-    os.remove(glb.SQLITE_DB_FP)
-    glb.sqla_engine  = load_database(glb.SQLITE_DB_FP)
-    glb.sqla_session = start_session(glb.sqla_engine)
-    glb.sqla_session.commit()
-
-    return {"message": "Database has been cleared."}
-
-# ------------------------------------------------------------------------------
-
 @fr_router.post("/verify/no_upload", response_model=List[List[List[VerificationMatch]]])
 async def verify_no_upload(files: List[UploadFile],
                           params: VerificationParams = Depends()):
@@ -1280,10 +1262,9 @@ async def verify_with_upload(files: List[UploadFile],
                     person_id = None
 
                 # Creates a FaceRep for each detected face
-                rep = FaceRep(image_name_orig=img_name, image_name='',
-                                image_fp_orig=img_fp, image_fp='',
+                rep = FaceRep(image_name=img_name, image_fp=img_fp,
                                 group_no=group_no, region=region,
-                                person_id=person_id,embeddings=cur_embd)
+                                person_id=person_id, embeddings=cur_embd)
 
                 # Adds each FaceRep to the global session
                 glb.sqla_session.add(rep)
