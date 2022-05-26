@@ -28,14 +28,16 @@ detector_names = ('retinaface') # to avoid long startups during developing
 verifier_names = ('ArcFace') # to avoid long startups during developing
 
 # Other variables
-models       = {}             # stores all face verifier & detector models
+models         = {}                       # stores all face verifier & detector models
+supported_exts = ['.jpg', '.png', '.npy'] # stores all supported extensions
 
 # SQLAlchemy global variables
-
-SQLITE_DB    = 'loki.sqlite'                    # SQLite database file name
+SQLITE_DB    = 'loki.sqlite'                                # SQLite database file name
 SQLITE_DB_FP = os.path.join('api/data/database', SQLITE_DB) # full path of SQLite database
-sqla_engine  = None                             # SQLAlchemy engine object
-sqla_session = None                             # SQLAlchemy global session object
+
+sqla_engine      = None                                     # SQLAlchemy engine object
+sqla_session     = None                                     # SQLAlchemy global session object
+sqla_table_names = ['person', 'representation', 'proc_files', 'proc_files_temp']
 
 # Rodrigo specific variables (because he needs a new computer :( )
 skip_model_save = True
