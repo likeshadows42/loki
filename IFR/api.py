@@ -721,10 +721,9 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
         # (FaceRep object)
         for region, cur_embds in zip(filtered_regions, embeddings):
             # Create a FaceRep record
-            record = FaceRep(image_name_orig=img_path.split('/')[-1],
-                        image_name='', image_fp_orig=img_path,
-                        image_fp='', group_no=-1, region=region,
-                        embeddings=cur_embds)
+            record = FaceRep(image_name=img_path[:img_path.rindex('/')],
+                             image_fp=img_path, group_no=-1, region=region,
+                             embeddings=cur_embds)
             
             # Appends each record to the records list
             records.append(record)
@@ -735,7 +734,6 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
 
         # After file has been processed, add it to the ProcessedFiles table
         glb.sqla_session.add(ProcessedFiles(filename=img_path.split('/')[-1],
-                                            # filepath=img_path,
                                             filesize=os.path.getsize(img_path)))
     
     if glb.DEBUG:
@@ -791,7 +789,7 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
 # ------------------------------------------------------------------------------
 
 def process_image_zip_file(myfile, image_dir, t_check=True, n_token=2,
-                            valid_exts=['.jpg', '.png', '.npy']):
+                            valid_exts=glb.supported_exts):
     """
     Processes a zip file containing image files. The zip file ('myfile') is
     assumed to have only valid image files (i.e. '.jpg', '.png', etc).
@@ -956,9 +954,9 @@ def get_matches_from_similarity(similarity_obj):
     for i, dst in zip(similarity_obj['idxs'], similarity_obj['distances']):
         rep = query.all()[i]
         matches.append(VerificationMatch(unique_id=rep.id,
-                            image_name=rep.image_name_orig,
+                            image_name=rep.image_name,
                             person_id=rep.person_id,
-                            image_fp=rep.image_fp_orig,
+                            image_fp=rep.image_fp,
                             region=rep.region,
                             distance=dst,
                             embeddings=[name for name in rep.embeddings.keys()],

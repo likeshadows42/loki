@@ -233,10 +233,8 @@ class FaceRepOutput(BaseModel):
     """
     id              : int
     person_id       : int = None
-    image_name_orig : str
-    #image_name      : str # because we are not using for now
-    image_fp_orig   : str
-    #image_fp        : str # because we are not using for now
+    image_name      : str
+    image_fp        : str
     group_no        : int
     region          : List[int]
     embeddings      : List[str]
@@ -260,7 +258,6 @@ class ProcessedFilesOutput(BaseModel):
     """
     id       : int
     filename : str
-    filepath : str
     filesize : int
 
 # ______________________________________________________________________________
@@ -306,10 +303,10 @@ class FaceRep(Base):
     # Object attributes (as database columns)
     id              = Column(Integer, primary_key=True)
     person_id       = Column(Integer, ForeignKey('person.id'), default=None)
-    image_name_orig = Column(String, nullable=False)
-    image_name      = Column(String, default=None) # because we are not using for now
-    image_fp_orig   = Column(String, nullable=False)
-    image_fp        = Column(String, default=None) # because we are not using for now
+    #image_name_orig = Column(String, nullable=False)
+    image_name      = Column(String, nullable=False) # because we are not using for now
+    #image_fp_orig   = Column(String, nullable=False)
+    image_fp        = Column(String, nullable=False) # because we are not using for now
     group_no        = Column(Integer, nullable=False)
     region          = Column(PickleType, nullable=False)
     embeddings      = Column(PickleType, nullable=False)
@@ -366,3 +363,4 @@ class tempClustering(Base):
     # Object attributes (as database columns)
     id       = Column(Integer, primary_key=True)
     group_no = Column(Integer, default=None)
+
