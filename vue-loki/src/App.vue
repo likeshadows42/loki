@@ -75,6 +75,13 @@ export default {
       this.MainContentRaw += '<p><b>' + await result.message + '</b></p>'
     },
 
+    async imgdirClear() {
+      console.log("Clearing default image dir")
+      this.mainClear()
+      const result = await this.axiosPost('/api/fr/utility/clear_image_dir')
+      this.MainContent = result.message
+    },
+
     async dbClear() {
       console.log("Clearing database")
       this.mainClear()
@@ -199,6 +206,7 @@ export default {
       <p><a href="#" @click.prevent="">Save database</a></p> -->
       
       <p><a href="#" @click.prevent="dbClear">Clear database</a></p>
+      <p><a href="#" @click.prevent="imgdirClear">Clear image dir</a></p>
       <!-- <p><a href="#" @click.prevent="dbReload">Reload database</a></p> -->
 
       <!-- <h3>Utility</h3>
