@@ -151,12 +151,12 @@ export default {
 
     zipOnSubmit(msg) {
       console.log(msg)
-      this.sectionToggler('zipUploaderToggler')
-      this.MainContent = null
-      this.MainContentRaw = "<p><b>All done!</b></p>"
-      this.MainContentRaw += '<p>' + msg.message + '</p>'
-      this.MainContentRaw += '<p>New images: <b>' + msg.n_records + '</b></p>'
-      this.MainContentRaw += '<p>Skipped files: <b>' + msg.n_skipped + '</b></p>'
+      // this.sectionToggler('zipUploaderToggler')
+      // this.MainContent = null
+      // this.MainContentRaw = "<p><b>All done!</b></p>"
+      // this.MainContentRaw += '<p>' + msg.message + '</p>'
+      // this.MainContentRaw += '<p>New images: <b>' + msg.n_records + '</b></p>'
+      // this.MainContentRaw += '<p>Skipped files: <b>' + msg.n_skipped + '</b></p>'
 
       // this.MainContent = msg
     },

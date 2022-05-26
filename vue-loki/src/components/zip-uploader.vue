@@ -29,11 +29,20 @@ export default {
             
         },
 
+        displayResult(msg){
+            this.MainContentRaw += "<p><b>All done!</b></p>"
+            this.MainContentRaw += '<p>' + msg.message + '</p>'
+            this.MainContentRaw += '<p>New images: <b>' + msg.n_records + '</b></p>'
+            this.MainContentRaw += '<p>Skipped files: <b>' + msg.n_skipped + '</b></p>'
+            this.$emit('response', msg)
+        },
+
         onChange(evt) {
             // this.fetchData(evt)
             this.uploadZip(evt)
-                .then(data => this.$emit('response', data))
-        },
+                // .then(data => this.$emit('response', data))
+                .then(data => this.displayResult(data))
+        }, 
     },
 }
 </script>
