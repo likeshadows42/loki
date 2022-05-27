@@ -85,7 +85,7 @@ export default {
     async dbClear() {
       console.log("Clearing database")
       this.mainClear()
-      const result = await this.axiosPost('/api/fr/database/clear')
+      const result = await this.axiosPost('/api/fr/utility/clear_database')
       this.MainContent = result.message
     },
 
