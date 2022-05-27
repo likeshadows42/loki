@@ -301,13 +301,11 @@ class FaceRep(Base):
     __tablename__ = 'representation'
 
     # Object attributes (as database columns)
-    id              = Column(Integer, primary_key=True)
-    person_id       = Column(Integer, ForeignKey('person.id'), default=None)
-    #image_name_orig = Column(String, nullable=False)
-    image_name      = Column(String, nullable=False) # because we are not using for now
-    #image_fp_orig   = Column(String, nullable=False)
-    image_fp        = Column(String, nullable=False) # because we are not using for now
-    group_no        = Column(Integer, nullable=False)
+    id              = Column(Integer   , primary_key=True)
+    person_id       = Column(Integer   , ForeignKey('person.id'), default=None)
+    image_name      = Column(String    , nullable=False)
+    image_fp        = Column(String    , nullable=False)
+    group_no        = Column(Integer   , nullable=False)
     region          = Column(PickleType, nullable=False)
     embeddings      = Column(PickleType, nullable=False)
 
