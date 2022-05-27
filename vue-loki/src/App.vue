@@ -36,7 +36,7 @@ export default {
       imgUploaderAdvToggler: false,
       zipUploaderToggler: false,
       compImgUngroupedToggler: false,
-      compGroupsToggler: false,
+      compGroupsToggler: true,
     }
   },
 
@@ -67,14 +67,26 @@ export default {
     },
     
     async dbLoadFromDir() {
+      this.mainClear()
       console.log("Loading database from directory")
       const params = {"force_create": true}
-      this.MainContent = await this.axiosPost('/api/fr/faces/import_from_directory', params)
+      this.MainContentRaw = '<h2>Load images from directory</h2><p>Wait until the process will be completed</p>'
+      const result = await this.axiosPost('/api/fr/faces/import_from_directory', params)
+      this.MainContentRaw += '<p><b>' + await result.message + '</b></p>'
+    },
+
+    async imgdirClear() {
+      console.log("Clearing default image dir")
+      this.mainClear()
+      const result = await this.axiosPost('/api/fr/utility/clear_image_dir')
+      this.MainContent = result.message
     },
 
     async dbClear() {
       console.log("Clearing database")
-      this.MainContent = await this.axiosPost('/api/fr/database/clear')
+      this.mainClear()
+      const result = await this.axiosPost('/api/fr/database/clear')
+      this.MainContent = result.message
     },
 
     async dbReload() {
@@ -89,6 +101,8 @@ export default {
     },
 
     mainClear() {
+      this.MainContent = null
+      this.MainContentRaw = null
       this.imgUploaderWithUpToggler = false
       this.imgUploaderWithoutUpToggler = false
       this.imgUploaderAdvToggler = false
@@ -136,8 +150,15 @@ export default {
     },
 
     zipOnSubmit(msg) {
-       console.log(msg)
-       this.MainContent = msg
+      console.log(msg)
+      // this.sectionToggler('zipUploaderToggler')
+      // this.MainContent = null
+      // this.MainContentRaw = "<p><b>All done!</b></p>"
+      // this.MainContentRaw += '<p>' + msg.message + '</p>'
+      // this.MainContentRaw += '<p>New images: <b>' + msg.n_records + '</b></p>'
+      // this.MainContentRaw += '<p>Skipped files: <b>' + msg.n_skipped + '</b></p>'
+
+      // this.MainContent = msg
     },
 
 
@@ -159,17 +180,17 @@ export default {
     <header class="header"><Home msg="Loki MVP"/></header>
     <aside class="aside aside-1">
       
-      <h3>Load images</h3>
-      <p><a href="#" @click.prevent="dbLoadFromDir">Load images from directory</a></p>
-      <p><a href="#" @click.prevent="sectionToggler('zipUploaderToggler')">Load images from zip</a></p>
-
       <h3>Face recognition</h3>
       <p><a href="#" @click.prevent="sectionToggler('compPeopleListToggler')">Show people</a></p> 
       <p><a href="#" @click.prevent="sectionToggler('compGroupsToggler')">Show people (detail)</a></p>
       <p><a href="#" @click.prevent="sectionToggler('compImgUngroupedToggler')">Show ungrouped images</a></p>
       <!-- <p><a href="#" @click.prevent="imgUploaderAdvToggle">Upload multiple images</a></p> -->
       
+      <h3>Load images</h3>
+      <p><a href="#" @click.prevent="sectionToggler('zipUploaderToggler')">Load images from zip</a></p>
       <!-- <p><a>Upload multiple images</a></p> -->
+
+      <h3>Verify images</h3>
       <p><a href="#" @click.prevent="sectionToggler('imgUploaderWithoutUpToggler')">Verify image (without upload)</a></p>
       <!-- <p><a href="#" @click.prevent="imgVerWithUpToggle">Verify image (with upload)</a></p> -->
       
@@ -179,11 +200,13 @@ export default {
 
       
 
-      <h3>Database</h3>
+      <h3>Utility</h3>
       <!-- <p><a href="#" @click.prevent="">Load database</a></p>
       <p><a href="#" @click.prevent="">Save database</a></p> -->
-      
+      <p><a href="#" @click.prevent="dbLoadFromDir">Load images from default directory</a></p>
+      <p><a href="/data/" target="_blank">Show img_dir content</a></p>
       <p><a href="#" @click.prevent="dbClear">Clear database</a></p>
+      <p><a href="#" @click.prevent="imgdirClear">Clear image dir</a></p>
       <!-- <p><a href="#" @click.prevent="dbReload">Reload database</a></p> -->
 
       <!-- <h3>Utility</h3>
