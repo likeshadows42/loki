@@ -198,20 +198,19 @@ export default {
       <!-- <SecondComp @response="(msg) => MainContent = msg"/>
       <SecondComp @response="mainClear"/> -->
 
-      
-
       <h3>Utility</h3>
       <!-- <p><a href="#" @click.prevent="">Load database</a></p>
       <p><a href="#" @click.prevent="">Save database</a></p> -->
       <p><a href="#" @click.prevent="dbLoadFromDir">Load images from default directory</a></p>
-      <p><a href="/data/" target="_blank">Show img_dir content</a></p>
       <p><a href="#" @click.prevent="dbClear">Clear database</a></p>
       <p><a href="#" @click.prevent="imgdirClear">Clear image dir</a></p>
       <!-- <p><a href="#" @click.prevent="dbReload">Reload database</a></p> -->
+      <!-- <p><a href="#" @click.prevent="getGlobaldata">Get global parameters</a></p> -->
 
-      <!-- <h3>Utility</h3>
-      <p><a href="#" @click.prevent="getGlobaldata">Get global parameters</a></p>
-      <p><a href="#" @click.prevent="serverReset">Server reset&restart</a></p> -->
+       <h3>Server debug</h3>
+      <p><a href="/data/" target="_blank">Show img_dir content</a></p>
+      <p><a href="/sqlite/loki.sqlite">Download sqlite</a></p>
+
     </aside>
     <article class="main">
        <!-- <ImagesUploader @changed="handleImages" @response="(msg) => MainContent = msg"/> -->
