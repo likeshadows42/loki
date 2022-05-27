@@ -88,7 +88,7 @@ export default {
     <div class="imgs_container">
       <div v-for="(item, index) in group_obj" :key="item.id" class="img_group">
         <div v-if="index == 0" class="img_div">
-        <div><img :src="'/data/'+item.image_name_orig" class="img_thum"></div>
+        <div><img :src="'/data/'+item.image_name" class="img_thum"></div>
         <div>Num pics: {{group_num }}</div>
           <!-- <compPeopleListImage :item="item" :show_button="true" @parent-handler="removeImg"></compPeopleListImage> -->
         </div>

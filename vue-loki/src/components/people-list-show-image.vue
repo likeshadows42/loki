@@ -19,7 +19,7 @@
                 var canvas = document.getElementById('picCanvas'+item.id)
                 var context = canvas.getContext('2d')
                 var imageObj = new Image();
-                imageObj.src = '/data/'+item.image_name_orig
+                imageObj.src = '/data/'+item.image_name
                 
                 imageObj.onload = function() {
                     // console.log(imageObj.width+", "+imageObj.height)
