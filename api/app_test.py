@@ -121,7 +121,7 @@ def test_inspect_globals():
 if not skip_server_reset_test:  # this test takes long so you can skip it
     def test_reset_server():
         # Gets the response object and converts the JSON payload to a dictionary
-        r   = client.post("/fr/debug/reset_server")
+        r   = client.post("/fr/debug/server_reset")
         out = dict(r.json())
 
         # Checks status code first

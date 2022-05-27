@@ -78,14 +78,14 @@ export default {
     async imgdirClear() {
       console.log("Clearing default image dir")
       this.mainClear()
-      const result = await this.axiosPost('/api/fr/utility/clear_image_dir')
+      const result = await this.axiosPost('/api/fr/utility/image_dir_clear')
       this.MainContent = result.message
     },
 
     async dbClear() {
       console.log("Clearing database")
       this.mainClear()
-      const result = await this.axiosPost('/api/fr/utility/clear_database')
+      const result = await this.axiosPost('/api/fr/utility/database_clear')
       this.MainContent = result.message
     },
 
@@ -97,7 +97,7 @@ export default {
     async serverReset(){
       console.log("Reset server&restart")
       const params = {"no_database": true}
-      this.MainContent = await this.axiosPost('/api/fr/debug/reset_server', params)
+      this.MainContent = await this.axiosPost('/api/fr/debug/server_reset', params)
     },
 
     mainClear() {

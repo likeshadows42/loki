@@ -141,10 +141,10 @@ async def inspect_globals(print2console: bool = Query(True, description="Toggles
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/debug/reset_server")
-async def reset_server():
+@fr_router.post("/debug/server_reset")
+async def server_reset():
     """
-    API endpoint: reset_server()
+    API endpoint: server_reset()
 
     Allows the user to restart the server without manually requiring to shut it
     down and start it up.
@@ -354,10 +354,10 @@ async def view_tables(
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/clear_image_dir")
-async def clear_image_dir():
+@fr_router.post("/utility/image_dir_clear")
+async def image_dir_clear():
     """
-    API endpoint: clear_image_dir()
+    API endpoint: image_dir_clear()
 
     Clears the image directory and the SQLite database. Then, recreates the new
     database with the necessary tables, but each and every table is empty (i.e.
@@ -400,7 +400,7 @@ async def clear_image_dir():
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/clear_database")
+@fr_router.post("/utility/database_clear")
 async def database_clear():
     """
     API endpoint: database_clear()
