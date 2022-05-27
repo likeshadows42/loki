@@ -181,8 +181,8 @@ export default {
     <aside class="aside aside-1">
       
       <h3>Face recognition</h3>
-      <p><a href="#" @click.prevent="sectionToggler('compPeopleListToggler')">Show people</a></p> 
       <p><a href="#" @click.prevent="sectionToggler('compGroupsToggler')">Show people (detail)</a></p>
+      <p><a href="#" @click.prevent="sectionToggler('compPeopleListToggler')">Show people</a></p> 
       <p><a href="#" @click.prevent="sectionToggler('compImgUngroupedToggler')">Show ungrouped images</a></p>
       <!-- <p><a href="#" @click.prevent="imgUploaderAdvToggle">Upload multiple images</a></p> -->
       
