@@ -29,7 +29,7 @@ verifier_names = ('ArcFace') # to avoid long startups during developing
 
 # Other variables
 models         = {}                       # stores all face verifier & detector models
-supported_exts = ['.jpg', '.png', '.npy', '.webp'] # stores all supported extensions
+supported_exts = ['.jpg', '.jpeg', '.png', '.npy', '.webp'] # stores all supported extensions
 
 # SQLAlchemy global variables
 SQLITE_DB    = 'loki.sqlite'                                # SQLite database file name
