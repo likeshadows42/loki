@@ -733,8 +733,9 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
                 embds.append(cur_embds[verifier_names[0]])
 
         # After file has been processed, add it to the ProcessedFiles table
-        glb.sqla_session.add(ProcessedFiles(filename=img_path.split('/')[-1],
-                                            filesize=os.path.getsize(img_path)))
+        glb.sqla_session.add(ProcessedFiles(
+                                filename=img_path[img_path.rindex('/')+1:],
+                                filesize=os.path.getsize(img_path)))
     
     if glb.DEBUG:
         print('Commits processed files')
