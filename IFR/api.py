@@ -654,7 +654,7 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
     records = []
 
     # Assuming img_dir is a directory containing images
-    img_paths = get_image_paths(img_dir)
+    img_paths = get_image_paths(img_dir, file_types=tuple(glb.supported_exts))
     img_paths.sort()
 
     # No images found, do something about it
@@ -733,8 +733,9 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
                 embds.append(cur_embds[verifier_names[0]])
 
         # After file has been processed, add it to the ProcessedFiles table
-        glb.sqla_session.add(ProcessedFiles(filename=img_path.split('/')[-1],
-                                            filesize=os.path.getsize(img_path)))
+        glb.sqla_session.add(ProcessedFiles(
+                                filename=img_path[img_path.rindex('/')+1:],
+                                filesize=os.path.getsize(img_path)))
     
     if glb.DEBUG:
         print('Commits processed files')
@@ -835,7 +836,7 @@ def process_image_zip_file(myfile, image_dir, t_check=True, n_token=2,
                                                 auto_rename=True)
     """
     # Create temporary directory and extract all files to it
-    with TemporaryDirectory(prefix="create_database_from_zip-") as tempdir:
+    with TemporaryDirectory(prefix="process_image_zip_file-") as tempdir:
         with ZipFile(BytesIO(myfile.file.read()), 'r') as myzip:
             # Extracts all files in the zip file to a temporary directory,
             # flattens the directory structure and filters the files by valid
@@ -1298,7 +1299,6 @@ def repopulate_temp_file_table(tpaths):
     """
     TODO: Documentation
     """
-
     # First, tries to clear everything in the 'proc_files_temp' table
     try:
         stmt = delete(ProcessedFilesTemp)

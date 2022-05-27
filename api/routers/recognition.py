@@ -10,7 +10,6 @@ import numpy                 as np
 import api.global_variables  as glb
 
 from typing                  import List, Optional
-from tempfile                import TemporaryDirectory
 from filecmp                 import cmp
 from fastapi                 import APIRouter, UploadFile, Depends, Query
 from IFR.api                 import init_load_verifiers, init_load_detectors,\
@@ -19,6 +18,8 @@ from IFR.api                 import init_load_verifiers, init_load_detectors,\
                                all_tables_exist, process_faces_from_dir,\
                                load_database, facerep_set_groupno_done,\
                                start_session, people_clean_without_repps
+from tempfile                import TemporaryDirectory
+from sqlalchemy              import select, update, insert, delete
 from IFR.classes             import *
 from IFR.functions           import ensure_dirs_exist, calc_embeddings,\
                                 calc_similarity, do_face_detection,\
@@ -27,8 +28,6 @@ from IFR.functions           import ensure_dirs_exist, calc_embeddings,\
 
 from shutil                  import rmtree, move   as sh_move
 from matplotlib              import image          as mpimg
-
-from sqlalchemy import select, update, insert
 
 glb_data_dir = glb.DATA_DIR
 glb_img_dir  = glb.IMG_DIR
@@ -594,6 +593,83 @@ async def people_assign_facerep(person_id : int = Query(None, description="'ID p
 
 # ------------------------------------------------------------------------------
 
+@fr_router.post("/people/remove_person")
+async def remove_person(person_id : int  = Query(-1, description="Person ID [integer]"),
+                       del_images : bool = Query(True, description="Toggles if the associated images on the server should be deleted [boolean]"),):
+    """
+    API endpoint: remove_person()
+    
+    Removes a person from the database, along with all of the associated face
+    representation (FaceReps) records. If 'del_images' is True, then all of the
+    images on the server associated to this person will also be deleted. For
+    each file, if the deletion process fails, a message is printed to the
+    console with the exception.
+
+    WARNING: Please note that this operation is irreversible!
+
+    Parameters:
+        - person_id : person record's id [integer, default=-1].
+
+        - del_images: toggles between removing the associated images on the
+                        server [boolean, default=True].
+
+    Output:\n
+        JSON-encoded dictionary with the following key/value pairs is returned:
+            1. status: flag indicating if the function executed without any
+                    errors (False) or if 1 or more errors occurred (True).
+
+            2. failed_files: list containing the full paths of any file that
+                    could not be deleted. This list will always be empty if
+                    del_images is False.
+            
+            3. message: informative message string
+    """
+    # Initializes failed files list and return flag
+    failed_files = []
+    ret_flag     = False
+    msg          = 'ok'
+
+    # First, checks if a Person with 'person_id' exists
+    if glb.sqla_session.query(Person.id).filter_by(id=person_id).first() is None:
+        ret_flag = True
+        msg      = f'Person {person_id} does not exist!'
+        return {'status':ret_flag, 'failed_files':failed_files, 'message':msg}
+
+    # Gets all FaceReps associated with the current person
+    query   = select(FaceRep).where(Person.id == person_id)
+    results = glb.sqla_session.execute(query)
+
+    # Deletes the images associated with each FaceRep if del_images=True
+    if del_images:
+        for rep in results:
+            try:
+                os.remove(rep[0].image_fp)
+            except Exception as excpt:
+                ret_flag = True
+                print(f'Could not remove image {rep[0].image_fp}.\n',
+                      f'(reason: {excpt})')
+                failed_files.append(rep[0].image_fp)
+        
+        n = len(failed_files)
+        if n > 0:
+            msg = f'{n} files failed!'
+    else:
+        msg = 'ok (delete images skipped)'
+
+    # Deletes all FaceReps associated with the chosen person
+    dele = delete(FaceRep).where(FaceRep.person_id==person_id)
+    glb.sqla_session.execute(dele)
+    glb.sqla_session.commit()
+    
+    # Deletes the selected Person
+    dele = delete(Person).where(Person.id == person_id)
+    glb.sqla_session.execute(dele)
+    glb.sqla_session.commit()
+
+    return {'status':ret_flag, 'failed_files':failed_files, 'message':msg}
+
+# ------------------------------------------------------------------------------
+
 @fr_router.post("/facerep/unjoin")
 async def facerep_unjoin(face_id  : int = Query(None, description="ID of FaceRep record")):
     """
@@ -748,7 +824,6 @@ async def faces_import_from_directory(params: CreateDatabaseParams,
     # Initialize output message, records and duplicate file names
     output_msg     = ''
     records        = []
-    dup_file_names = []
 
     # If image directory provided is None or is not a directory, use default
     # directory
@@ -793,8 +868,7 @@ async def faces_import_from_directory(params: CreateDatabaseParams,
         glb.sqla_session.commit()
         output_msg += ' success!'
     
-    return {'n_records':len(records), 'message':output_msg,
-            'dup_file_names':dup_file_names}
+    return {'n_records':len(records), 'message':output_msg}
 
 # ------------------------------------------------------------------------------
 
