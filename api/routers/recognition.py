@@ -824,7 +824,6 @@ async def faces_import_from_directory(params: CreateDatabaseParams,
     # Initialize output message, records and duplicate file names
     output_msg     = ''
     records        = []
-    dup_file_names = []
 
     # If image directory provided is None or is not a directory, use default
     # directory
@@ -869,8 +868,7 @@ async def faces_import_from_directory(params: CreateDatabaseParams,
         glb.sqla_session.commit()
         output_msg += ' success!'
     
-    return {'n_records':len(records), 'message':output_msg,
-            'dup_file_names':dup_file_names}
+    return {'n_records':len(records), 'message':output_msg}
 
 # ------------------------------------------------------------------------------
 
