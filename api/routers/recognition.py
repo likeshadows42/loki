@@ -425,6 +425,81 @@ async def database_clear():
 
 # ------------------------------------------------------------------------------
 
+@fr_router.post("/utility/remove_image")
+async def remove_image(image_name : str  = Query(None, description="Image's name (with extension) [string]"),
+                remove_from_server: bool = Query(True, description="Toggles between  [integer]"),
+                image_dir         : str  = Query(glb.IMG_DIR, description="Full path to server's image directory [str]")):
+    """
+    API endpoint: remove_image()
+    
+    Removes an image from the database, that is, removes all associated face
+    representation (FaceReps) records and processed file (ProcessedFiles)
+    record. If 'remove_from_server' is True, then also removes the image from
+    the server.
+
+    WARNING: Please note that this operation is irreversible!
+
+    Parameters:
+        - image_name        : image's name [string].
+
+        - remove_from_server: toggles between removing the chosen image from the
+                                server or not [boolean, default=True].
+
+        - image_dir         : directory containing all images in the server
+                                [string, default=<glb.IMG_DIR>].
+
+    Output:\n
+        JSON-encoded dictionary with the following key/value pairs is returned:
+            1. status: flag indicating if the function executed without any
+                    errors (False) or if 1 or more errors occurred (True).
+            
+            2. message: informative message string
+    """
+    # Initializes failed files list and return flag
+    ret_flag     = False
+    msg          = 'ok'
+
+    # Tries to ensures the image name is a name (and not a full path)
+    try:
+        image_name = image_name[image_name.rindex('/')+1:]
+    except:
+        pass
+
+    print('Image full path:', os.path.join(image_dir, image_name),
+          '| decision:', os.path.isfile(os.path.join(image_dir, image_name)))
+
+    # First, checks if the image exists
+    if not os.path.isfile(os.path.join(image_dir, image_name)):
+        ret_flag = True
+        msg      = 'Chosen image does not exist!'
+        return {'status':ret_flag, 'message':msg}
+
+    # Deletes the image from the server
+    if remove_from_server:
+        try:
+            os.remove(os.path.join(image_dir, image_name))
+        except Exception as excpt:
+            ret_flag = True
+            print(f'Could not remove image {image_name}.\n',
+                  f'(reason: {excpt})')
+            msg = f'Could not remove image {image_name}.'
+    else:
+        msg = 'ok (delete image skipped)'
+
+    # Deletes all FaceReps associated with the chosen image
+    dele = delete(FaceRep).where(FaceRep.image_name == image_name)
+    glb.sqla_session.execute(dele)
+    glb.sqla_session.commit()
+    
+    # Deletes all ProcessedFiles associated with the chosen image
+    dele = delete(ProcessedFiles).where(ProcessedFiles.filename == image_name)
+    glb.sqla_session.execute(dele)
+    glb.sqla_session.commit()
+
+    return {'status':ret_flag, 'message':msg}
+
+# ------------------------------------------------------------------------------
+
 @fr_router.post("/people/list")
 async def people_list():
     """
