@@ -711,7 +711,7 @@ async def remove_person(person_id : int  = Query(-1, description="Person ID [int
         return {'status':ret_flag, 'failed_files':failed_files, 'message':msg}
 
     # Gets all FaceReps associated with the current person
-    query   = select(FaceRep).where(Person.id == person_id)
+    query = select(FaceRep).where(FaceRep.person_id == person_id)
     results = glb.sqla_session.execute(query)
 
     # Deletes the images associated with each FaceRep if del_images=True
@@ -732,7 +732,7 @@ async def remove_person(person_id : int  = Query(-1, description="Person ID [int
         msg = 'ok (delete images skipped)'
 
     # Deletes all FaceReps associated with the chosen person
-    dele = delete(FaceRep).where(FaceRep.person_id==person_id)
+    dele = delete(FaceRep).where(FaceRep.person_id == person_id)
     glb.sqla_session.execute(dele)
     glb.sqla_session.commit()
     
