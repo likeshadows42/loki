@@ -65,6 +65,12 @@ export default {
       this.getGroupMembers(this.person_id)
     },
 
+    deletePerson(person_id) {
+      if(confirm('Are you sure to delete completely this person?')) {
+        console.log(person_id)
+      }
+    },
+
   },
 
   created() {
@@ -81,7 +87,11 @@ export default {
 <template>
   <div v-if="group_num > 0" class="group_div">
     <div class="header_div">
-      <div><input v-model="person_new_name" :placeholder="person_name_placeholder" class="person_name_box" :size="person_new_name.length != 0 ? person_new_name.length: 7"> <button @click="updatePerson(person_id)">CHANGE</button></div>
+      <div>
+        <input v-model="person_new_name" :placeholder="person_name_placeholder" class="person_name_box" :size="person_new_name.length != 0 ? person_new_name.length: 7">
+        <button @click="updatePerson(person_id)">SET NAME</button>&nbsp;
+        <button @click="deletePerson(person_id)">DELETE</button>
+      </div>
       Note <textarea :placeholder="this.person_note_placeholder" v-model="person_new_note"></textarea>
       
     </div>

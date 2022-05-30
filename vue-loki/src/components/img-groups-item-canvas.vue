@@ -51,7 +51,8 @@
         <canvas v-if="show_button" :id="'picCanvas'+item.id"></canvas>
         <canvas v-else :id="'picCanvas'+item.id" @click="$emit('parent-handler', item.id, item.person_id)"></canvas>
 
-        <button v-if="show_button" class='buttCanvas' @click="$emit('parent-handler', item.id, item.person_id)">X</button>
+        <button v-if="show_button" class='buttCanvasNoFace' @click="$emit('parent-handler', 'del', item.id, item.person_id)">DEL</button>
+        <button v-if="show_button" class='buttCanvasRemove' @click="$emit('parent-handler', 'rem', item.id, item.person_id)">REM</button>
     </div>
 </template>
 
@@ -62,10 +63,16 @@
     position: relative;
 }
 
-.buttCanvas {
+.buttCanvasNoFace {
     position: absolute;
     left: 5px;
-    top: 5px;
+    bottom: 5px;
+}
+
+.buttCanvasRemove {
+    position: absolute;
+    left: 5px;
+    bottom: 30px;
 }
 
 </style>

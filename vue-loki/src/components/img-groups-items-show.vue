@@ -51,10 +51,16 @@ export default {
       this.group_num = Object.keys(this.group_obj).length
     },
 
-    async removeImg(item_id, person_id) {
+    async removeImg(action, item_id, person_id) {
       const params = {}
-      await this.axiosPost(`/api/fr/facerep/unjoin?face_id=${item_id}`, params)
-      this.getGroupMembers(person_id)
+      if(action == 'rem') {
+        await this.axiosPost(`/api/fr/facerep/unjoin?face_id=${item_id}`, params)
+      }
+      if(action == "del") {
+        await this.axiosPost(`/api/fr/facerep/unjoin?face_id=${item_id}`, params)
+      }
+       this.getGroupMembers(person_id)
+
     },
 
     async updatePerson(person_id) {
@@ -63,6 +69,12 @@ export default {
       await this.axiosPost(`/api/fr/people/set_note?person_id=${person_id}&new_note=${this.person_new_note}`, params)
       this.name_title = this.person_new_name
       this.getGroupMembers(this.person_id)
+    },
+
+    deletePerson(person_id) {
+      if(confirm("Are you sure to delete person #"+person_id+"?")) {
+        console.log(person_id)
+      }
     },
 
   },
@@ -81,7 +93,13 @@ export default {
 <template>
   <div v-if="group_num > 0" class="group_div">
     <div class="header_div">
-      <div>#{{ person_id }} <input v-model="person_new_name" :placeholder="person_name_placeholder" class="person_name_box" :size="person_new_name.length != 0 ? person_new_name.length: 7"> <button @click="updatePerson(person_id)">CHANGE</button></div>
+      <div>
+          #{{ person_id }}
+          <input v-model="person_new_name" :placeholder="person_name_placeholder" class="person_name_box" :size="person_new_name.length != 0 ? person_new_name.length: 7">
+          <button @click="updatePerson(person_id)">SET NAME</button>
+          &nbsp;
+          <button @click="deletePerson(person_id)">DELETE</button>
+      </div>
       Note <textarea :placeholder="this.person_note_placeholder" v-model="person_new_note"></textarea>
       <div>Num pics: {{group_num }}</div>
     </div>
