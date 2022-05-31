@@ -4,10 +4,11 @@
 
 from enum                       import Enum
 from typing                     import List, Tuple, Optional
+#from xmlrpc.client import Boolean
 from pydantic                   import BaseModel
 
 from sqlalchemy                 import Column, String, Integer,\
-                                        PickleType, ForeignKey
+                                        PickleType, ForeignKey, Boolean
 from sqlalchemy.orm             import relationship
 from sqlalchemy.dialects.mysql  import INTEGER
 from sqlalchemy.ext.declarative import declarative_base
@@ -280,10 +281,11 @@ class Person(Base):
 
     # Object attributes (as database columns)
     id        = Column(Integer, primary_key=True)
-    name      = Column(String, default=None)
+    name      = Column(String , default=None)
     group_no  = Column(Integer, default=None)
-    note      = Column(String, default=None)
+    note      = Column(String , default=None)
     front_img = Column(Integer, default=None)
+    hidden    = Column(Boolean, nullable=False, default=False)
 
     # Establishes connection to associated Face Representations
     reps = relationship("FaceRep", back_populates="person",
@@ -301,13 +303,14 @@ class FaceRep(Base):
     __tablename__ = 'representation'
 
     # Object attributes (as database columns)
-    id              = Column(Integer   , primary_key=True)
-    person_id       = Column(Integer   , ForeignKey('person.id'), default=None)
-    image_name      = Column(String    , nullable=False)
-    image_fp        = Column(String    , nullable=False)
-    group_no        = Column(Integer   , nullable=False)
-    region          = Column(PickleType, nullable=False)
-    embeddings      = Column(PickleType, nullable=False)
+    id         = Column(Integer   , primary_key=True)
+    person_id  = Column(Integer   , ForeignKey('person.id'), default=None)
+    image_name = Column(String    , nullable=False)
+    image_fp   = Column(String    , nullable=False)
+    group_no   = Column(Integer   , nullable=False)
+    region     = Column(PickleType, nullable=False)
+    embeddings = Column(PickleType, nullable=False)
+    hidden     = Column(Boolean   , nullable=False, default=False)
 
     # Establishes connection to associated Person
     person = relationship("Person", back_populates="reps")
