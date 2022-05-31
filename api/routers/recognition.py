@@ -425,48 +425,6 @@ async def database_clear():
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/facerep/hide")
-async def facerep_hide(facerep_id : int = Query(None, description="Face representation identification number (id) [integer]")):
-    """
-    API endpoint: facerep_hide()
-    
-    Hides a face representation. This disables a face representation from being
-    shown and from being used during any potential calculations. In this case,
-    hidding can be interpreted as deleting, with the difference being that when
-    a face representation is hidden, it is still stored in the database.
-
-    Parameters:
-        - facerep_id: Face representation identification number (id) [integer].
-
-    Output:\n
-        JSON-encoded dictionary with the following key/value pairs is returned:
-            1. status: flag indicating if the function executed without any
-                    errors (False) or if any errors occurred (True).
-            
-            2. message: informative message string.
-    """
-    # Initializes failed files list and return flag
-    ret_flag = False
-    msg      = 'ok'
-
-    # Checks if FaceRep id exists
-    if glb.sqla_session.query(FaceRep.id == facerep_id).first() is not None:
-        # FaceRep exists, so update the hidden value to True
-        stmt = update(FaceRep).values(hidden=True).where(
-                                                    FaceRep.id == facerep_id)
-        glb.sqla_session.execute(stmt)
-        glb.sqla_session.commit()
-
-    else:
-        # FaceRep does not exist, so set the return flag to True and create an
-        # appropriate message
-        ret_flag = True
-        msg      = f'No FaceRep exists with the id {facerep_id}'  
-
-    return {'status':ret_flag, 'message':msg}
-
-# ------------------------------------------------------------------------------
-
 @fr_router.post("/people/list")
 async def people_list():
     """
@@ -636,7 +594,7 @@ async def people_assign_facerep(person_id : int = Query(None, description="'ID p
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/people/hide")
-async def people_hide(person_id : int  = Query(-1, description="Person ID [integer]")):
+async def people_hide(person_id : int  = Query(None, description="Person ID [integer]")):
     """
     API endpoint: people_hide()
     
@@ -645,7 +603,7 @@ async def people_hide(person_id : int  = Query(-1, description="Person ID [integ
     is preferred to deleting the person due to implementation reasons.
 
     Parameters:
-        - person_id : person record's id [integer, default=-1].
+        - person_id : person record's id [integer, default=None].
 
     Output:\n
         JSON-encoded dictionary with the following key/value pairs is returned:
@@ -664,17 +622,57 @@ async def people_hide(person_id : int  = Query(-1, description="Person ID [integ
                 'message':f'Person {person_id} does not exist!'}
 
     # Updates the 'hidden' attribute to True for the selected Person
-    stmt    = update(Person).values(hidden=True).where(
-                                                  Person.person_id == person_id)
+    stmt    = update(Person).values(hidden=True).where(person_id == person_id)
     glb.sqla_session.execute(stmt)
     glb.sqla_session.commit()
 
     # Updates all FaceReps associated with the current person, setting their
     # 'hidden' attribute to True
-    stmt    = update(FaceRep).values(hidden=True).where(
-                                                 FaceRep.person_id == person_id)
+    stmt    = update(FaceRep).values(hidden=True).where(person_id == person_id)
     glb.sqla_session.execute(stmt)
     glb.sqla_session.commit()
+
+    return {'status':ret_flag, 'message':msg}
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/facerep/hide")
+async def facerep_hide(facerep_id : int = Query(None, description="Face representation identification number (id) [integer]")):
+    """
+    API endpoint: facerep_hide()
+    
+    Hides a face representation. This disables a face representation from being
+    shown and from being used during any potential calculations. In this case,
+    hidding can be interpreted as deleting, with the difference being that when
+    a face representation is hidden, it is still stored in the database.
+
+    Parameters:
+        - facerep_id: Face representation identification number (id) [integer].
+
+    Output:\n
+        JSON-encoded dictionary with the following key/value pairs is returned:
+            1. status: flag indicating if the function executed without any
+                    errors (False) or if any errors occurred (True).
+            
+            2. message: informative message string.
+    """
+    # Initializes failed files list and return flag
+    ret_flag = False
+    msg      = 'ok'
+
+    # Checks if FaceRep id exists
+    if glb.sqla_session.query(FaceRep.id == facerep_id).first() is not None:
+        # FaceRep exists, so update the hidden value to True
+        stmt = update(FaceRep).values(hidden=True).where(
+                                                    FaceRep.id == facerep_id)
+        glb.sqla_session.execute(stmt)
+        glb.sqla_session.commit()
+
+    else:
+        # FaceRep does not exist, so set the return flag to True and create an
+        # appropriate message
+        ret_flag = True
+        msg      = f'No FaceRep exists with the id {facerep_id}'  
 
     return {'status':ret_flag, 'message':msg}
 
