@@ -57,7 +57,7 @@ export default {
         await this.axiosPost(`/api/fr/facerep/unjoin?face_id=${item_id}`, params)
       }
       if(action == "del") {
-        await this.axiosPost(`/api/fr/facerep/unjoin?face_id=${item_id}`, params)
+        this.deleteFace(item_id)
       }
        this.getGroupMembers(person_id)
 
@@ -69,6 +69,12 @@ export default {
       await this.axiosPost(`/api/fr/people/set_note?person_id=${person_id}&new_note=${this.person_new_note}`, params)
       this.name_title = this.person_new_name
       this.getGroupMembers(this.person_id)
+    },
+
+    deleteFace(item_id) {
+       if(confirm("Are you sure this face ? "+item_id)) {
+          console.log(item_id)
+       }
     },
 
     async deletePerson(person_id) {

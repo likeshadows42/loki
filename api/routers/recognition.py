@@ -465,7 +465,8 @@ async def remove_image(image_name : str  = Query(None, description="Image's name
     except:
         pass
 
-    print('Image full path:', os.path.join(image_dir, image_name),
+    if glb.DEBUG:
+        print('Image full path:', os.path.join(image_dir, image_name),
           '| decision:', os.path.isfile(os.path.join(image_dir, image_name)))
 
     # First, checks if the image exists
