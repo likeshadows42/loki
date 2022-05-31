@@ -493,25 +493,37 @@ def save_built_verifiers(verifier_names, saved_models_dir, overwrite=False,
 #                   REPRESENTATION DATABASE RELATED FUNCTIONS
 # ------------------------------------------------------------------------------
 
-def get_embeddings_as_array(verifier_name):
+def get_embeddings_as_array(verifier_name, ignore_hidden=True):
     """
-    Gets all of the embeddings for a given 'verifier_name' from the session
-    object stored in the global variable 'sqla_session' in
-    'global_variables.py', and returns it as a N x M numpy array where N is the
-    number of embeddings and M is the number of elements of each embeddings.
+    Gets all of the embeddings for a given 'verifier_name' (if 'ignore_hidden'
+    is False) from the session object stored in the global variable
+    'sqla_session' in 'global_variables.py', and returns it as a N x M numpy
+    array where N is the number of embeddings and M is the number of elements of
+    each embeddings.
+
+    If 'ignore_hidden' is True then only embeddings from face representations
+    (FaceReps) that are not hidden (i.e. with the hidden attribute set to False)
+    are considered. 
 
     Inputs:
         1. verifier_name - name of verifier [string].
+
+        2. ignore_hidden - toggles between including embeddings of 'hidden' face
+                            representations or not [boolean, default=True].
 
     Output:
         1. N x M numpy array where each row corresponds to a face image's
             embedding [numpy array].
 
     Signature:
-        embeddings = get_embeddings_as_array(verifier_name)
+        embeddings = get_embeddings_as_array(verifier_name, ignore_hidden=True)
     """
     # Get all face embeddings
-    query = glb.sqla_session.query(FaceRep.embeddings)
+    if ignore_hidden:
+        query = glb.sqla_session.query(FaceRep.embeddings).where(
+                                                        FaceRep.hidden == False)
+    else:
+        query = glb.sqla_session.query(FaceRep.embeddings)
 
     # Loops through each query result, appending the appropriate embedding to
     # the list
@@ -723,7 +735,7 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
             # Create a FaceRep record
             record = FaceRep(image_name=img_path[img_path.rindex('/')+1:],
                              image_fp=img_path, group_no=-1, region=region,
-                             embeddings=cur_embds)
+                             embeddings=cur_embds, hidden=False)
             
             # Appends each record to the records list
             records.append(record)
@@ -780,7 +792,7 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
     glb.sqla_session.commit()
 
     # Clusters Representations together using the DBSCAN algorithm
-    if auto_grouping and len(embds) > 0:
+    if auto_grouping:
         group_facereps(verifier_names[0], eps=eps, min_samples=min_samples,
                         metric=metric, verbose=verbose)
 
@@ -972,7 +984,10 @@ def group_facereps(verifier_name, eps=0.5, min_samples=2, metric='cosine',
     """
     Groups face representations. Each group is considered to be a unique person.
     This functions raises an assertion error if it fails to get the embeddings
-    corresponding to the face verifier 'verifier_name' from the database.
+    corresponding to the face verifier 'verifier_name' from the database. Only
+    face representation which are not hidden are considered. If no face
+    representations are found (i.e. all or hidden or there are no representation
+    available), the function return True. Otherwise, it returns False.
 
     Note that this functions uses the global session (glb.sqla_session) to read
     and modify tables in the database.
@@ -1000,7 +1015,8 @@ def group_facereps(verifier_name, eps=0.5, min_samples=2, metric='cosine',
                            the console [boolean, default=False]
 
     Output:
-        1. None
+        1. Returns a flag indicating if the function ran successfully (False)
+            or not (True) [boolean].
 
     Signature:
         group_facereps(verifier_name, eps=0.5, min_samples=2, metric='cosine')
@@ -1008,9 +1024,13 @@ def group_facereps(verifier_name, eps=0.5, min_samples=2, metric='cosine',
     # Attempts to get all embeddings stored in the database, given the chosen
     # verifier model's name
     try:
-        embds = get_embeddings_as_array(verifier_name)
+        embds = get_embeddings_as_array(verifier_name, ignore_hidden=True)
     except Exception as excpt:
         raise AssertionError(f'Could not get embeddings (reason: {excpt})')
+
+    # Checks if at least 1 embedding was found. If not, aborts the function
+    if embds.shape[0] == 0:
+        return True
 
     # Clusters embeddings using DBSCAN algorithm
     result = DBSCAN(eps=eps, min_samples=min_samples, metric=metric).fit(embds)
@@ -1091,7 +1111,7 @@ def group_facereps(verifier_name, eps=0.5, min_samples=2, metric='cosine',
             glb.sqla_session.execute(query)
             glb.sqla_session.commit()
 
-    return None
+    return False
 
 # ______________________________________________________________________________
 #                           DATABASE RELATED FUNCTIONS 
