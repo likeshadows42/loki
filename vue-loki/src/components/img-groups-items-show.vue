@@ -71,9 +71,11 @@ export default {
       this.getGroupMembers(this.person_id)
     },
 
-    deletePerson(person_id) {
+    async deletePerson(person_id) {
       if(confirm("Are you sure to delete person #"+person_id+"?")) {
-        console.log(person_id)
+        const response = await this.axiosPost(`/api/fr/people/remove_person?person_id=${person_id}`, {})
+        console.log(response)
+        this.getGroupMembers(this.person_id)
       }
     },
 

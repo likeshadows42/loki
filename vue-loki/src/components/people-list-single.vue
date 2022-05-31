@@ -46,28 +46,27 @@ export default {
     },
 
     async getGroupMembers(person_id) {
-      const params = {}
-      this.group_obj = await this.axiosPost(`/api/fr/people/get_faces?person_id=${person_id}`, params)
+      this.group_obj = await this.axiosPost(`/api/fr/people/get_faces?person_id=${person_id}`, {})
       this.group_num = Object.keys(this.group_obj).length
     },
 
     async removeImg(item_id, person_id) {
-      const params = {}
-      await this.axiosPost(`/api/fr/facerep/unjoin?face_id=${item_id}`, params)
+      await this.axiosPost(`/api/fr/facerep/unjoin?face_id=${item_id}`, {})
       this.getGroupMembers(person_id)
     },
 
     async updatePerson(person_id) {
-      const params = {}
-      await this.axiosPost(`/api/fr/people/set_name?person_id=${person_id}&person_name=${this.person_new_name}`, params)
-      await this.axiosPost(`/api/fr/people/set_note?person_id=${person_id}&new_note=${this.person_new_note}`, params)
+      await this.axiosPost(`/api/fr/people/set_name?person_id=${person_id}&person_name=${this.person_new_name}`, {})
+      await this.axiosPost(`/api/fr/people/set_note?person_id=${person_id}&new_note=${this.person_new_note}`, {})
       this.name_title = this.person_new_name
       this.getGroupMembers(this.person_id)
     },
 
-    deletePerson(person_id) {
-      if(confirm('Are you sure to delete completely this person?')) {
-        console.log(person_id)
+    async deletePerson(person_id) {
+      if(confirm("Are you sure to delete person #"+person_id+"?")) {
+        const response = await this.axiosPost(`/api/fr/people/remove_person?person_id=${person_id}`, {})
+        console.log(response)
+        this.getGroupMembers(this.person_id)
       }
     },
 

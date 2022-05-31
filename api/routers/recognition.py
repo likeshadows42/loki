@@ -718,12 +718,12 @@ async def remove_person(person_id : int  = Query(-1, description="Person ID [int
     if del_images:
         for rep in results:
             try:
-                os.remove(rep[0].image_fp)
+                os.remove(rep.FaceRep.image_fp)
             except Exception as excpt:
                 ret_flag = True
-                print(f'Could not remove image {rep[0].image_fp}.\n',
+                print(f'Could not remove image {rep.FaceRep.image_fp}.\n',
                       f'(reason: {excpt})')
-                failed_files.append(rep[0].image_fp)
+                failed_files.append(rep.FaceRep.image_fp)
         
         n = len(failed_files)
         if n > 0:
