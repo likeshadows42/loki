@@ -619,8 +619,8 @@ async def people_hide(person_id : int  = Query(None, description="Person ID [int
     msg      = 'ok'
 
     # First, checks if a Person with 'person_id' exists
-    if glb.sqla_session.execute(select(Person.id).where(
-                                       Person.id == person_id).first()) is None:
+    if glb.sqla_session.query(Person).filter(Person.id == person_id).first() is\
+        None:
         return {'status':True,
                 'message':f'Person {person_id} does not exist!'}
 
