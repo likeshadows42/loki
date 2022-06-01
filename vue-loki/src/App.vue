@@ -10,6 +10,7 @@ import ImagesVerifiedWithoutUpload from './components/img-verifier-without-uploa
 import ImagesUploaderAdv from './components/img-uploader-adv.vue'
 import zipUploader from './components/zip-uploader.vue'
 import axios from "axios"
+import slider from "vue3-slider"
 
 // exports
 export default {
@@ -23,7 +24,8 @@ export default {
     ImagesVerifiedWithUpload,
     ImagesVerifiedWithoutUpload,
     ImagesUploaderAdv,
-    zipUploader
+    zipUploader,
+    "vue3-slider": slider
   },
 
   data() {
@@ -37,6 +39,10 @@ export default {
       zipUploaderToggler: false,
       compImgUngroupedToggler: false,
       compGroupsToggler: true,
+      facePercent: 2,
+      certainlyThreshold: 45,
+      doubtThreshold: 70
+
     }
   },
 
@@ -207,10 +213,15 @@ export default {
       <!-- <p><a href="#" @click.prevent="dbReload">Reload database</a></p> -->
       <!-- <p><a href="#" @click.prevent="getGlobaldata">Get global parameters</a></p> -->
 
-       <h3>Server debug</h3>
+      <h3>Server debug</h3>
       <p><a href="/data/" target="_blank">Show img_dir content</a></p>
       <p><a href="/sqlite/loki.sqlite">Download sqlite</a></p>
 
+       <h3>Global parameters</h3>
+      <div>Face minimum area %: {{facePercent}} <vue3-slider v-model="facePercent" tooltip="true" tooltipText="%v%" /></div>
+      <div>Certainly --> Doubt threshold (%): {{certainlyThreshold}} <vue3-slider v-model="certainlyThreshold" tooltip="true" tooltipText="%v%" /></div>
+      <div>Doubt --> No Match threshold (%): {{doubtThreshold}} <vue3-slider v-model="doubtThreshold" tooltip="true" tooltipText="%v%" /></div>
+      
     </aside>
     <article class="main">
        <!-- <ImagesUploader @changed="handleImages" @response="(msg) => MainContent = msg"/> -->
