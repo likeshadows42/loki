@@ -51,35 +51,37 @@ export default {
       this.group_num = Object.keys(this.group_obj).length
     },
 
-    async removeImg(action, item_id, person_id) {
+    async updatePerson(person_id) {
+      await this.axiosPost(`/api/fr/people/set_name?person_id=${person_id}&person_name=${this.person_new_name}`, {})
+      await this.axiosPost(`/api/fr/people/set_note?person_id=${person_id}&new_note=${this.person_new_note}`, {})
+      this.name_title = this.person_new_name
+      this.getGroupMembers(this.person_id)
+    },
+
+    async removeFace(action, item_id, person_id) {
       const params = {}
-      if(action == 'rem') {
+      if(action == 'remove') {
         await this.axiosPost(`/api/fr/facerep/unjoin?face_id=${item_id}`, params)
       }
-      if(action == "del") {
-        this.deleteFace(item_id)
+      if(action == "hide") {
+        this.hideFace(item_id)
       }
        this.getGroupMembers(person_id)
 
     },
 
-    async updatePerson(person_id) {
-      const params = {}
-      await this.axiosPost(`/api/fr/people/set_name?person_id=${person_id}&person_name=${this.person_new_name}`, params)
-      await this.axiosPost(`/api/fr/people/set_note?person_id=${person_id}&new_note=${this.person_new_note}`, params)
-      this.name_title = this.person_new_name
-      this.getGroupMembers(this.person_id)
-    },
-
-    deleteFace(item_id) {
+    async hideFace(item_id) {
        if(confirm("Are you sure this face ? "+item_id)) {
           console.log(item_id)
+          const response = await this.axiosPost(`/api/fr/facerep/hide?${item_id}`, {})
+          console.log(response)
+          this.getGroupMembers(this.person_id)
        }
     },
 
-    async deletePerson(person_id) {
+    async hidePerson(person_id) {
       if(confirm("Are you sure to delete person #"+person_id+"?")) {
-        const response = await this.axiosPost(`/api/fr/people/remove_person?person_id=${person_id}`, {})
+        const response = await this.axiosPost(`/api/fr/people/hide?person_id=${person_id}`, {})
         console.log(response)
         this.getGroupMembers(this.person_id)
       }
@@ -106,7 +108,7 @@ export default {
           <input v-model="person_new_name" :placeholder="person_name_placeholder" class="person_name_box" :size="person_new_name.length != 0 ? person_new_name.length: 7">
           <button @click="updatePerson(person_id)">SET NAME</button>
           &nbsp;
-          <button @click="deletePerson(person_id)">DELETE</button>
+          <button @click="hidePerson(person_id)">DELETE</button>
       </div>
       Note <textarea :placeholder="this.person_note_placeholder" v-model="person_new_note"></textarea>
       <div>Num pics: {{group_num }}</div>
@@ -114,7 +116,7 @@ export default {
     <div class="imgs_container">
       <div v-for="item in group_obj" :key="item.id" class="img_group">
         <div class="img_div">
-          <compGroupItemsCanvas :item="item" :show_button="true" @parent-handler="removeImg"></compGroupItemsCanvas>
+          <compGroupItemsCanvas :item="item" :show_button="true" @parent-handler="removeFace"></compGroupItemsCanvas>
         </div>
       </div>
     </div>
