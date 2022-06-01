@@ -4,11 +4,10 @@
 
 from enum                       import Enum
 from typing                     import List, Tuple, Optional
-#from xmlrpc.client import Boolean
 from pydantic                   import BaseModel
 
 from sqlalchemy                 import Column, String, Integer,\
-                                        PickleType, ForeignKey, Boolean
+                                        PickleType, ForeignKey, Boolean, text
 from sqlalchemy.orm             import relationship
 from sqlalchemy.dialects.mysql  import INTEGER
 from sqlalchemy.ext.declarative import declarative_base
@@ -287,7 +286,7 @@ class Person(Base):
     group_no  = Column(Integer, default=None)
     note      = Column(String , default=None)
     front_img = Column(Integer, default=None)
-    hidden    = Column(Boolean, nullable=False, default=False)
+    hidden    = Column(Boolean, nullable=False, server_default=text("false"))
 
     # Establishes connection to associated Face Representations
     reps = relationship("FaceRep", back_populates="person",
@@ -312,7 +311,7 @@ class FaceRep(Base):
     group_no   = Column(Integer   , nullable=False)
     region     = Column(PickleType, nullable=False)
     embeddings = Column(PickleType, nullable=False)
-    hidden     = Column(Boolean   , nullable=False, default=False)
+    hidden     = Column(Boolean   , nullable=False, server_default=text("false"))
 
     # Establishes connection to associated Person
     person = relationship("Person", back_populates="reps")
