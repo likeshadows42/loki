@@ -321,7 +321,8 @@ async def view_tables(
                 image_fp   = rep.image_fp,
                 group_no   = rep.group_no,
                 region     = rep.region,
-                embeddings = [name for name in rep.embeddings.keys()]
+                embeddings = [name for name in rep.embeddings.keys()],
+                hidden     = rep.hidden
             ))
 
     # Prints the appropriate information if the selected table is 'person'
@@ -332,7 +333,8 @@ async def view_tables(
                 id       = prsn.id,
                 name     = prsn.name,
                 group_no = prsn.group_no,
-                note     = prsn.note
+                note     = prsn.note,
+                hidden   = prsn.hidden
             ))
 
     # Prints the appropriate information if the selected table is 'proc_files'
@@ -617,18 +619,19 @@ async def people_hide(person_id : int  = Query(None, description="Person ID [int
     msg      = 'ok'
 
     # First, checks if a Person with 'person_id' exists
-    if glb.sqla_session.query(Person.id).filter_by(id=person_id).first() is None:
+    if glb.sqla_session.execute(select(Person.id).where(
+                                       Person.id == person_id).first()) is None:
         return {'status':True,
                 'message':f'Person {person_id} does not exist!'}
 
     # Updates the 'hidden' attribute to True for the selected Person
-    stmt    = update(Person).values(hidden=True).where(person_id == person_id)
+    stmt = update(Person).values(hidden=True).where(Person.id == person_id)
     glb.sqla_session.execute(stmt)
     glb.sqla_session.commit()
 
     # Updates all FaceReps associated with the current person, setting their
     # 'hidden' attribute to True
-    stmt    = update(FaceRep).values(hidden=True).where(person_id == person_id)
+    stmt = update(FaceRep).values(hidden=True).where(FaceRep.person_id == person_id)
     glb.sqla_session.execute(stmt)
     glb.sqla_session.commit()
 

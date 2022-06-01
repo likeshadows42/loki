@@ -239,6 +239,7 @@ class FaceRepOutput(BaseModel):
     group_no        : int
     region          : List[int]
     embeddings      : List[str]
+    hidden          : bool
 
 # Response class for the output of the person table
 class PersonTableOutput(BaseModel):
@@ -250,6 +251,7 @@ class PersonTableOutput(BaseModel):
     name     : str
     group_no : int
     note     : str
+    hidden   : bool
 
 # Response class for the output of the processed files table
 class ProcessedFilesOutput(BaseModel):
