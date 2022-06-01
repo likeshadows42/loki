@@ -631,7 +631,8 @@ async def people_hide(person_id : int  = Query(None, description="Person ID [int
 
     # Updates all FaceReps associated with the current person, setting their
     # 'hidden' attribute to True
-    stmt = update(FaceRep).values(hidden=True).where(FaceRep.person_id == person_id)
+    stmt = update(FaceRep).values(hidden=True).where(
+                                                 FaceRep.person_id == person_id)
     glb.sqla_session.execute(stmt)
     glb.sqla_session.commit()
 
