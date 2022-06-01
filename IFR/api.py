@@ -1093,7 +1093,7 @@ def group_facereps(verifier_name, eps=0.5, min_samples=2, metric='cosine',
                       "the relevant representations")
 
             # Inserts a new record (person) into the Person table
-            query  = text("INSERT INTO person(name, group_no) VALUES(Null, -2)")
+            query  = text("INSERT INTO person(name, group_no, hidden) VALUES(Null, -2, false)")
             result = glb.sqla_session.execute(query)
             glb.sqla_session.commit()
 
