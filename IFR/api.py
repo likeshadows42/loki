@@ -735,7 +735,7 @@ def process_faces_from_dir(img_dir, detector_models, verifier_models,
             # Create a FaceRep record
             record = FaceRep(image_name=img_path[img_path.rindex('/')+1:],
                              image_fp=img_path, group_no=-1, region=region,
-                             embeddings=cur_embds, hidden=False)
+                             embeddings=cur_embds)
             
             # Appends each record to the records list
             records.append(record)

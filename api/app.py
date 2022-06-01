@@ -52,7 +52,7 @@ async def initialization():
 
     # Tries to load a database if it exists. If not, create a new one.
     if glb.DEBUG:
-        print('  -> Loading / creating database:', end='')
+        print('  -> Loading / creating database: ', end='')
     glb.sqla_engine = load_database(glb.SQLITE_DB_FP)
     if glb.DEBUG:
         print('success!\n')
@@ -60,7 +60,7 @@ async def initialization():
     # Loads (or creates) the session. Also commits once to create table
     # definitions if required.
     if glb.DEBUG:
-        print('  -> Loading / creating session:', end='')
+        print('  -> Loading / creating session: ', end='')
     glb.sqla_session = start_session(glb.sqla_engine)
     glb.sqla_session.commit()                   # create table definitions
     if glb.DEBUG:
