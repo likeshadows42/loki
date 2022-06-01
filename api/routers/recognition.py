@@ -425,82 +425,6 @@ async def database_clear():
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/utility/remove_image")
-async def remove_image(image_name : str  = Query(None, description="Image's name (with extension) [string]"),
-                remove_from_server: bool = Query(True, description="Toggles between  [integer]"),
-                image_dir         : str  = Query(glb.IMG_DIR, description="Full path to server's image directory [str]")):
-    """
-    API endpoint: remove_image()
-    
-    Removes an image from the database, that is, removes all associated face
-    representation (FaceReps) records and processed file (ProcessedFiles)
-    record. If 'remove_from_server' is True, then also removes the image from
-    the server.
-
-    WARNING: Please note that this operation is irreversible!
-
-    Parameters:
-        - image_name        : image's name [string].
-
-        - remove_from_server: toggles between removing the chosen image from the
-                                server or not [boolean, default=True].
-
-        - image_dir         : directory containing all images in the server
-                                [string, default=<glb.IMG_DIR>].
-
-    Output:\n
-        JSON-encoded dictionary with the following key/value pairs is returned:
-            1. status: flag indicating if the function executed without any
-                    errors (False) or if 1 or more errors occurred (True).
-            
-            2. message: informative message string
-    """
-    # Initializes failed files list and return flag
-    ret_flag     = False
-    msg          = 'ok'
-
-    # Tries to ensures the image name is a name (and not a full path)
-    try:
-        image_name = image_name[image_name.rindex('/')+1:]
-    except:
-        pass
-
-    if glb.DEBUG:
-        print('Image full path:', os.path.join(image_dir, image_name),
-          '| decision:', os.path.isfile(os.path.join(image_dir, image_name)))
-
-    # First, checks if the image exists
-    if not os.path.isfile(os.path.join(image_dir, image_name)):
-        ret_flag = True
-        msg      = 'Chosen image does not exist!'
-        return {'status':ret_flag, 'message':msg}
-
-    # Deletes the image from the server
-    if remove_from_server:
-        try:
-            os.remove(os.path.join(image_dir, image_name))
-        except Exception as excpt:
-            ret_flag = True
-            print(f'Could not remove image {image_name}.\n',
-                  f'(reason: {excpt})')
-            msg = f'Could not remove image {image_name}.'
-    else:
-        msg = 'ok (delete image skipped)'
-
-    # Deletes all FaceReps associated with the chosen image
-    dele = delete(FaceRep).where(FaceRep.image_name == image_name)
-    glb.sqla_session.execute(dele)
-    glb.sqla_session.commit()
-    
-    # Deletes all ProcessedFiles associated with the chosen image
-    dele = delete(ProcessedFiles).where(ProcessedFiles.filename == image_name)
-    glb.sqla_session.execute(dele)
-    glb.sqla_session.commit()
-
-    return {'status':ret_flag, 'message':msg}
-
-# ------------------------------------------------------------------------------
-
 @fr_router.post("/people/list")
 async def people_list():
     """
@@ -669,80 +593,88 @@ async def people_assign_facerep(person_id : int = Query(None, description="'ID p
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/people/remove_person")
-async def remove_person(person_id : int  = Query(-1, description="Person ID [integer]"),
-                       del_images : bool = Query(True, description="Toggles if the associated images on the server should be deleted [boolean]"),):
+@fr_router.post("/people/hide")
+async def people_hide(person_id : int  = Query(None, description="Person ID [integer]")):
     """
-    API endpoint: remove_person()
+    API endpoint: people_hide()
     
-    Removes a person from the database, along with all of the associated face
-    representation (FaceReps) records. If 'del_images' is True, then all of the
-    images on the server associated to this person will also be deleted. For
-    each file, if the deletion process fails, a message is printed to the
-    console with the exception.
-
-    WARNING: Please note that this operation is irreversible!
+    Hides a person. This can be interpreted as deleting a person, with the
+    difference being that the person record is still kept in the database. This
+    is preferred to deleting the person due to implementation reasons.
 
     Parameters:
-        - person_id : person record's id [integer, default=-1].
-
-        - del_images: toggles between removing the associated images on the
-                        server [boolean, default=True].
+        - person_id : person record's id [integer, default=None].
 
     Output:\n
         JSON-encoded dictionary with the following key/value pairs is returned:
             1. status: flag indicating if the function executed without any
                     errors (False) or if 1 or more errors occurred (True).
 
-            2. failed_files: list containing the full paths of any file that
-                    could not be deleted. This list will always be empty if
-                    del_images is False.
-            
-            3. message: informative message string
+            2. message: informative message string.
     """
-    # Initializes failed files list and return flag
-    failed_files = []
-    ret_flag     = False
-    msg          = 'ok'
+    # Initializes return flag and output message
+    ret_flag = False
+    msg      = 'ok'
 
     # First, checks if a Person with 'person_id' exists
     if glb.sqla_session.query(Person.id).filter_by(id=person_id).first() is None:
-        ret_flag = True
-        msg      = f'Person {person_id} does not exist!'
-        return {'status':ret_flag, 'failed_files':failed_files, 'message':msg}
+        return {'status':True,
+                'message':f'Person {person_id} does not exist!'}
 
-    # Gets all FaceReps associated with the current person
-    query = select(FaceRep).where(FaceRep.person_id == person_id)
-    results = glb.sqla_session.execute(query)
-
-    # Deletes the images associated with each FaceRep if del_images=True
-    if del_images:
-        for rep in results:
-            try:
-                os.remove(rep.FaceRep.image_fp)
-            except Exception as excpt:
-                ret_flag = True
-                print(f'Could not remove image {rep.FaceRep.image_fp}.\n',
-                      f'(reason: {excpt})')
-                failed_files.append(rep.FaceRep.image_fp)
-        
-        n = len(failed_files)
-        if n > 0:
-            msg = f'{n} files failed!'
-    else:
-        msg = 'ok (delete images skipped)'
-
-    # Deletes all FaceReps associated with the chosen person
-    dele = delete(FaceRep).where(FaceRep.person_id == person_id)
-    glb.sqla_session.execute(dele)
+    # Updates the 'hidden' attribute to True for the selected Person
+    stmt    = update(Person).values(hidden=True).where(Person.id == person_id)
+    glb.sqla_session.execute(stmt)
     glb.sqla_session.commit()
+
+    # Updates all FaceReps associated with the current person, setting their
+    # 'hidden' attribute to True
+    stmt    = update(FaceRep).values(hidden=True).where(FaceRep.person_id == person_id)
+    glb.sqla_session.execute(stmt)
+    glb.sqla_session.commit()
+
+    return {'status':ret_flag, 'message':msg}
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/facerep/hide")
+async def facerep_hide(facerep_id : int = Query(None, description="Face representation identification number (id) [integer]")):
+    """
+    API endpoint: facerep_hide()
     
-    # Deletes the selected Person
-    dele = delete(Person).where(Person.id == person_id)
-    glb.sqla_session.execute(dele)
-    glb.sqla_session.commit()
+    Hides a face representation. This disables a face representation from being
+    shown and from being used during any potential calculations. In this case,
+    hidding can be interpreted as deleting, with the difference being that when
+    a face representation is hidden, it is still stored in the database.
 
-    return {'status':ret_flag, 'failed_files':failed_files, 'message':msg}
+    Parameters:
+        - facerep_id: Face representation identification number (id) [integer].
+
+    Output:\n
+        JSON-encoded dictionary with the following key/value pairs is returned:
+            1. status: flag indicating if the function executed without any
+                    errors (False) or if any errors occurred (True).
+            
+            2. message: informative message string.
+    """
+    # Initializes failed files list and return flag
+    ret_flag = False
+    msg      = 'ok'
+
+    # Checks if FaceRep id exists
+    if glb.sqla_session.query(FaceRep.id == facerep_id).first() is not None:
+        # FaceRep exists, so update the hidden value to True
+        stmt = update(FaceRep).values(hidden=True).where(
+                                                    FaceRep.id == facerep_id)
+        glb.sqla_session.execute(stmt)
+        glb.sqla_session.commit()
+
+    else:
+        # FaceRep does not exist, so set the return flag to True and create an
+        # appropriate message
+        ret_flag = True
+        msg      = f'No FaceRep exists with the id {facerep_id}'  
+
+    return {'status':ret_flag, 'message':msg}
 
 # ------------------------------------------------------------------------------
 
@@ -1155,32 +1087,43 @@ async def verify_no_upload(files: List[UploadFile],
     dtb_embs = get_embeddings_as_array(params.verifier_name)
 
     # Loops through each file
-    for f in files:
+    for i, f in enumerate(files):
+        print(f'Processing file {i}: {f}')
+
         # Obtains contents of the file & transforms it into an image
         data  = np.fromfile(f.file, dtype=np.uint8)
         image = cv2.imdecode(data, cv2.IMREAD_UNCHANGED)
         image = image[:, :, ::-1]
+
+        print('  > Cleared file decode')
 
         # Detects faces
         output = do_face_detection(image, detector_models=glb.models,
                                     detector_name=params.detector_name,
                                     align=params.align, verbose=params.verbose)
 
+        print('  > Cleared face detection')
+
         # Filter regions & faces which are too small
         filtered_regions, idxs = discard_small_regions(output['regions'],
                                                     image.shape, pct=params.pct)
         filtered_faces         = [output['faces'][i] for i in idxs]
+
+        print('  > Cleared small faces filtering')
 
         # Calculates the deep neural embeddings for each face image in outputs
         embeddings = calc_embeddings(filtered_faces, glb.models,
                                      verifier_names=params.verifier_name,
                                      normalization=params.normalization)
 
+        print('  > Cleared embedding calculation')
+
         # Initialize current image's result container
         cur_img_results = []
 
         # 
-        for cur_embd in embeddings:
+        print('  > Calculating similarity:')
+        for j, cur_embd in enumerate(embeddings):
             # Calculates the similarity between the current embedding and all
             # embeddings from the database
             similarity_obj = calc_similarity(cur_embd[params.verifier_name],
@@ -1189,9 +1132,13 @@ async def verify_no_upload(files: List[UploadFile],
                                              face_verifier=params.verifier_name,
                                              threshold=params.threshold)
 
+            print('     - Cleared similarity calculation ', end='')
+
             # Gets all matches based on the similarity object and append the
             # result to the results list
             result = get_matches_from_similarity(similarity_obj)
+
+            print('& got matches from similarity')
 
             # Stores the result for each face on the current image
             cur_img_results.append(result)
@@ -1199,6 +1146,8 @@ async def verify_no_upload(files: List[UploadFile],
         # Then, stores the set of results (of the current image) to the
         # verification results list
         verification_results.append(cur_img_results)
+
+        print('')
 
     return verification_results
     
