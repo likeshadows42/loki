@@ -41,8 +41,8 @@ export default {
       compGroupsToggler: true,
       facePercent: 2,
       certainlyThreshold: 45,
-      doubtThreshold: 70
-
+      doubtThreshold: 70,
+      showHidden: false
     }
   },
 
@@ -186,41 +186,45 @@ export default {
     <header class="header"><Home msg="Loki MVP"/></header>
     <aside class="aside aside-1">
       
-      <h3>Face recognition</h3>
-      <p><a href="#" @click.prevent="sectionToggler('compGroupsToggler')">Show people (detail)</a></p>
-      <p><a href="#" @click.prevent="sectionToggler('compPeopleListToggler')">Show people</a></p> 
-      <p><a href="#" @click.prevent="sectionToggler('compImgUngroupedToggler')">Show ungrouped images</a></p>
-      <!-- <p><a href="#" @click.prevent="imgUploaderAdvToggle">Upload multiple images</a></p> -->
-      
-      <h3>Load images</h3>
-      <p><a href="#" @click.prevent="sectionToggler('zipUploaderToggler')">Load images from zip</a></p>
-      <!-- <p><a>Upload multiple images</a></p> -->
+      <input type="checkbox" id="checkbox" v-model="showHidden" />
+      <b>Show hidden people&faces</b><br/>
 
-      <h3>Verify images</h3>
-      <p><a href="#" @click.prevent="sectionToggler('imgUploaderWithoutUpToggler')">Verify image (without upload)</a></p>
-      <!-- <p><a href="#" @click.prevent="imgVerWithUpToggle">Verify image (with upload)</a></p> -->
-      
-      <!-- <p><a>Verify image (with upload)</a></p> -->
-      <!-- <SecondComp @response="(msg) => MainContent = msg"/>
-      <SecondComp @response="mainClear"/> -->
+      <div>
+        <h3>Face recognition</h3>
+        <a href="#" @click.prevent="sectionToggler('compGroupsToggler')">Show people (detail)</a><br/>
+        <a href="#" @click.prevent="sectionToggler('compPeopleListToggler')">Show people</a><br/>
+        <a href="#" @click.prevent="sectionToggler('compImgUngroupedToggler')">Show ungrouped images</a><br/>
+      </div>
 
-      <h3>Utility</h3>
-      <!-- <p><a href="#" @click.prevent="">Load database</a></p>
-      <p><a href="#" @click.prevent="">Save database</a></p> -->
-      <p><a href="#" @click.prevent="dbLoadFromDir">Load images from default directory</a></p>
-      <p><a href="#" @click.prevent="dbClear">Clear database</a></p>
-      <p><a href="#" @click.prevent="imgdirClear">Clear image dir</a></p>
-      <!-- <p><a href="#" @click.prevent="dbReload">Reload database</a></p> -->
-      <!-- <p><a href="#" @click.prevent="getGlobaldata">Get global parameters</a></p> -->
+      <div>
+        <h3>Load images</h3>
+        <a href="#" @click.prevent="sectionToggler('zipUploaderToggler')">Load images from zip</a><br/>
+      </div>
 
-      <h3>Server debug</h3>
-      <p><a href="/data/" target="_blank">Show img_dir content</a></p>
-      <p><a href="/sqlite/loki.sqlite">Download sqlite</a></p>
+      <div>
+        <h3>Verify images</h3>
+        <a href="#" @click.prevent="sectionToggler('imgUploaderWithoutUpToggler')">Verify image (without upload)</a><br/>
+      </div>
 
-       <h3>Global parameters</h3>
-      <div>Face minimum area %: {{facePercent}} <vue3-slider v-model="facePercent" tooltip="true" tooltipText="%v%" /></div>
-      <div>Certainly --> Doubt threshold (%): {{certainlyThreshold}} <vue3-slider v-model="certainlyThreshold" tooltip="true" tooltipText="%v%" /></div>
-      <div>Doubt --> No Match threshold (%): {{doubtThreshold}} <vue3-slider v-model="doubtThreshold" tooltip="true" tooltipText="%v%" /></div>
+      <div>
+        <h3>Utility</h3>
+        <a href="#" @click.prevent="dbLoadFromDir">Load images from default directory</a><br/>
+        <a href="#" @click.prevent="dbClear">Clear database</a><br/>
+        <a href="#" @click.prevent="imgdirClear">Clear image dir</a><br/>
+      </div>
+
+      <div>
+        <h3>Server debug</h3>
+        <a href="/data/" target="_blank">Show img_dir content</a><br/>
+        <a href="/sqlite/loki.sqlite">Download sqlite</a><br/>
+      </div>
+
+      <div>
+        <h3>Global parameters</h3>
+        Face minimum area %: {{facePercent}} <vue3-slider v-model="facePercent" tooltip="true" tooltipText="%v%" />
+        Certainly --> Doubt threshold (%): {{certainlyThreshold}} <vue3-slider v-model="certainlyThreshold" tooltip="true" tooltipText="%v%" />
+        Doubt --> No Match threshold (%): {{doubtThreshold}} <vue3-slider v-model="doubtThreshold" tooltip="true" tooltipText="%v%" />
+      </div>
       
     </aside>
     <article class="main">
@@ -305,6 +309,7 @@ header > h1 {
 
 .aside-1 {
   background: #f4f6ff;
+  padding-top: 20px;
 }
 
 @media all and (min-width: 600px) {
@@ -323,7 +328,7 @@ body {
 }
 
 h3 {
-  margin: 40px 0 0;
+  margin: 20px 0 0;
 }
 
 ul {
