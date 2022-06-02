@@ -108,7 +108,7 @@ export default {
           <input v-model="person_new_name" :placeholder="person_name_placeholder" class="person_name_box" :size="person_new_name.length != 0 ? person_new_name.length: 7">
           <button @click="updatePerson(person_id)">SET NAME</button>
           &nbsp;
-          <button @click="hidePerson(person_id)">DELETE</button>
+          <button @click="hidePerson(person_id)">HIDE</button>
       </div>
       Note <textarea :placeholder="this.person_note_placeholder" v-model="person_new_note"></textarea>
       <div>Num pics: {{group_num }}</div>
