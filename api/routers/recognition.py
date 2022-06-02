@@ -595,17 +595,22 @@ async def people_assign_facerep(person_id : int = Query(None, description="'ID p
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/people/hide")
-async def people_hide(person_id : int  = Query(None, description="Person ID [integer]")):
+@fr_router.post("/people/hide_unhide")
+async def people_hide_unhide(person_id : int  = Query(None, description="Person ID [integer]"),
+                             hide      : bool = Query(True, description="Toggles between hiding or unhiding the person [boolean]")):
     """
-    API endpoint: people_hide()
+    API endpoint: people_hide_unhide()
     
-    Hides a person. This can be interpreted as deleting a person, with the
-    difference being that the person record is still kept in the database. This
-    is preferred to deleting the person due to implementation reasons.
+    Hides or unhides a person. Hiding can be interpreted as temporarily
+    'deleting' a person, with the difference being that the person's record is
+    still kept in the database. This enables the person to be 'unhidden' (or
+    restored) if needed.
 
     Parameters:
         - person_id : person record's id [integer, default=None].
+
+        - hide      : toggles between hiding or unhiding a person [boolean,
+                        default=True].
 
     Output:\n
         JSON-encoded dictionary with the following key/value pairs is returned:
@@ -619,19 +624,20 @@ async def people_hide(person_id : int  = Query(None, description="Person ID [int
     msg      = 'ok'
 
     # First, checks if a Person with 'person_id' exists
-    if glb.sqla_session.query(Person).filter(Person.id == person_id).first() is\
-        None:
+    if glb.sqla_session.execute(select(Person.id).where(
+                                       Person.id == person_id)).first() is None:
         return {'status':True,
                 'message':f'Person {person_id} does not exist!'}
 
-    # Updates the 'hidden' attribute to True for the selected Person
-    stmt = update(Person).values(hidden=True).where(Person.id == person_id)
+    # Updates the 'hidden' attribute to either True (hidden) or False (unhidden)
+    # for the selected Person
+    stmt = update(Person).values(hidden=hide).where(Person.id == person_id)
     glb.sqla_session.execute(stmt)
     glb.sqla_session.commit()
 
     # Updates all FaceReps associated with the current person, setting their
-    # 'hidden' attribute to True
-    stmt = update(FaceRep).values(hidden=True).where(
+    # 'hidden' attribute to either True (hidden) or False (unhidden)
+    stmt = update(FaceRep).values(hidden=hide).where(
                                                  FaceRep.person_id == person_id)
     glb.sqla_session.execute(stmt)
     glb.sqla_session.commit()
@@ -640,18 +646,25 @@ async def people_hide(person_id : int  = Query(None, description="Person ID [int
 
 # ------------------------------------------------------------------------------
 
-@fr_router.post("/facerep/hide")
-async def facerep_hide(facerep_id : int = Query(None, description="Face representation identification number (id) [integer]")):
+@fr_router.post("/facerep/hide_unhide")
+async def facerep_hide_unhide(facerep_id : int  = Query(None, description="Face representation identification number (id) [integer]"),
+                              hide       : bool = Query(True, description="Toggles between hiding or unhiding the face representation [boolean]")):
     """
-    API endpoint: facerep_hide()
+    API endpoint: facerep_hide_unhide()
     
-    Hides a face representation. This disables a face representation from being
-    shown and from being used during any potential calculations. In this case,
-    hidding can be interpreted as deleting, with the difference being that when
-    a face representation is hidden, it is still stored in the database.
+    Hides or unhides a face representation. Hiding disables a face
+    representation from being shown and from being used during any potential
+    calculations (except during grouping - this ensures new face representation
+    belonging to a hidden person remain hidden). In this case, hiding can be
+    interpreted as a 'temporary deletion', with the difference being that when
+    a face representation is hidden, it is still stored in the database. This
+    enables the person to be 'unhidden' (or restored) if needed.
 
     Parameters:
-        - facerep_id: Face representation identification number (id) [integer].
+        - facerep_id: face representation identification number (id) [integer].
+
+        - hide      : toggles between hiding or unhiding a face representation
+                        [boolean, default=True].
 
     Output:\n
         JSON-encoded dictionary with the following key/value pairs is returned:
@@ -664,19 +677,17 @@ async def facerep_hide(facerep_id : int = Query(None, description="Face represen
     ret_flag = False
     msg      = 'ok'
 
-    # Checks if FaceRep id exists
-    if glb.sqla_session.query(FaceRep.id == facerep_id).first() is not None:
-        # FaceRep exists, so update the hidden value to True
-        stmt = update(FaceRep).values(hidden=True).where(
-                                                    FaceRep.id == facerep_id)
-        glb.sqla_session.execute(stmt)
-        glb.sqla_session.commit()
-
-    else:
+    if glb.sqla_session.execute(select(FaceRep.id).where(
+                                     FaceRep.id == facerep_id)).first() is None:
         # FaceRep does not exist, so set the return flag to True and create an
         # appropriate message
         ret_flag = True
-        msg      = f'No FaceRep exists with the id {facerep_id}'  
+        msg      = f'No FaceRep exists with the id {facerep_id}' 
+
+    # Otherwise, FaceRep exists so update the hidden value to 'hide'
+    stmt = update(FaceRep).values(hidden=hide).where(FaceRep.id == facerep_id)
+    glb.sqla_session.execute(stmt)
+    glb.sqla_session.commit()
 
     return {'status':ret_flag, 'message':msg}
 
