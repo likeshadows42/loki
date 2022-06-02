@@ -639,12 +639,13 @@ async def people_hide_unhide(person_id : int  = Query(None, description="Person 
     glb.sqla_session.execute(stmt)
     glb.sqla_session.commit()
 
+    # Luca comment: hidden faces should remain hidden after a person is unhide
     # Updates all FaceReps associated with the current person, setting their
     # 'hidden' attribute to either True (hidden) or False (unhidden)
-    stmt = update(FaceRep).values(hidden=hide).where(
-                                                 FaceRep.person_id == person_id)
-    glb.sqla_session.execute(stmt)
-    glb.sqla_session.commit()
+    # stmt = update(FaceRep).values(hidden=hide).where(
+    #                                              FaceRep.person_id == person_id)
+    # glb.sqla_session.execute(stmt)
+    # glb.sqla_session.commit()
 
     return {'status':ret_flag, 'message':msg}
 
