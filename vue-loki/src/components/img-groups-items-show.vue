@@ -71,7 +71,7 @@ export default {
     async hideFace(item_id) {
        if(confirm("Are you sure this face ? "+item_id)) {
           console.log(item_id)
-          const response = await this.axiosPost(`/api/fr/facerep/hide?facerep_id=${item_id}`, {})
+          const response = await this.axiosPost(`/api/fr/facerep/hide_unhide?facerep_id=${item_id}`, {})
           console.log(response)
           this.getGroupMembers(this.person_id)
        }
@@ -79,7 +79,7 @@ export default {
 
     async hidePerson(person_id) {
       if(confirm("Are you sure to delete person #"+person_id+"?")) {
-        const response = await this.axiosPost(`/api/fr/people/hide?person_id=${person_id}`, {})
+        const response = await this.axiosPost(`/api/fr/people/hide_unhide?person_id=${person_id}`, {})
         console.log(response)
         this.getGroupMembers(this.person_id)
       }
@@ -99,6 +99,7 @@ export default {
 
 
 <template>
+  <div>hidden: {{showHidden}}</div>
   <div v-if="group_num > 0" class="group_div">
     <div class="header_div">
       <div>
