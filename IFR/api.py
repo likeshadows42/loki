@@ -1093,7 +1093,8 @@ def group_facereps(verifier_name, eps=0.5, min_samples=2, metric='cosine',
                       "the relevant representations")
 
             # Inserts a new record (person) into the Person table
-            query  = text("INSERT INTO person(name, group_no, hidden) VALUES(Null, -2, false)")
+            query  = text("INSERT INTO person(name, group_no, hidden) "     +\
+                          "VALUES(Null, -2, false)")
             result = glb.sqla_session.execute(query)
             glb.sqla_session.commit()
 
@@ -1110,6 +1111,16 @@ def group_facereps(verifier_name, eps=0.5, min_samples=2, metric='cosine',
                         ") & (rep2.person_id IS NOT NULL)) IS NULL)")
             glb.sqla_session.execute(query)
             glb.sqla_session.commit()
+
+    # Ensures new batches of face representation are also hidden if they belong
+    # to a hidden person (note that this is not required for unhidden people as
+    # by default face representation are unhidden)
+    query = glb.sqla_session.query(Person.id).where(Person.hidden==True).all()
+    for person_id in query:
+        stmt = update(FaceRep).values(hidden = True).where(
+                                                FaceRep.person_id==person_id[0])
+        glb.sqla_session.execute(stmt)
+        glb.sqla_session.commit()
 
     return False
 
