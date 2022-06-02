@@ -167,6 +167,10 @@ export default {
       // this.MainContent = msg
     },
 
+    test(evt) {
+      this.$showHidden = evt.target.checked
+    },
+
 
   },
 
@@ -186,9 +190,10 @@ export default {
     <header class="header"><Home msg="Loki MVP"/></header>
     <aside class="aside aside-1">
       
-      <input type="checkbox" id="checkbox" v-model="showHidden" />
+      <!-- <input type="checkbox" id="checkbox" v-model="this.$showHidden" /> -->
+      <input type="checkbox" id="checkbox" @change="this.$store.commit('hideUnhide')" />
       <b>Show hidden people&faces</b><br/>
-
+       {{ this.$store.state.$showHidden }}
       <div>
         <h3>Face recognition</h3>
         <a href="#" @click.prevent="sectionToggler('compGroupsToggler')">Show people (detail)</a><br/>

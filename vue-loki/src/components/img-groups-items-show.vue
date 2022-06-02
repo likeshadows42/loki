@@ -24,6 +24,12 @@ export default {
     }
   },
 
+  watch: {
+    '$store.state.$showHidden': function() {
+        this.getGroupMembers(this.person_id)
+    }
+  },
+
   methods: {
     async axiosGet(url) {
       try {
@@ -46,7 +52,7 @@ export default {
     },
 
     async getGroupMembers(person_id) {
-      this.group_obj = await this.axiosPost(`/api/fr/people/get_faces?person_id=${person_id}`, {})
+      this.group_obj = await this.axiosPost(`/api/fr/people/get_faces?person_id=${person_id}&show_hidden=${this.$store.state.$showHidden}`, {})
       this.group_num = Object.keys(this.group_obj).length
     },
 
@@ -99,7 +105,6 @@ export default {
 
 
 <template>
-  <div>hidden: {{showHidden}}</div>
   <div v-if="group_num > 0" class="group_div">
     <div class="header_div">
       <div>

@@ -13,12 +13,18 @@ export default {
     }
   },
 
+  watch: {
+    '$store.state.$showHidden': function() {
+        this.ListPeople()
+    }
+  },
+
   methods: {
     async ListPeople() {
       const requestOptions = {
         method: "POST",
       };
-      const res = await fetch(`/api/fr/people/list`,requestOptions)
+      const res = await fetch(`/api/fr/people/list?show_hidden=${this.$store.state.$showHidden}`,requestOptions)
       this.people = await res.json()
       // console.log(this.groups)
       //console.log(this.imgs)
@@ -42,8 +48,7 @@ export default {
 
 
 <template>
-<h2>List people</h2>
-
+<h2>List people (details)</h2>
 <span v-for="person in people" :key="person.id">
       <compGroupItems :person_id="person.id" :person_name="person.name" :person_note="person.note"></compGroupItems>
 </span>
