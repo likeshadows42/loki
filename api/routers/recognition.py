@@ -470,7 +470,8 @@ async def people_get_front_image():
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/people/get_faces")
-async def people_get_faces(person_id: int = Query(None, description="'person_id key' in Person table [integer]")):
+async def people_get_faces(person_id: int = Query(None, description="'person_id key' in Person table [integer]"),
+                            show_hidden   : Optional[bool] = Query(False, description="Show also hidden faces for this person? [boolen]")):
     """
     API endpoint: people_get_faces()
 
@@ -484,9 +485,12 @@ async def people_get_faces(person_id: int = Query(None, description="'person_id 
     Output:\n
             JSON-encoded FaceRep result for a specific person_id
     """
-    query = select(FaceRep.id, FaceRep.person_id, FaceRep.image_name,
-                    FaceRep.image_fp, FaceRep.region).where(\
-                    FaceRep.person_id == person_id)
+
+    query_txt = "SELECT id, person_id, image_name, image_fp, region FROM representation WHERE person_id ="+str(person_id)
+    if show_hidden is False:
+        query_txt += " AND hidden = 0"
+    query = text(query_txt)
+
     result = glb.sqla_session.execute(query)
 
     return_value = []
