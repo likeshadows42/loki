@@ -428,7 +428,7 @@ async def database_clear():
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/people/list")
-async def people_list(show_hidden: bool = Query(False, description="boolean value to show visible people (false) or hidden one (true)")):
+async def people_list(show_hidden: bool = Query(False, description="boolean value to show visible people (false) or ALSO hidden one (true)")):
     """
     API endpoint: people_list()
     
@@ -440,7 +440,10 @@ async def people_list(show_hidden: bool = Query(False, description="boolean valu
     Output:\n
         JSON-encoded ...
     """
-    query = select(Person.id, Person.name, Person.note).where(Person.hidden == show_hidden)
+    query_txt = "SELECT id, name, note, hidden FROM person"
+    if show_hidden is False:
+        query_txt += " WHERE hidden = 0"
+    query = text(query_txt)    
     result = glb.sqla_session.execute(query)
     return result.fetchall()
 
