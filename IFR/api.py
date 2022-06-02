@@ -1024,7 +1024,7 @@ def group_facereps(verifier_name, eps=0.5, min_samples=2, metric='cosine',
     # Attempts to get all embeddings stored in the database, given the chosen
     # verifier model's name
     try:
-        embds = get_embeddings_as_array(verifier_name, ignore_hidden=True)
+        embds = get_embeddings_as_array(verifier_name, ignore_hidden=False)
     except Exception as excpt:
         raise AssertionError(f'Could not get embeddings (reason: {excpt})')
 
