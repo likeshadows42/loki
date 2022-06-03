@@ -24,6 +24,12 @@ export default {
     }
   },
 
+  watch: {
+    '$store.state.$showHidden': function() {
+        this.getGroupMembers(this.person_id)
+    }
+  },
+
   methods: {
     async axiosGet(url) {
       try {
@@ -46,8 +52,7 @@ export default {
     },
 
     async getGroupMembers(person_id) {
-      const params = {}
-      this.group_obj = await this.axiosPost(`/api/fr/people/get_faces?person_id=${person_id}`, params)
+      this.group_obj = await this.axiosPost(`/api/fr/people/get_faces?person_id=${person_id}&show_hidden=${this.$store.state.$showHidden}`, {})
       this.group_num = Object.keys(this.group_obj).length
     },
 
@@ -59,9 +64,8 @@ export default {
     },
 
     async removeFace(action, item_id, person_id) {
-      const params = {}
       if(action == 'remove') {
-        await this.axiosPost(`/api/fr/facerep/unjoin?face_id=${item_id}`, params)
+        await this.axiosPost(`/api/fr/facerep/unjoin?face_id=${item_id}`, {})
       }
       if(action == "hide") {
         this.hideFace(item_id)
@@ -73,7 +77,7 @@ export default {
     async hideFace(item_id) {
        if(confirm("Are you sure this face ? "+item_id)) {
           console.log(item_id)
-          const response = await this.axiosPost(`/api/fr/facerep/hide?${item_id}`, {})
+          const response = await this.axiosPost(`/api/fr/facerep/hide_unhide?facerep_id=${item_id}`, {})
           console.log(response)
           this.getGroupMembers(this.person_id)
        }
@@ -81,7 +85,7 @@ export default {
 
     async hidePerson(person_id) {
       if(confirm("Are you sure to delete person #"+person_id+"?")) {
-        const response = await this.axiosPost(`/api/fr/people/hide?person_id=${person_id}`, {})
+        const response = await this.axiosPost(`/api/fr/people/hide_unhide?person_id=${person_id}`, {})
         console.log(response)
         this.getGroupMembers(this.person_id)
       }

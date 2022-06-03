@@ -428,7 +428,7 @@ async def database_clear():
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/people/list")
-async def people_list(show_hidden: bool = Query(False, description="boolean value to show visible people (false) or hidden one (true)")):
+async def people_list(show_hidden: bool = Query(False, description="boolean value to show visible people (false) or ALSO hidden one (true)")):
     """
     API endpoint: people_list()
     
@@ -440,7 +440,10 @@ async def people_list(show_hidden: bool = Query(False, description="boolean valu
     Output:\n
         JSON-encoded ...
     """
-    query = select(Person.id, Person.name, Person.note).where(Person.hidden == show_hidden)
+    query_txt = "SELECT id, name, note, hidden FROM person"
+    if show_hidden is False:
+        query_txt += " WHERE hidden = 0"
+    query = text(query_txt)    
     result = glb.sqla_session.execute(query)
     return result.fetchall()
 
@@ -470,7 +473,8 @@ async def people_get_front_image():
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/people/get_faces")
-async def people_get_faces(person_id: int = Query(None, description="'person_id key' in Person table [integer]")):
+async def people_get_faces(person_id: int = Query(None, description="'person_id key' in Person table [integer]"),
+                            show_hidden   : Optional[bool] = Query(False, description="Show also hidden faces for this person? [boolen]")):
     """
     API endpoint: people_get_faces()
 
@@ -484,9 +488,12 @@ async def people_get_faces(person_id: int = Query(None, description="'person_id 
     Output:\n
             JSON-encoded FaceRep result for a specific person_id
     """
-    query = select(FaceRep.id, FaceRep.person_id, FaceRep.image_name,
-                    FaceRep.image_fp, FaceRep.region).where(\
-                    FaceRep.person_id == person_id)
+
+    query_txt = "SELECT id, person_id, image_name, image_fp, region FROM representation WHERE person_id ="+str(person_id)
+    if show_hidden is False:
+        query_txt += " AND hidden = 0"
+    query = text(query_txt)
+
     result = glb.sqla_session.execute(query)
 
     return_value = []
@@ -635,12 +642,13 @@ async def people_hide_unhide(person_id : int  = Query(None, description="Person 
     glb.sqla_session.execute(stmt)
     glb.sqla_session.commit()
 
+    # Luca comment: hidden faces should remain hidden after a person is unhide
     # Updates all FaceReps associated with the current person, setting their
     # 'hidden' attribute to either True (hidden) or False (unhidden)
-    stmt = update(FaceRep).values(hidden=hide).where(
-                                                 FaceRep.person_id == person_id)
-    glb.sqla_session.execute(stmt)
-    glb.sqla_session.commit()
+    # stmt = update(FaceRep).values(hidden=hide).where(
+    #                                              FaceRep.person_id == person_id)
+    # glb.sqla_session.execute(stmt)
+    # glb.sqla_session.commit()
 
     return {'status':ret_flag, 'message':msg}
 
