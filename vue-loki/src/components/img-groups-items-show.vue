@@ -98,7 +98,7 @@ export default {
       if(confirm("Are you sure to delete person #"+person_id+"?")) {
         await this.axiosPost(`/api/fr/people/hide_unhide?person_id=${person_id}`, {})
         this.getGroupMembers(this.person_id)
-        // this.$emit('parent-update')
+        this.$emit('parent-update')
       }
     },
 
