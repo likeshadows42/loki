@@ -193,7 +193,6 @@ export default {
       <!-- <input type="checkbox" id="checkbox" v-model="this.$showHidden" /> -->
       <input type="checkbox" id="checkbox" @change="this.$store.commit('hideUnhide')" />
       <b>Show hidden people&faces</b><br/>
-       {{ this.$store.state.$showHidden }}
       <div>
         <h3>Face recognition</h3>
         <a href="#" @click.prevent="sectionToggler('compGroupsToggler')">Show people (detail)</a><br/>
