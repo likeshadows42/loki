@@ -50,7 +50,7 @@ export default {
 <template>
 <h2>List people (details)</h2>
 <span v-for="person in people" :key="person.id">
-      <compGroupItems :person_id="person.id" :person_name="person.name" :person_note="person.note"></compGroupItems>
+      <compGroupItems :person_id="person.id" :person_name="person.name" :person_note="person.note" :person_hidden="person.hidden" @parent-update="this.ListPeople()"></compGroupItems>
 </span>
 <p v-if="checkPeople(people)">No people yet.</p>
 </template>

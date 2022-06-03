@@ -10,8 +10,11 @@ export default {
   props: {
     person_id: Number,
     person_name: String,
-    person_note: String
+    person_note: String,
+    person_hidden: Number
   },
+
+  emits: ['parent-update'],
 
   data() {
     return {
@@ -63,12 +66,15 @@ export default {
       this.getGroupMembers(this.person_id)
     },
 
-    async removeFace(action, item_id, person_id) {
+    async editFace(action, item_id, person_id) {
       if(action == 'remove') {
         await this.axiosPost(`/api/fr/facerep/unjoin?face_id=${item_id}`, {})
       }
       if(action == "hide") {
         this.hideFace(item_id)
+      }
+      if(action == 'unhide'){
+        this.unhideFace(item_id)
       }
        this.getGroupMembers(person_id)
 
@@ -76,19 +82,30 @@ export default {
 
     async hideFace(item_id) {
        if(confirm("Are you sure this face ? "+item_id)) {
-          console.log(item_id)
-          const response = await this.axiosPost(`/api/fr/facerep/hide_unhide?facerep_id=${item_id}`, {})
-          console.log(response)
-          this.getGroupMembers(this.person_id)
+          await this.axiosPost(`/api/fr/facerep/hide_unhide?facerep_id=${item_id}`, {})
+          await this.getGroupMembers(this.person_id)
+          // this.$emit('parent-update')
        }
+    },
+
+    async unhideFace(item_id) {
+        await this.axiosPost(`/api/fr/facerep/hide_unhide?facerep_id=${item_id}&hide=False`, {})
+        await this.getGroupMembers(this.person_id)
+        // this.$emit('parent-update')
     },
 
     async hidePerson(person_id) {
       if(confirm("Are you sure to delete person #"+person_id+"?")) {
-        const response = await this.axiosPost(`/api/fr/people/hide_unhide?person_id=${person_id}`, {})
-        console.log(response)
+        await this.axiosPost(`/api/fr/people/hide_unhide?person_id=${person_id}`, {})
         this.getGroupMembers(this.person_id)
+        // this.$emit('parent-update')
       }
+    },
+
+    async unhidePerson(person_id) {
+        await this.axiosPost(`/api/fr/people/hide_unhide?person_id=${person_id}&hide=False`, {})
+        this.getGroupMembers(this.person_id)
+        this.$emit('parent-update')
     },
 
   },
@@ -105,14 +122,15 @@ export default {
 
 
 <template>
-  <div v-if="group_num > 0" class="group_div">
+  <div v-if="group_num > 0" class="group_div" v-bind:class="{ 'person-hidden' : person_hidden}">
     <div class="header_div">
       <div>
           #{{ person_id }}
           <input v-model="person_new_name" :placeholder="person_name_placeholder" class="person_name_box" :size="person_new_name.length != 0 ? person_new_name.length: 7">
           <button @click="updatePerson(person_id)">SET NAME</button>
           &nbsp;
-          <button @click="hidePerson(person_id)">HIDE</button>
+          <button v-if="person_hidden" @click="unhidePerson(person_id)">UNHIDE</button>
+          <button v-else @click="hidePerson(person_id)">HIDE</button>
       </div>
       Note <textarea :placeholder="this.person_note_placeholder" v-model="person_new_note"></textarea>
       <div>Num pics: {{group_num }}</div>
@@ -120,7 +138,7 @@ export default {
     <div class="imgs_container">
       <div v-for="item in group_obj" :key="item.id" class="img_group">
         <div class="img_div">
-          <compGroupItemsCanvas :item="item" :show_button="true" @parent-handler="removeFace"></compGroupItemsCanvas>
+          <compGroupItemsCanvas :item="item" :show_button="true" @parent-handler="editFace"></compGroupItemsCanvas>
         </div>
       </div>
     </div>
@@ -131,6 +149,10 @@ export default {
 <style scoped>
 .group_div {
   padding-bottom: 50px;
+}
+
+.person-hidden {
+  background-color: #eee;
 }
 
 .header_div {
