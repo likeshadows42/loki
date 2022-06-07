@@ -655,6 +655,66 @@ async def people_hide_unhide(person_id : int  = Query(None, description="Person 
 
 # ------------------------------------------------------------------------------
 
+@fr_router.post("/people/merge")
+async def people_merge(main_person_id: int = Query(None, description="ID of the person from Person table that will remain after the merge [integer]"),
+                      merge_person_id: int = Query(None, description="ID of the person from Person table that will be merged with the main one [integer]"),):
+    """
+    API endpoint: people_merge()
+    
+    Merges one person into another one. The face representations associated to
+    the merged person (with 'merge_person_id' id) are associated to the main
+    person (with 'main_person_id' id). The merged person, which after the
+    previous step has no face representations associated with it, is deleted.
+    This endpoint is useful if there are two people who are actually the same
+    person and should be combined into one. For example, an older and a much
+    younger version of the same person.
+
+    If either person does not exist (i.e. 'main_person_id' and / or
+    'merge_person_id' do not exist), then the function returns with a True
+    status and an error message.
+
+    Parameters:
+        - main_person_id : ID of the person from Person table that will remain
+                            after the merge [integer].
+
+        - merge_person_id: ID of the person from Person table that will be
+                            merged with the main one [integer].
+
+    Output:\n
+        JSON-encoded dictionary with the following key/value pairs is returned:
+            1. status: flag indicating if the function executed without any
+                    errors (False) or if 1 or more errors occurred (True).
+
+            2. message: informative message string.
+    """
+    # Checks if Person with 'main_person_id' exists
+    if glb.sqla_session.execute(select(Person.id).where(Person.id ==\
+        main_person_id)).first() is None:
+        return {'status':True,
+                'message':f'Main person {main_person_id} does not exist!'}
+
+    # Checks if Person with 'merge_person_id' exists
+    if glb.sqla_session.execute(select(Person.id).where(Person.id ==\
+        merge_person_id)).first() is None:
+        return {'status':True,
+                'message':f'Merge person {merge_person_id} does not exist!'}
+
+    # Assigns all face representations from merged person to main person
+    stmt = update(FaceRep).values(person_id=main_person_id).where(
+                                        FaceRep.person_id == merge_person_id)
+    glb.sqla_session.execute(stmt)
+    glb.sqla_session.commit()
+
+    # Deletes merged person
+    stmt = delete(Person).where(Person.id == merge_person_id)
+    glb.sqla_session.execute(stmt)
+    glb.sqla_session.commit()
+
+    return {'status':False,
+            'message':'ok'}
+
+# ------------------------------------------------------------------------------
+
 @fr_router.post("/facerep/hide_unhide")
 async def facerep_hide_unhide(facerep_id : int  = Query(None, description="Face representation identification number (id) [integer]"),
                               hide       : bool = Query(True, description="Toggles between hiding or unhiding the face representation [boolean]")):
