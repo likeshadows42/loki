@@ -489,7 +489,7 @@ async def people_get_faces(person_id: int = Query(None, description="'person_id 
             JSON-encoded FaceRep result for a specific person_id
     """
 
-    query_txt = "SELECT id, person_id, image_name, image_fp, region FROM representation WHERE person_id ="+str(person_id)
+    query_txt = "SELECT id, person_id, image_name, image_fp, hidden, region FROM representation WHERE person_id ="+str(person_id)
     if show_hidden is False:
         query_txt += " AND hidden = 0"
     query = text(query_txt)
@@ -501,6 +501,7 @@ async def people_get_faces(person_id: int = Query(None, description="'person_id 
         return_value.append({'id': item.id, 'person_id': item.person_id,
                              'image_name': item.image_name,
                              'image_fp': item.image_fp,
+                             'hidden': item.hidden,
                              'region': [int(x) for x in item.region] })
 
     return return_value

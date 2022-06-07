@@ -226,9 +226,9 @@ export default {
 
       <div>
         <h3>Global parameters</h3>
-        Face minimum area %: {{facePercent}} <vue3-slider v-model="facePercent" tooltip="true" tooltipText="%v%" />
-        Certainly --> Doubt threshold (%): {{certainlyThreshold}} <vue3-slider v-model="certainlyThreshold" tooltip="true" tooltipText="%v%" />
-        Doubt --> No Match threshold (%): {{doubtThreshold}} <vue3-slider v-model="doubtThreshold" tooltip="true" tooltipText="%v%" />
+        Face minimum area %: <b>{{facePercent}}</b> <vue3-slider v-model="facePercent" tooltip tooltipText="%v%" />
+        Certainly --> Doubt threshold (%): <b>{{certainlyThreshold}}</b> <vue3-slider v-model="certainlyThreshold" tooltip tooltipText="%v%" />
+        Doubt --> No Match threshold (%): <b>{{doubtThreshold}}</b> <vue3-slider v-model="doubtThreshold" tooltip tooltipText="%v%" />
       </div>
       
     </aside>
