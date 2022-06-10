@@ -9,6 +9,7 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy                 as np
 import api.global_variables  as glb
 
+from zipfile                 import ZipFile
 from typing                  import List, Optional
 from filecmp                 import cmp
 from fastapi                 import APIRouter, UploadFile, Depends, Query
@@ -18,6 +19,7 @@ from IFR.api                 import init_load_verifiers, init_load_detectors,\
                                all_tables_exist, process_faces_from_dir,\
                                load_database, facerep_set_groupno_done,\
                                start_session, people_clean_without_repps
+from datetime                import datetime
 from tempfile                import TemporaryDirectory
 from sqlalchemy              import select, update, insert, delete
 from IFR.classes             import *
@@ -25,6 +27,7 @@ from IFR.functions           import ensure_dirs_exist, calc_embeddings,\
                                 calc_similarity, do_face_detection,\
                                 discard_small_regions, image_is_uncorrupted,\
                                 rename_file_w_hex_token
+from fastapi.responses       import StreamingResponse
 
 from shutil                  import rmtree, move   as sh_move
 from matplotlib              import image          as mpimg
@@ -427,6 +430,134 @@ async def database_clear():
 
 # ------------------------------------------------------------------------------
 
+@fr_router.post("/utility/save_state")
+async def save_state(save_dir: str  = Query(glb.BACKUP_DIR, description="Save directory full path [string]."),
+                   return_zip: bool = Query(False, description="Toggles between a dictionary or the zip file as a response [boolean].")):
+    """
+    API endpoint: save_state()
+
+    Creates a backup by zipping the database file and all image files currently
+    present in the image directory. The zip file is saved in the 'save_dir'
+    directory and has the following automatically generated name:
+
+                    zip file name: backup_YYYYMMDD-HHMMSS.zip
+
+    If 'return_zip' is False, then this function returns a dictionary with a
+    False 'status' (if no errors occured, True otherwise), and an 'ok' message.
+
+    If 'return_zip' is True, then the zip file is returned.
+
+    Parameters:
+        - save_dir  : save directory full path
+                        [string, default=<glb.BACKUP_DIR>].
+
+        - return_zip: toggles between a dictionary or the zip file as a response
+                        [boolean, default=False].
+
+    Output:\n
+        The output depends on the value of 'return_zip'.
+            > If 'return_zip' is True: returns the zip file.
+
+            > If 'return_zip' is False: returns a JSON-encoded dictionary with
+               the following attributes:
+
+                    1. status: False (if no errors occurred) or True (if at
+                                least one error occured) [boolean].
+                    
+                    2. message: an 'ok' message string [string].
+    """
+    # Automatically generates a name for the backup file and its full path
+    zip_name = 'backup_' + datetime.now().strftime("%Y%m%d-%H%M%S") + '.zip'
+    zip_path = os.path.join(save_dir, zip_name)
+
+    # Opens the zip file at the specified directory, with the specified name
+    with ZipFile(zip_path, 'w') as myzip:
+        # Adds the database file to the zip file
+        myzip.write(glb.SQLITE_DB_FP, arcname=glb.SQLITE_DB)
+
+        # Obtains all image paths and adds each image to the zip file
+        img_names = os.listdir(glb.IMG_DIR)
+        img_paths = [os.path.join(glb.IMG_DIR, item) for item in img_names]
+        for path, name in zip(img_paths, img_names):
+            myzip.write(path, arcname=name)
+
+    if return_zip:
+        return StreamingResponse(myzip,
+                                 media_type="application/x-zip-compressed")
+    else:
+        return {'status':False, 'message':'ok'}
+
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/utility/restore_state")
+async def restore_state(file_fp: str = Query(None, description="Backup zip file's full path [string]."),
+                        img_dir: str = Query(glb.IMG_DIR, description="Image directory's full path [string]."),
+                        rdb_dir: str = Query(glb.RDB_DIR, description="Database directory's full path [string]."),):
+    """
+    API endpoint: restore_state()
+
+    Restores the database state and the image directory 'img_dir' state
+    according to a backup zip file created by the 'save_state' endpoint. The zip
+    file is expected to contain a SQLITE file and image files with valid
+    extensions. The validity of the extensions is NOT checked in this function.
+
+    This functions ensures that 'file_fp' points to a valid file and that both
+    'img_dir' and 'rdb_dir' point to valid directories. If any of these checks
+    fail, the function returns with a True 'status' and a descriptive message
+    informing what the error was.
+
+    Parameters:
+        - file_fp: backup zip file's full path [string].
+
+        - img_dir: image directory's full path [string, default=<glb.IMG_DIR>].
+
+        - rdb_dir: database directory's full path
+                    [string, default=<glb.RDB_DIR>].
+
+    Output:\n
+        JSON-encoded dictionary with the following key/value pairs is returned:
+            1. status: flag indicating if the function executed without any
+                    errors (False) or if 1 or more errors occurred (True).
+
+            2. message: informative message string.
+    """
+    # Checks if file and directories are valid
+    if not os.path.isfile(file_fp):
+        return {'status':True, 'message':f'{file_fp} is not a file!'}
+
+    if not os.path.isdir(img_dir):
+        return {'status':True, 'message':f'{img_dir} is not a directory!'}
+        
+    if not os.path.isdir(rdb_dir):
+        return {'status':True, 'message':f'{rdb_dir} is not a directory!'}
+
+    # Clears the image directory of all images (all files, actually)
+    for f in os.listdir(img_dir):
+        os.remove(os.path.join(img_dir, f))
+
+    # Clears the database directory of the database file (all files, actually)
+    for f in os.listdir(rdb_dir):
+        os.remove(os.path.join(rdb_dir, f))
+    
+    # Opens the zip file
+    with ZipFile(file_fp) as myzip:
+        # Loops through each member file inside the zip
+        for fname in myzip.namelist():
+            # Determines the directory the file should be extracted to depending
+            # on if the file is a database or image file
+            if fname[fname.rindex('.'):] == '.sqlite':
+                path = glb.RDB_DIR
+            else:
+                path = glb.IMG_DIR
+        
+            # Extracts the file
+            myzip.extract(fname, path=path)
+
+    return {'status':False, 'message':'ok'}
+
+# ------------------------------------------------------------------------------
+
 @fr_router.post("/people/list")
 async def people_list(show_hidden: bool = Query(False, description="boolean value to show visible people (false) or ALSO hidden one (true)")):
     """
@@ -821,7 +952,7 @@ async def facerep_get_ungrouped():
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/facerep/get_person")
-async def facerep_get_person(facerep_id: int = Query(None, description="ID primary key in FaceRep table [integer")):
+async def facerep_get_person(facerep_id: int = Query(None, description="ID primary key in FaceRep table [integer]")):
     """
     API endpoint: facerep_get_person()
     
