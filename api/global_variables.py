@@ -9,6 +9,7 @@ DEBUG = True
 # Path variables
 API_DIR      = os.path.join(os.path.dirname(os.path.realpath("__file__")),'api')
 DATA_DIR     = os.path.join(API_DIR     , 'data')
+BACKUP_DIR   = os.path.join(DATA_DIR    , 'backup')
 IMG_DIR      = os.path.join(DATA_DIR    , 'img')
 RDB_DIR      = os.path.join(DATA_DIR    , 'database')
 SVD_MDL_DIR  = os.path.join(API_DIR     , 'saved_models')
@@ -16,8 +17,9 @@ SVD_VRF_DIR  = os.path.join(SVD_MDL_DIR , 'verifiers')
 SVD_DTC_DIR  = os.path.join(SVD_MDL_DIR , 'detectors')
 
 # List with all path variables' "names"
-directory_list_names = ['api root', 'data dir', 'img dir', 'rep. database',
-                        'saved models', 'saved verifiers', 'saved detectors']
+directory_list_names = ['api root', 'data dir', 'backup dir', 'img dir',
+                        'rep. database', 'saved models', 'saved verifiers',
+                        'saved detectors']
 
 # Tuple with all face detector and verifier names
 # detector_names = ('opencv', 'ssd', 'mtcnn', 'retinaface')
