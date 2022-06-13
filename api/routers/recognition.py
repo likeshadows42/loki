@@ -600,7 +600,8 @@ async def backup_list(return_readable=True):
                             [list of strings].
     """
     # Determines the full paths of all backup files
-    backup_paths = os.path.join(glb.BACKUP_DIR, os.listdir(glb.BACKUP_DIR))
+    backup_paths = [os.path.join(glb.BACKUP_DIR, item) for item\
+                    in os.listdir(glb.BACKUP_DIR)]
 
     # Checks if the readable option was selected
     if return_readable:
@@ -610,7 +611,7 @@ async def backup_list(return_readable=True):
         # Loops through each backup file's path, storing it in the dictionary
         # with a sequential path key (i.e. path_001, path_002, etc ...)
         for i, pth in enumerate(backup_paths):
-            paths_dict['path_' + str(i).zfill(2)] = pth
+            paths_dict['path_' + str(i+1).zfill(3)] = pth
 
         # Returns the more-readable-when-JSON-enconded dictionary
         return paths_dict
