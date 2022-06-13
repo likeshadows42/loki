@@ -571,7 +571,8 @@ async def backup_list(return_readable=True):
     API endpoint: backup_list()
 
     Lists all the available backup files in the backup directory specified by
-    the BACKUP_DIR global variable.
+    the BACKUP_DIR global variable. Backup files are assumed to have their names
+    starting with 'backup_'.
     
     If return_readable is True, then this function returns a dictionary where
     each path is a seperate entry with the following sequential name structure:
@@ -601,7 +602,7 @@ async def backup_list(return_readable=True):
     """
     # Determines the full paths of all backup files
     backup_paths = [os.path.join(glb.BACKUP_DIR, item) for item\
-                    in os.listdir(glb.BACKUP_DIR)]
+                    in os.listdir(glb.BACKUP_DIR) if item.startswith('backup_')]
 
     # Checks if the readable option was selected
     if return_readable:
