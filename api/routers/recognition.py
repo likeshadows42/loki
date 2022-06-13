@@ -71,11 +71,12 @@ async def inspect_globals(print2console: bool = Query(True, description="Toggles
             8. sqla_engine   : SQLAlchemy engine object      [engine object]
     """
     # Obtains all current directory paths
-    directories = [glb.API_DIR    , glb.DATA_DIR   , glb.IMG_DIR, glb.RDB_DIR,
-                   glb.SVD_MDL_DIR, glb.SVD_VRF_DIR, glb.SVD_DTC_DIR]
+    directories = [glb.API_DIR    , glb.DATA_DIR   , glb.BACKUP_DIR ,
+                   glb.IMG_DIR    , glb.RDB_DIR    , glb.SVD_MDL_DIR,
+                   glb.SVD_VRF_DIR, glb.SVD_DTC_DIR]
 
     # Prints the path variables along with their names
-    dir_names = ['API root dir', 'Data dir', 'Image dir',
+    dir_names = ['API root dir', 'Data dir', 'Backup dir', 'Image dir',
                  'Rep. database dir', 'Saved models dir',
                  'Saved face verifiers dir', 'Saved face detectors dir']
 
