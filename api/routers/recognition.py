@@ -170,6 +170,10 @@ async def server_reset():
     glb.DATA_DIR     = os.path.join(glb.API_DIR    , 'data')
     print('[PATH]'.ljust(12), 'DATA_DIR'.ljust(12),
          f': reset! ({glb.DATA_DIR})')
+
+    glb.BACKUP_DIR   = os.path.join(glb.DATA_DIR   , 'backup')
+    print('[PATH]'.ljust(12), 'BACKUP_DIR'.ljust(12),
+         f': reset! ({glb.BACKUP_DIR})')
     
     glb.IMG_DIR      = os.path.join(glb.DATA_DIR  , 'img')
     print('[PATH]'.ljust(12), 'IMG_DIR'.ljust(12),
@@ -216,8 +220,9 @@ async def server_reset():
 
     # Directories & paths initialization
     print('  -> Directory creation:')
-    directory_list = [glb.API_DIR, glb.DATA_DIR, glb.IMG_DIR, glb.RDB_DIR,
-                      glb.SVD_MDL_DIR, glb.SVD_VRF_DIR, glb.SVD_DTC_DIR]
+    directory_list = [glb.API_DIR, glb.DATA_DIR, glb.BACKUP_DIR, glb.IMG_DIR,
+                      glb.RDB_DIR, glb.SVD_MDL_DIR, glb.SVD_VRF_DIR,
+                      glb.SVD_DTC_DIR]
     ensure_dirs_exist(directory_list, verbose=True)
     print('')
 
