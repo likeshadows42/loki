@@ -44,8 +44,9 @@ async def initialization():
     # Directories & paths initialization
     if glb.DEBUG:
         print('  -> Directory creation:')
-    directory_list = [glb.API_DIR, glb.DATA_DIR, glb.IMG_DIR, glb.RDB_DIR,
-                      glb.SVD_MDL_DIR, glb.SVD_VRF_DIR, glb.SVD_DTC_DIR]
+    directory_list = [glb.API_DIR, glb.DATA_DIR, glb.BACKUP_DIR, glb.IMG_DIR,
+                      glb.RDB_DIR, glb.SVD_MDL_DIR, glb.SVD_VRF_DIR,
+                      glb.SVD_DTC_DIR]
     ensure_dirs_exist(directory_list, verbose=True)
     if glb.DEBUG:
         print('')
