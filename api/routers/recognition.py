@@ -71,11 +71,12 @@ async def inspect_globals(print2console: bool = Query(True, description="Toggles
             8. sqla_engine   : SQLAlchemy engine object      [engine object]
     """
     # Obtains all current directory paths
-    directories = [glb.API_DIR    , glb.DATA_DIR   , glb.IMG_DIR, glb.RDB_DIR,
-                   glb.SVD_MDL_DIR, glb.SVD_VRF_DIR, glb.SVD_DTC_DIR]
+    directories = [glb.API_DIR    , glb.DATA_DIR   , glb.BACKUP_DIR ,
+                   glb.IMG_DIR    , glb.RDB_DIR    , glb.SVD_MDL_DIR,
+                   glb.SVD_VRF_DIR, glb.SVD_DTC_DIR]
 
     # Prints the path variables along with their names
-    dir_names = ['API root dir', 'Data dir', 'Image dir',
+    dir_names = ['API root dir', 'Data dir', 'Backup dir', 'Image dir',
                  'Rep. database dir', 'Saved models dir',
                  'Saved face verifiers dir', 'Saved face detectors dir']
 
@@ -169,6 +170,10 @@ async def server_reset():
     glb.DATA_DIR     = os.path.join(glb.API_DIR    , 'data')
     print('[PATH]'.ljust(12), 'DATA_DIR'.ljust(12),
          f': reset! ({glb.DATA_DIR})')
+
+    glb.BACKUP_DIR   = os.path.join(glb.DATA_DIR   , 'backup')
+    print('[PATH]'.ljust(12), 'BACKUP_DIR'.ljust(12),
+         f': reset! ({glb.BACKUP_DIR})')
     
     glb.IMG_DIR      = os.path.join(glb.DATA_DIR  , 'img')
     print('[PATH]'.ljust(12), 'IMG_DIR'.ljust(12),
@@ -215,8 +220,9 @@ async def server_reset():
 
     # Directories & paths initialization
     print('  -> Directory creation:')
-    directory_list = [glb.API_DIR, glb.DATA_DIR, glb.IMG_DIR, glb.RDB_DIR,
-                      glb.SVD_MDL_DIR, glb.SVD_VRF_DIR, glb.SVD_DTC_DIR]
+    directory_list = [glb.API_DIR, glb.DATA_DIR, glb.BACKUP_DIR, glb.IMG_DIR,
+                      glb.RDB_DIR, glb.SVD_MDL_DIR, glb.SVD_VRF_DIR,
+                      glb.SVD_DTC_DIR]
     ensure_dirs_exist(directory_list, verbose=True)
     print('')
 
@@ -555,6 +561,64 @@ async def restore_state(file_fp: str = Query(None, description="Backup zip file'
             myzip.extract(fname, path=path)
 
     return {'status':False, 'message':'ok'}
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/utility/backup/list")
+async def backup_list(return_readable=True):
+    """
+
+    API endpoint: backup_list()
+
+    Lists all the available backup files in the backup directory specified by
+    the BACKUP_DIR global variable.
+    
+    If return_readable is True, then this function returns a dictionary where
+    each path is a seperate entry with the following sequential name structure:
+    path_ + i, e.g. path_001, path_002, etc.
+
+    If return_readable is False, then this function returns a dictionary with
+    the list of backup files' full paths under the 'backups' key.
+
+    Parameters:
+    - return_readable: toggles between returning a more 'readable' version of
+                        the backup files' full paths or simply a list with all
+                        paths [boolean, default=True].
+
+    Output:\n
+        The output of this functions depends on the value of the
+        'return_readable' parameter. In both cases, this function returns a
+        JSON-encoded dictionary with the following key/value pairs:
+            > If return_readable is True:
+                1. path_001: first backup file's full path [string].
+                2. path_002: second backup file's full path [string].
+                                        ...
+                n. path_(n): n-th backup file's full path [string].
+
+            > If return_readable is False:
+                1. backups: list with each backup file's full path
+                            [list of strings].
+    """
+    # Determines the full paths of all backup files
+    backup_paths = [os.path.join(glb.BACKUP_DIR, item) for item\
+                    in os.listdir(glb.BACKUP_DIR)]
+
+    # Checks if the readable option was selected
+    if return_readable:
+        # If so, initializes an empt dictionary
+        paths_dict = {}
+
+        # Loops through each backup file's path, storing it in the dictionary
+        # with a sequential path key (i.e. path_001, path_002, etc ...)
+        for i, pth in enumerate(backup_paths):
+            paths_dict['path_' + str(i+1).zfill(3)] = pth
+
+        # Returns the more-readable-when-JSON-enconded dictionary
+        return paths_dict
+    else:
+        # Otherwise, returns the backup paths as a list (in a dictionary with a
+        # single element)
+        return {"backups":backup_paths}
 
 # ------------------------------------------------------------------------------
 
