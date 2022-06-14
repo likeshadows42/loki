@@ -566,7 +566,7 @@ async def restore_state(file_fp: str = Query(None, description="Backup zip file'
 # ------------------------------------------------------------------------------
 
 @fr_router.post("/utility/backup/list")
-async def backup_list(return_readable=True):
+async def backup_list():
     """
 
     API endpoint: backup_list()
@@ -603,24 +603,9 @@ async def backup_list(return_readable=True):
     """
     # Determines the full paths of all backup files
     backup_paths = [os.path.join(glb.BACKUP_DIR, item) for item\
-                    in os.listdir(glb.BACKUP_DIR) if item.startswith('backup_')]
+                    in os.listdir(glb.BACKUP_DIR) if item.endswith('.zip')]
 
-    # Checks if the readable option was selected
-    if return_readable:
-        # If so, initializes an empt dictionary
-        paths_dict = {}
-
-        # Loops through each backup file's path, storing it in the dictionary
-        # with a sequential path key (i.e. path_001, path_002, etc ...)
-        for i, pth in enumerate(backup_paths):
-            paths_dict['path_' + str(i+1).zfill(3)] = pth
-
-        # Returns the more-readable-when-JSON-enconded dictionary
-        return paths_dict
-    else:
-        # Otherwise, returns the backup paths as a list (in a dictionary with a
-        # single element)
-        return {"backups":backup_paths}
+    return backup_paths
 
 # ------------------------------------------------------------------------------
 
