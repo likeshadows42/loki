@@ -262,6 +262,15 @@ class ProcessedFilesOutput(BaseModel):
     filename : str
     filesize : int
 
+# Response class for the output for the backup files
+class BackupFileOutput(BaseModel):
+    """
+    Response model class: defines the output for the backup files.
+    """
+    name: str
+    path: str
+    size: int
+
 # ______________________________________________________________________________
 #                         SQLALCHEMY TABLES DEFINITIONS
 # ------------------------------------------------------------------------------
