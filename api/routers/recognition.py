@@ -590,6 +590,7 @@ async def backup_list():
     # Determines the full paths of all backup files
     backup_names = [item for item in os.listdir(glb.BACKUP_DIR)\
                     if item.startswith('backup_')]
+    backup_names.sort(reverse=True)
     backup_paths = [os.path.join(glb.BACKUP_DIR, item) for item\
                     in backup_names]
     backup_sizes = [os.path.getsize(item) for item in backup_paths]
@@ -609,43 +610,44 @@ async def backup_list():
 @fr_router.post("/utility/backup/remove")
 async def backup_remove(filepaths: list[str]):
     """
-    TODO: Update docs.
     API endpoint: backup_remove()
 
-    Lists all the available backup files in the backup directory specified by
-    the BACKUP_DIR global variable. Backup files are assumed to have their names
-    starting with 'backup_'.
-    
-    This function returns the backup file's name, full path and size for each
-    backup file found inside the backup directory.
+    Removes one or more backup files provided as strings in 'filepaths'. The
+    files can be specified as either file names or full paths. If a file name is
+    provided, then this function builds the full path using the default backup
+    directory stored in the global variable BACKUP_DIR.
 
     Parameters:
-        - None
+        - filepaths: names or full paths of file(s) [list of strings].
 
     Output:\n
-        Returns a list of JSON-encoded BackupFileOuput objects (1 for each
-        backup file). The BackupFileOuput object is a JSON-encoded strcuture
-        with the following key/value pairs:
-            1. name - file name [string]
-            2. path - file full path [string]
-            3. size - file size [integer]
+        Returns a list with the full paths of all files that were NOT found
+        [list of strings].
     """
-    # 
+    # Initializes the 'files_not_found' list
     files_not_found = []
-    for fpath in filepaths:
-        output = os.path.split(fpath)
-        fname  = output[0]
-        fpath  = output[1]
 
+    # Loops through each full path in filepaths
+    for fp in filepaths:
+        # Determines the file's path and name from the current full path
+        output = os.path.split(fp)
+        fpath  = output[0]
+        fname  = output[1]
 
+        # If the file's path is 'empty' (i.e. '') then uses the backup directory
+        # as the file's path
+        if fpath == '':
+            fp = os.path.join(glb.BACKUP_DIR, fname)
 
-        if os.path.isfile(fname):
-            pass
+        # Checks if the path provided points to a file
+        if os.path.isfile(fp):
+            # If so, removes the backup file
+            os.remove(fp)
         else:
-            files_not_found.append(fname)
+            # Otherwise, appends the full path to the 'files_not_found' list
+            files_not_found.append(fp)
 
-
-    return None
+    return files_not_found
 
 # ------------------------------------------------------------------------------
 
