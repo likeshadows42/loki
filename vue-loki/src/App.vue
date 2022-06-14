@@ -167,6 +167,14 @@ export default {
       // this.MainContent = msg
     },
 
+    async backupCreate() {
+      console.log("Create a backup")
+      const response = await this.axiosPost('/api/fr/utility/save_state')
+      if(response['message'] == 'ok') {
+        this.MainContentRaw = "<p><b>Backup created successfully<b><p>"
+      }
+    },
+
     test(evt) {
       this.$showHidden = evt.target.checked
     },
@@ -212,6 +220,8 @@ export default {
 
       <div>
         <h3>Utility</h3>
+        <a href="#" @click.prevent="backupCreate">Create a backup</a><br/>
+        <a href="#" @click.prevent="backupRestore">Restore from backup</a><br/>
         <a href="#" @click.prevent="dbLoadFromDir">Load images from default directory</a><br/>
         <a href="#" @click.prevent="dbClear">Clear database</a><br/>
         <a href="#" @click.prevent="imgdirClear">Clear image dir</a><br/>
@@ -232,7 +242,9 @@ export default {
       
     </aside>
     <article class="main">
-       <!-- <ImagesUploader @changed="handleImages" @response="(msg) => MainContent = msg"/> -->
+
+      <p>{{ MainContent }}</p>
+      <p><span v-html="MainContentRaw"></span></p>
 
       <compImgUngrouped v-if="compImgUngroupedToggler"/>
 
@@ -261,8 +273,6 @@ export default {
         @response="zipOnSubmit"
       />
 
-      <p>{{ MainContent }}</p>
-      <p><span v-html="MainContentRaw"></span></p>
 
 
     </article>

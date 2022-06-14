@@ -28,7 +28,9 @@
                 imageObj.src = '/data/'+item.image_name
                 
                 imageObj.onload = function() {
-                    // console.log(imageObj.width+", "+imageObj.height)
+                    console.log("image: "+imageObj.width+", "+imageObj.height)
+                    console.log("canvas: "+canvas.width+", "+canvas.height)
+                    console.log("coords: "+item.region[0]+", "+item.region[1]+", "+item.region[2]+", "+item.region[3])
                     var scale = Math.min(canvas.width / imageObj.width, canvas.height / imageObj.height)
                     // get the top left position of the image
                     // var x = (canvas.width / 2) - (imageObj.width / 2) * scale
