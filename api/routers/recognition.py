@@ -31,6 +31,7 @@ from fastapi.responses       import StreamingResponse
 
 from shutil                  import rmtree, move   as sh_move
 from matplotlib              import image          as mpimg
+import pickle
 
 glb_data_dir = glb.DATA_DIR
 glb_img_dir  = glb.IMG_DIR
@@ -684,7 +685,6 @@ async def people_get_faces(person_id: int = Query(None, description="'person_id 
     Output:\n
             JSON-encoded FaceRep result for a specific person_id
     """
-
     query_txt = "SELECT id, person_id, image_name, image_fp, hidden, region FROM representation WHERE person_id ="+str(person_id)
     if show_hidden is False:
         query_txt += " AND hidden = 0"
@@ -698,7 +698,7 @@ async def people_get_faces(person_id: int = Query(None, description="'person_id 
                              'image_name': item.image_name,
                              'image_fp': item.image_fp,
                              'hidden': item.hidden,
-                             'region': [int(x) for x in item.region] })
+                             'region': [int(x) for x in pickle.loads(item.region)] })
 
     return return_value
 
