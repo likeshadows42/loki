@@ -9,6 +9,7 @@ import ImagesVerifiedWithUpload from './components/img-verifier-with-upload.vue'
 import ImagesVerifiedWithoutUpload from './components/img-verifier-without-upload.vue'
 import ImagesUploaderAdv from './components/img-uploader-adv.vue'
 import zipUploader from './components/zip-uploader.vue'
+import backupList from './components/backup-list.vue'
 import axios from "axios"
 import slider from "vue3-slider"
 
@@ -25,7 +26,8 @@ export default {
     ImagesVerifiedWithoutUpload,
     ImagesUploaderAdv,
     zipUploader,
-    "vue3-slider": slider
+    "vue3-slider": slider,
+    backupList
   },
 
   data() {
@@ -42,7 +44,8 @@ export default {
       facePercent: 2,
       certainlyThreshold: 45,
       doubtThreshold: 70,
-      showHidden: false
+      showHidden: false,
+      backupListToggler: false
     }
   },
 
@@ -119,7 +122,7 @@ export default {
     },
 
     sectionToggler(section) {
-      const components = ['MainContent','MainContentRaw','compPeopleListToggler','imgUploaderWithUpToggler','imgUploaderWithoutUpToggler','imgUploaderAdvToggler','zipUploaderToggler','compImgUngroupedToggler','compGroupsToggler']
+      const components = ['MainContent','MainContentRaw','compPeopleListToggler','imgUploaderWithUpToggler','imgUploaderWithoutUpToggler','imgUploaderAdvToggler','zipUploaderToggler','compImgUngroupedToggler','compGroupsToggler','backupListToggler']
       for(var comp of components) {
           this[comp] = (comp == section ? true : null)
         }
@@ -173,6 +176,11 @@ export default {
       if(response['message'] == 'ok') {
         this.MainContentRaw = "<p><b>Backup created successfully<b><p>"
       }
+    },
+
+    backupRestore () {
+      this.mainClear()
+      this.sectionToggler('backupListToggler')
     },
 
     test(evt) {
@@ -273,7 +281,9 @@ export default {
         @response="zipOnSubmit"
       />
 
-
+      <backupList
+        v-if="backupListToggler"
+      />
 
     </article>
   </div>
