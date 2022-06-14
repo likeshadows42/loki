@@ -6,6 +6,7 @@ import pickle
 import api.global_variables   as glb
 
 from fastapi                  import FastAPI
+from fastapi.responses        import RedirectResponse
 from fastapi.middleware.cors  import CORSMiddleware
 from IFR.api                  import load_database, init_load_detectors,\
                                     init_load_verifiers, save_built_detectors,\
@@ -118,3 +119,8 @@ async def finish_processes():
         print('\n -------- Exitting program: goodbye! -------- \n')
 
 # ------------------------------------------------------------------------------
+
+@app.get("/")
+def redirect_to_docs():
+    return RedirectResponse(url=f"/docs", status_code=303)
+    
