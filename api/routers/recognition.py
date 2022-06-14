@@ -543,9 +543,8 @@ async def restore_state(file_fp: str = Query(None, description="Backup zip file'
     for f in os.listdir(img_dir):
         os.remove(os.path.join(img_dir, f))
 
-    # Clears the database directory of the database file (all files, actually)
-    for f in os.listdir(rdb_dir):
-        os.remove(os.path.join(rdb_dir, f))
+    # Remove sqlite
+    os.remove(glb.SQLITE_DB_FP)
     
     # Opens the zip file
     with ZipFile(file_fp) as myzip:
