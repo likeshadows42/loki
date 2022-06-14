@@ -27,7 +27,7 @@ export default {
     async restoreZip(name) {
       if(confirm("Are you sure you want tot restore this zip? All the actual content will be replaced.")) {
         // console.log(name)
-        await this.axiosPost(`/api/fr/utility/backup/restore_state?file_fp=${name}`, {})
+        await this.axiosPost(`/api/fr/utility/restore_state?file_fp=${encodeURIComponent(name)}`, {})
       }
     },
 
