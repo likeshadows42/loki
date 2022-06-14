@@ -567,44 +567,85 @@ async def restore_state(file_fp: str = Query(None, description="Backup zip file'
 @fr_router.post("/utility/backup/list")
 async def backup_list():
     """
-
     API endpoint: backup_list()
 
     Lists all the available backup files in the backup directory specified by
     the BACKUP_DIR global variable. Backup files are assumed to have their names
     starting with 'backup_'.
     
-    If return_readable is True, then this function returns a dictionary where
-    each path is a seperate entry with the following sequential name structure:
-    path_ + i, e.g. path_001, path_002, etc.
-
-    If return_readable is False, then this function returns a dictionary with
-    the list of backup files' full paths under the 'backups' key.
+    This function returns the backup file's name, full path and size for each
+    backup file found inside the backup directory.
 
     Parameters:
-    - return_readable: toggles between returning a more 'readable' version of
-                        the backup files' full paths or simply a list with all
-                        paths [boolean, default=True].
+        - None
 
     Output:\n
-        The output of this functions depends on the value of the
-        'return_readable' parameter. In both cases, this function returns a
-        JSON-encoded dictionary with the following key/value pairs:
-            > If return_readable is True:
-                1. path_001: first backup file's full path [string].
-                2. path_002: second backup file's full path [string].
-                                        ...
-                n. path_(n): n-th backup file's full path [string].
-
-            > If return_readable is False:
-                1. backups: list with each backup file's full path
-                            [list of strings].
+        Returns a list of JSON-encoded BackupFileOuput objects (1 for each
+        backup file). The BackupFileOuput object is a JSON-encoded strcuture
+        with the following key/value pairs:
+            1. name - file name [string]
+            2. path - file full path [string]
+            3. size - file size [integer]
     """
     # Determines the full paths of all backup files
+    backup_names = [item for item in os.listdir(glb.BACKUP_DIR)\
+                    if item.startswith('backup_')]
     backup_paths = [os.path.join(glb.BACKUP_DIR, item) for item\
-                    in os.listdir(glb.BACKUP_DIR) if item.endswith('.zip')]
+                    in backup_names]
+    backup_sizes = [os.path.getsize(item) for item in backup_paths]
 
-    return backup_paths
+    # If so, initializes an empty list
+    backup_list = []
+
+    # Loops through each backup file's name, path and size, storing them as
+    # a BackupFile output object and appending each object to the 'backup_list'
+    for name, pth, sze in zip(backup_names, backup_paths, backup_sizes):
+        backup_list.append(BackupFileOutput(name=name, path=pth, size=sze))
+
+    return backup_list
+
+# ------------------------------------------------------------------------------
+
+@fr_router.post("/utility/backup/remove")
+async def backup_remove(filepaths: list[str]):
+    """
+    TODO: Update docs.
+    API endpoint: backup_remove()
+
+    Lists all the available backup files in the backup directory specified by
+    the BACKUP_DIR global variable. Backup files are assumed to have their names
+    starting with 'backup_'.
+    
+    This function returns the backup file's name, full path and size for each
+    backup file found inside the backup directory.
+
+    Parameters:
+        - None
+
+    Output:\n
+        Returns a list of JSON-encoded BackupFileOuput objects (1 for each
+        backup file). The BackupFileOuput object is a JSON-encoded strcuture
+        with the following key/value pairs:
+            1. name - file name [string]
+            2. path - file full path [string]
+            3. size - file size [integer]
+    """
+    # 
+    files_not_found = []
+    for fpath in filepaths:
+        output = os.path.split(fpath)
+        fname  = output[0]
+        fpath  = output[1]
+
+
+
+        if os.path.isfile(fname):
+            pass
+        else:
+            files_not_found.append(fname)
+
+
+    return None
 
 # ------------------------------------------------------------------------------
 
